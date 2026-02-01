@@ -275,16 +275,11 @@ TSWLatexianTemp*
 # Makeindex log files
 *.lpz
 
-# DS_Store file from Mac computers
-.DS_Store
-
-## Python:
-# Byte-compiled / optimized / DLL files
+## Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Distribution / packaging
+*.so
 .Python
 build/
 develop-eggs/
@@ -317,3 +312,26 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+## IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+## Environment & logs
+.env
+.env.local
+logs/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Tooling
+.uv/
+
+## Project
+.memory/
+.artifacts/
