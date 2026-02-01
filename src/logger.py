@@ -15,6 +15,11 @@ def setup_logger(name="ProjectProxi", log_dir="logs"):
 
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
+    logger.propagate = False
+
+    # Remove any existing handlers (including stream/terminal handlers)
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
 
     f_handler = logging.FileHandler(log_file)
     f_handler.setLevel(logging.DEBUG)
@@ -25,9 +30,6 @@ def setup_logger(name="ProjectProxi", log_dir="logs"):
     )
     f_handler.setFormatter(log_format)
 
-    if not logger.handlers:
-        logger.addHandler(f_handler)
-
-    print(f"Logger initialized. All logs are being sent to: {log_file}")
+    logger.addHandler(f_handler)
 
     return logger

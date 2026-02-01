@@ -4,4 +4,5 @@ openai>=1.60.0
 google-api-python-client>=2.155.0
 google-auth>=2.36.0
 google-auth-oauthlib>=1.2.1
-dotenv>=0.0.5
+notion-client>=2.2.0
+python-dotenv>=1.0.0
