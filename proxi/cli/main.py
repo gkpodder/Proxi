@@ -14,6 +14,7 @@ from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
 from proxi.mcp.calendar.tools import register_calendar_tools
 from proxi.observability.logging import setup_logging, get_logger
+from proxi.tools.datetime import DateTimeTool
 from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
 from proxi.tools.registry import ToolRegistry
 from proxi.tools.shell import ExecuteCommandTool
@@ -47,8 +48,8 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     # Shell tool
     registry.register(ExecuteCommandTool(working_directory=working_directory))
 
-    # Calendar MCP tools
-    register_calendar_tools(registry)
+    # Datetime tool
+    registry.register(DateTimeTool())
 
     return registry
 
