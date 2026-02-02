@@ -303,6 +303,10 @@ env/
 ENV/
 .venv
 
+# Browser agent artifacts
+browser_artifacts/
+test_browser_artifacts/
+
 # pytest
 .pytest_cache/
 .coverage
