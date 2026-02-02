@@ -43,8 +43,11 @@ function App() {
   }
 
   const connectAndSend = (prompt: string) => {
+    // In development, Vite proxies /ws to the backend at localhost:8000
+    // In production, the frontend is served by the backend on the same host
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/execute`)
+    const host = import.meta.env.DEV ? 'localhost:8000' : window.location.host
+    const ws = new WebSocket(`${protocol}//${host}/ws/execute`)
 
     ws.onopen = () => {
       console.log('WebSocket connected')

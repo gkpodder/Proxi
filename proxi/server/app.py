@@ -233,18 +233,24 @@ async def setup_agents() -> SubAgentManager:
 @app.websocket("/ws/execute")
 async def websocket_execute(websocket: WebSocket):
     """WebSocket endpoint for executing proxi with streaming status."""
+    logger.info("websocket_connection_attempt", client=websocket.client)
     await websocket.accept()
+    logger.info("websocket_accepted")
     
     try:
         # Receive the initial request
+        logger.info("waiting_for_message")
         data = await websocket.receive_text()
+        logger.info("received_message", data_length=len(data))
         request = ProxiRequest(**json.loads(data))
+        logger.info("parsed_request", prompt_length=len(request.prompt), provider=request.provider)
         
         # Send acknowledgement
         await websocket.send_json({
             "type": "started",
             "message": f"Starting execution with prompt: {request.prompt[:50]}..."
         })
+        logger.info("sent_acknowledgement")
         
         # Send initialization status
         await websocket.send_json({
@@ -269,7 +275,7 @@ async def websocket_execute(websocket: WebSocket):
                 await websocket.send_json({
                     "type": "status",
                     "status": "fallback",
-                    "message": "MCP tools unavailable; using CLI fallback"
+                    "message": "MCP tools unavailable; using CLI fallback without MCP"
                 })
                 import subprocess
                 import shutil
@@ -278,13 +284,12 @@ async def websocket_execute(websocket: WebSocket):
                 project_root = Path(__file__).parent.parent.parent
                 uv_path = shutil.which("uv")
 
+                # Don't use MCP flags since MCP servers aren't loaded
                 if uv_path:
                     cmd = [
                         uv_path,
                         "run",
                         "proxi",
-                        "--mcp-gmail",
-                        "--mcp-notion",
                         request.prompt,
                     ]
                 else:
@@ -292,25 +297,47 @@ async def websocket_execute(websocket: WebSocket):
                         sys.executable,
                         "-m",
                         "proxi.cli.main",
-                        "--mcp-gmail",
-                        "--mcp-notion",
                         request.prompt,
                     ]
 
                 logger.info("fallback_to_cli", cmd=cmd)
 
-                result = await asyncio.to_thread(
-                    subprocess.run,
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
-                    cwd=project_root,
-                    env=os.environ.copy(),
-                )
+                try:
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            subprocess.run,
+                            cmd,
+                            capture_output=True,
+                            text=True,
+                            cwd=project_root,
+                            env=os.environ.copy(),
+                        ),
+                        timeout=120  # 2 minute timeout
+                    )
+                except asyncio.TimeoutError:
+                    await websocket.send_json({
+                        "type": "error",
+                        "error": "CLI command timed out after 2 minutes"
+                    })
+                    logger.error("cli_timeout", cmd=cmd)
+                    return
 
                 output = result.stdout or ""
                 error_output = result.stderr or ""
+                
+                logger.info("cli_completed", 
+                           return_code=result.returncode,
+                           stdout_length=len(output),
+                           stderr_length=len(error_output))
+                
+                if result.returncode != 0:
+                    await websocket.send_json({
+                        "type": "error",
+                        "error": f"CLI failed: {error_output or output or 'Unknown error'}"
+                    })
+                    logger.error("cli_failed", return_code=result.returncode, stderr=error_output)
+                    return
+                
                 final_response = None
                 parsed_tokens = None
                 parsed_turns = None
