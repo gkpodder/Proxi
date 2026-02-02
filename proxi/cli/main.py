@@ -51,6 +51,9 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     # Datetime tool
     registry.register(DateTimeTool())
 
+    # Register calendar tools
+    register_calendar_tools(registry)
+
     return registry
 
 
