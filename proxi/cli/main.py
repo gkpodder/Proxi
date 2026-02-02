@@ -13,6 +13,7 @@ from proxi.llm.openai import OpenAIClient
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
 from proxi.mcp.multiplexer import MCPMultiplexer
+from proxi.mcp.calendar.tools import register_calendar_tools
 from proxi.observability.logging import setup_logging, get_logger
 from proxi.tools.datetime import DateTimeTool
 from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
@@ -50,6 +51,9 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
 
     # Datetime tool
     registry.register(DateTimeTool())
+
+    # Register calendar tools
+    register_calendar_tools(registry)
 
     return registry
 
