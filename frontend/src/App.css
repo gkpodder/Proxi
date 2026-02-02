@@ -1,0 +1,65 @@
+:root {
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f9fafb;
+  --color-border: #e5e7eb;
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
+  --color-accent-light: #eff6ff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-primary: #0f172a;
+    --color-bg-secondary: #1e293b;
+    --color-border: #334155;
+    --color-text-primary: #f1f5f9;
+    --color-text-secondary: #cbd5e1;
+    --color-accent: #60a5fa;
+    --color-accent-hover: #93c5fd;
+    --color-accent-light: #1e3a8a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  padding: 0;
+  background: var(--color-bg-primary);
+}
+
+.status-sidebar {
+  width: 320px;
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border);
+  padding: 24px;
+  overflow-y: auto;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
+}
+
+@media (max-width: 1024px) {
+  .app-container {
+    flex-direction: column;
+  }
+
+  .status-sidebar {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--color-border);
+    max-height: 25%;
+    padding: 16px;
+  }
+}

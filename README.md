@@ -130,3 +130,16 @@ uv run proxi --mcp-server "python:tests/mcp_server_example.py" "Your task"
 ```
 
 See `tests/README.md` for more information about the test MCP server.
+
+
+
+To run Project:
+### Terminal 1 - Backend
+`uv run python run_server.py`
+
+### Terminal 2 - Frontend  
+```
+cd frontend
+npm run dev
+```
+
