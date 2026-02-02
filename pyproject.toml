@@ -10,6 +10,10 @@ dependencies = [
     "anthropic>=0.40.0",
     "aiofiles>=24.0.0",
     "structlog>=24.0.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "websockets>=12.0",
+    "python-dateutil>=2.8.2",
     # Browser subagent dependencies
     "playwright>=1.49.0",
     "httpx>=0.27.0",
@@ -24,6 +28,16 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "ruff>=0.4.0",
     "mypy>=1.8.0",
+]
+gmail = [
+    "google-auth-oauthlib>=1.2.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-api-python-client>=2.100.0",
+    "python-dotenv>=1.0.0",
+]
+notion = [
+    "notion-client>=2.2.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [build-system]
