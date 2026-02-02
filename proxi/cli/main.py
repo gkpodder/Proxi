@@ -7,6 +7,7 @@ from pathlib import Path
 
 from proxi.agents.registry import SubAgentManager, SubAgentRegistry
 from proxi.agents.summarizer import SummarizerAgent
+from proxi.agents.browser import BrowserAgent
 from proxi.core.loop import AgentLoop
 from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
@@ -60,6 +61,16 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
     # Register summarizer agent
     summarizer = SummarizerAgent(llm_client)
     registry.register(summarizer)
+
+    # Register browser agent
+    browser_agent = BrowserAgent(
+        headless=True,
+        max_steps=20,
+        allowed_domains=[],  # Empty = allow all domains
+        denied_domains=[],   # Add domains to block if needed
+        artifacts_base_dir="./browser_artifacts",
+    )
+    registry.register(browser_agent)
 
     manager = SubAgentManager(registry)
     return manager
