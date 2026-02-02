@@ -226,9 +226,17 @@ class BrowserAgent(BaseSubAgent):
         """Convert browser RunResult to SubAgentResult."""
         # Build summary message
         if result.success and result.done:
+            # Include extracted data in summary so main agent knows what was found
+            data_summary = ""
+            if result.result_data:
+                # Format result_data for the summary
+                import json
+                data_preview = json.dumps(result.result_data, indent=2)[:200]
+                data_summary = f" Extracted data: {data_preview}"
+            
             summary = (
                 f"Successfully completed browser task in {result.steps_taken} steps. "
-                f"Final URL: {result.final_url}"
+                f"Final URL: {result.final_url}.{data_summary}"
             )
         elif result.success and result.needs_input:
             summary = (

@@ -65,7 +65,7 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
     # Register browser agent
     browser_agent = BrowserAgent(
         headless=False,  # Set to False to see the browser window
-        max_steps=20,
+        max_steps=3,  # Very limited steps - just navigate and observe
         allowed_domains=[],  # Empty = allow all domains
         denied_domains=[],   # Add domains to block if needed
         artifacts_base_dir="./browser_artifacts",
