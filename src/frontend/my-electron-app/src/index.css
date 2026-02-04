@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'Space Grotesk', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #1f2a24;
+  background-color: #f6f1e7;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --font-sans: 'Space Grotesk', sans-serif;
+  --font-display: 'Fraunces', serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #f6f1e7;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}

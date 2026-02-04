@@ -317,3 +317,4 @@ htmlcov/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+src/frontend/my-electron-app/package-lock.json
