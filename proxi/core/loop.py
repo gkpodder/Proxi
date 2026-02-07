@@ -2,7 +2,7 @@
 
 import json
 import time
-from typing import Any
+from typing import Any, Protocol
 
 from proxi.agents.registry import SubAgentManager
 from proxi.core.planner import Planner
@@ -17,6 +17,14 @@ from proxi.tools.registry import ToolRegistry
 logger = get_logger(__name__)
 
 
+class BridgeEmitter(Protocol):
+    """Protocol for emitting bridge messages (e.g. to TUI)."""
+
+    def emit(self, msg: dict[str, Any]) -> None:
+        """Emit a JSON-serializable message."""
+        ...
+
+
 class AgentLoop:
     """Main agent loop controller."""
 
@@ -27,6 +35,7 @@ class AgentLoop:
         sub_agent_manager: SubAgentManager | None = None,
         max_turns: int = 50,
         enable_reflection: bool = True,
+        emitter: BridgeEmitter | None = None,
     ):
         """Initialize the agent loop."""
         self.llm_client = llm_client
@@ -35,6 +44,7 @@ class AgentLoop:
         self.planner = Planner(llm_client)
         self.reflector = Reflector(enabled=enable_reflection)
         self.max_turns = max_turns
+        self.emitter = emitter
         self.logger = logger
 
     async def run(self, initial_message: str) -> AgentState:
@@ -52,12 +62,30 @@ class AgentLoop:
             max_turns=self.max_turns,
             start_time=time.time(),
         )
-
-        # Initialize with user message
         state.add_message(Message(role="user", content=initial_message))
-
         self.logger.info("agent_loop_start", message=initial_message[:100])
+        return await self._run_loop(state)
 
+    async def run_continue(self, state: AgentState, user_message: str) -> AgentState:
+        """
+        Continue the agent loop with another user message (e.g. for multi-turn chat).
+
+        Args:
+            state: Previous agent state (will be mutated)
+            user_message: Next user message
+
+        Returns:
+            Updated agent state
+        """
+        state.add_message(Message(role="user", content=user_message))
+        state.status = AgentStatus.RUNNING
+        if state.end_time is not None:
+            state.end_time = None
+        self.logger.info("agent_loop_continue", message=user_message[:100])
+        return await self._run_loop(state)
+
+    async def _run_loop(self, state: AgentState) -> AgentState:
+        """Inner loop: run until completion or failure."""
         try:
             with TraceContext("agent_loop"):
                 while state.can_continue():
@@ -74,7 +102,7 @@ class AgentLoop:
                     try:
                         # REASON → DECIDE
                         turn.status = TurnStatus.DECIDING
-                        decision, usage = await self._decide(state)
+                        decision, usage = await self._decide(state, emit_stream=self.emitter is not None)
 
                         # Accumulate token usage
                         state.total_tokens += usage.get("total_tokens", 0)
@@ -256,17 +284,25 @@ class AgentLoop:
             turns=state.current_turn,
             duration=state.end_time - state.start_time if state.start_time and state.end_time else 0,
         )
-
         return state
 
-    async def _decide(self, state: AgentState) -> tuple[ModelDecision, dict[str, int]]:
+    async def _decide(
+        self, state: AgentState, *, emit_stream: bool = False
+    ) -> tuple[ModelDecision, dict[str, int]]:
         """Make a decision based on current state."""
         tools = self.tool_registry.to_specs()
         agents = None
         if self.sub_agent_manager:
             agents = self.sub_agent_manager.registry.to_specs()
 
-        decision, usage = await self.planner.decide(state, tools, agents)
+        async def stream_callback(chunk: str) -> None:
+            if self.emitter:
+                self.emitter.emit({"type": "text_stream", "content": chunk})
+
+        stream_cb = stream_callback if emit_stream else None
+        decision, usage = await self.planner.decide(
+            state, tools, agents, stream_callback=stream_cb
+        )
         return decision, usage
 
     async def _act(
@@ -280,8 +316,21 @@ class AgentLoop:
 
             self.logger.info("tool_call", tool=tool_name,
                              turn=turn.turn_number)
+            if self.emitter:
+                self.emitter.emit({
+                    "type": "status_update",
+                    "label": f"Tool: {tool_name}",
+                    "status": "running",
+                })
 
             result = await self.tool_registry.execute(tool_name, arguments)
+
+            if self.emitter:
+                self.emitter.emit({
+                    "type": "status_update",
+                    "label": f"Tool: {tool_name}",
+                    "status": "done",
+                })
 
             return {
                 "type": "tool_call",
@@ -326,6 +375,12 @@ class AgentLoop:
                 agent=agent_name,
                 turn=turn.turn_number,
             )
+            if self.emitter:
+                self.emitter.emit({
+                    "type": "status_update",
+                    "label": f"Subagent {agent_name} is thinking...",
+                    "status": "running",
+                })
 
             result = await self.sub_agent_manager.run(
                 agent_name=agent_name,
@@ -334,6 +389,13 @@ class AgentLoop:
                 max_tokens=2000,
                 max_time=30.0,
             )
+
+            if self.emitter:
+                self.emitter.emit({
+                    "type": "status_update",
+                    "label": f"Subagent {agent_name}",
+                    "status": "done",
+                })
 
             return {
                 "type": "sub_agent_call",

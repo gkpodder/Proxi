@@ -1,6 +1,6 @@
 """Anthropic Claude LLM client implementation."""
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 from anthropic import AsyncAnthropic
@@ -120,3 +120,19 @@ class AnthropicClient:
             usage=usage,
             finish_reason=response.stop_reason,
         )
+
+    async def generate_stream(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[ToolSpec] | None = None,
+        agents: Sequence[SubAgentSpec] | None = None,
+    ) -> AsyncIterator[tuple[str, ModelResponse | None]]:
+        """
+        Generate a response; yields content in one chunk then the full response.
+        (Anthropic streaming can be added later for token-by-token.)
+        """
+        response = await self.generate(messages, tools=tools, agents=agents)
+        content = response.decision.payload.get("content") or ""
+        if content:
+            yield content, None
+        yield "", response

@@ -85,6 +85,17 @@ uv run proxi --mcp-filesystem "." "List all files in the current directory"
 uv run proxi --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
 ```
 
+### TUI (Terminal UI)
+
+Interactive chat interface. **Verify step-by-step** — see [`cli_ink/STEPS.md`](cli_ink/STEPS.md).
+
+**Requirements:** `uv`, Node.js, and `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`).
+
+1. **Step 1 — Bridge only:** From project root, run `uv run proxi-bridge`. You should see one line: `{"type":"ready"}`. (Ctrl+C to exit.)
+2. **Step 2 — Minimal TUI:** From project root: `cd cli_ink && npm install && cd ..`, then `npm run proxi-tui`. You should see "Bridge: Ready" and a `>` prompt; type a task and press Enter.
+
+All steps and troubleshooting are in `cli_ink/STEPS.md`.
+
 ## Project Status
 
 **Phase 1 Complete** ✅

@@ -335,3 +335,5 @@ Thumbs.db
 ## Project
 .memory/
 .artifacts/
+
+cli_ink/node_modules/

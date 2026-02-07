@@ -1,6 +1,7 @@
 """OpenAI LLM client implementation."""
 
-from collections.abc import Sequence
+import json
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -171,6 +172,110 @@ class OpenAIClient:
             usage=usage,
             finish_reason=choice.finish_reason,
         )
+
+    async def generate_stream(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[ToolSpec] | None = None,
+        agents: Sequence[SubAgentSpec] | None = None,
+    ) -> AsyncIterator[tuple[str, ModelResponse | None]]:
+        """
+        Generate a response with streaming. Yields (content_delta, None) for each
+        token and (\"\", response) at the end.
+        """
+        self.logger.info("llm_call_stream", model=self.model, provider="openai")
+        openai_messages = self._convert_messages(messages)
+        openai_tools = self._convert_tools(tools) if tools else None
+        agent_tools = []
+        if agents:
+            for agent in agents:
+                agent_tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": f"sub_agent_{agent.name}",
+                        "description": f"[Sub-Agent] {agent.description}",
+                        "parameters": agent.input_schema,
+                    },
+                })
+        if agent_tools:
+            openai_tools = (openai_tools or []) + agent_tools
+
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": openai_messages,
+            "stream": True,
+        }
+        if openai_tools:
+            kwargs["tools"] = openai_tools
+            kwargs["tool_choice"] = "auto"
+
+        stream = await self.client.chat.completions.create(**kwargs)
+        content_parts: list[str] = []
+        tool_calls_acc: list[dict[str, Any]] = []
+        current_tool: dict[str, Any] | None = None
+        usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        finish_reason: str | None = None
+
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta is None:
+                continue
+            if getattr(delta, "content", None) and delta.content:
+                content_parts.append(delta.content)
+                yield delta.content, None
+            if getattr(delta, "tool_calls", None) and delta.tool_calls:
+                for tc in delta.tool_calls:
+                    if getattr(tc, "index", None) is not None:
+                        while len(tool_calls_acc) <= (tc.index or 0):
+                            tool_calls_acc.append({
+                                "id": "",
+                                "type": "function",
+                                "function": {"name": "", "arguments": ""},
+                            })
+                        idx = tc.index or 0
+                        if getattr(tc, "id", None):
+                            tool_calls_acc[idx]["id"] = tc.id or ""
+                        if getattr(tc, "function", None):
+                            if getattr(tc.function, "name", None):
+                                tool_calls_acc[idx]["function"]["name"] = (tool_calls_acc[idx]["function"]["name"] or "") + (tc.function.name or "")
+                            if getattr(tc.function, "arguments", None):
+                                tool_calls_acc[idx]["function"]["arguments"] = (tool_calls_acc[idx]["function"]["arguments"] or "") + (tc.function.arguments or "")
+            if chunk.choices[0].finish_reason:
+                finish_reason = chunk.choices[0].finish_reason
+            if getattr(chunk, "usage", None) and chunk.usage:
+                usage = {
+                    "prompt_tokens": chunk.usage.prompt_tokens or 0,
+                    "completion_tokens": chunk.usage.completion_tokens or 0,
+                    "total_tokens": chunk.usage.total_tokens or 0,
+                }
+
+        full_content = "".join(content_parts)
+        if tool_calls_acc:
+            tool_call = tool_calls_acc[0]
+            tool_name = tool_call["function"]["name"]
+            arguments = self._parse_json(tool_call["function"]["arguments"] or "{}")
+            if tool_name.startswith("sub_agent_"):
+                from proxi.llm.schemas import SubAgentCall
+                decision = ModelDecision.sub_agent_call(
+                    SubAgentCall(
+                        agent=tool_name.replace("sub_agent_", ""),
+                        task=arguments.get("task", arguments.get("text", "")),
+                        context_refs=arguments.get("context_refs", []),
+                    ),
+                    reasoning=full_content or None,
+                )
+            else:
+                decision = ModelDecision.tool_call(
+                    ToolCall(id=tool_call["id"], name=tool_name, arguments=arguments),
+                    reasoning=full_content or None,
+                )
+                decision.payload["tool_calls"] = tool_calls_acc
+        else:
+            decision = ModelDecision.respond(content=full_content, reasoning=None)
+
+        yield "", ModelResponse(decision=decision, usage=usage, finish_reason=finish_reason)
 
     def _parse_json(self, json_str: str) -> dict[str, Any]:
         """Parse JSON string safely."""
