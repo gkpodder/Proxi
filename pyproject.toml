@@ -13,7 +13,8 @@ dependencies = [
 ]
 
 [project.scripts]
-proxi = "proxi.cli.main:cli_main"
+proxi = "proxi.tui_launcher:main"
+proxi-run = "proxi.cli.main:cli_main"
 proxi-bridge = "proxi.bridge:main"
 proxi-tui = "proxi.tui_launcher:main"
 

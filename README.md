@@ -42,7 +42,7 @@ Where ACT can be:
 
 ## Tech Stack
 
-- Python 3.14+
+- Python 3.11+
 - UV for build system and package management
 - asyncio for async operations
 - Pydantic for data validation
@@ -50,51 +50,86 @@ Where ACT can be:
 
 ## Installation
 
-```bash
-# Install dependencies using uv
-uv sync
+**Prerequisites**
 
-# Or install in development mode
-uv pip install -e .
+- **Python 3.12+** and [uv](https://docs.astral.sh/uv/) (install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or your package manager).
+- For the **TUI**: **Node.js** and npm (e.g. from [nodejs.org](https://nodejs.org/) or `nvm`).
+
+**Steps**
+
+From the project root:
+
+```bash
+# Install Python dependencies and register CLI commands
+uv sync
 ```
+
+To use the **interactive TUI**, install the frontend once:
+
+```bash
+cd cli_ink && npm install && cd ..
+```
+
+You can run `proxi` via `uv run proxi` (no global install) or, after `uv sync`, use the `proxi` script if your environment has the project’s virtualenv on `PATH`.
 
 ## Usage
 
-Set up your API key:
+**API keys** (required for the agent):
+
 ```bash
 export OPENAI_API_KEY="your-key-here"
 # or
 export ANTHROPIC_API_KEY="your-key-here"
 ```
 
-Run the agent:
+**Interactive TUI (default)**
+
+From the project root:
+
+```bash
+proxi
+# or
+uv run proxi
+```
+
+This starts the Ink TUI and the agent bridge so you can chat and run tasks in the terminal. The TUI runs the same agent loop (tools, MCP, sub-agents) behind the scenes.
+
+**One-shot agent (CLI)**
+
+To run a single task from the command line without the TUI:
+
 ```bash
 # Using OpenAI (default)
-uv run proxi "Your task here"
+uv run proxi-run "Your task here"
 
 # Using Anthropic
-uv run proxi --provider anthropic "Your task here"
+uv run proxi-run --provider anthropic "Your task here"
 
 # With options
-uv run proxi --max-turns 30 --log-level DEBUG "Your task here"
+uv run proxi-run --max-turns 30 --log-level DEBUG "Your task here"
 
 # With MCP server (filesystem example)
-uv run proxi --mcp-filesystem "." "List all files in the current directory"
+uv run proxi-run --mcp-filesystem "." "List all files in the current directory"
 
 # With custom MCP server
-uv run proxi --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
+uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
 ```
 
 ### TUI (Terminal UI)
 
-Interactive chat interface. **Verify step-by-step** — see [`cli_ink/STEPS.md`](cli_ink/STEPS.md).
+The **recommended way** to use Proxi interactively is to run **`proxi`** (or `uv run proxi`). That command:
 
-**Requirements:** `uv`, Node.js, and `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`).
+1. Starts the **agent bridge** (Python) in the background.
+2. Launches the **Ink TUI** (Node.js) so you can type tasks and see responses in a chat-style interface.
 
-1. **Step 1 — Bridge only:** From project root, run `uv run proxi-bridge`. You should see one line: `{"type":"ready"}`. (Ctrl+C to exit.)
-2. **Step 2 — Minimal TUI:** From project root: `cd cli_ink && npm install && cd ..`, then `npm run proxi-tui`. You should see "Bridge: Ready" and a `>` prompt; type a task and press Enter.
+**Requirements:** `uv`, Node.js, `npm`, and `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`). Ensure you have run `npm install` inside `cli_ink` at least once (see [Installation](#installation)).
 
-All steps and troubleshooting are in `cli_ink/STEPS.md`.
+**Optional verification**
+
+- **Bridge only:** From project root, run `uv run proxi-bridge`. You should see `{"type":"ready"}`. (Ctrl+C to exit.) This checks that the Python agent bridge starts correctly.
+- **Full flow:** Run `proxi`; you should see “Bridge: Ready” and a prompt. Type a task and press Enter.
+
+For step-by-step checks and troubleshooting, see [`cli_ink/STEPS.md`](cli_ink/STEPS.md).
 
 ## Project Status
 
@@ -127,7 +162,7 @@ Sub-agents are now available! They can be invoked by the primary agent to handle
 
 Example:
 ```bash
-uv run proxi "Summarize this long text: [your text here]"
+uv run proxi-run "Summarize this long text: [your text here]"
 ```
 
 The agent will automatically use the summarizer sub-agent when appropriate.
@@ -137,7 +172,7 @@ The agent will automatically use the summarizer sub-agent when appropriate.
 You can connect to MCP servers to extend proxi's capabilities:
 
 ```bash
-uv run proxi --mcp-server "python:tests/mcp_server_example.py" "Your task"
+uv run proxi-run --mcp-server "python:tests/mcp_server_example.py" "Your task"
 ```
 
 See `tests/README.md` for more information about the test MCP server.
