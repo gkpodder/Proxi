@@ -2,6 +2,8 @@
 
 import logging
 import sys
+from pathlib import Path
+from typing import Union
 
 import structlog
 
@@ -18,6 +20,7 @@ _CATEGORY_COLORS = {
 _EVENT_CATEGORY_MAP = {
     # LLM
     "llm_call": "llm",
+    "llm_call_stream": "llm",
     "llm_generate": "llm",
     "planner_decide": "llm",
     # Tool
@@ -68,11 +71,42 @@ def _colored_console_renderer(logger: logging.Logger, method_name: str, event_di
     return tag + line
 
 
-def setup_logging(level: str = "INFO", use_colors: bool = True) -> None:
-    """Set up structured logging with optional category colors."""
+def _plain_console_renderer(logger: logging.Logger, method_name: str, event_dict: dict) -> str:
+    """Render log line with plain [CATEGORY] tag for log files (no ANSI)."""
+    category = event_dict.get("_event_category")
+    render_dict = {k: v for k, v in event_dict.items()
+                   if k not in ("_event_category", "_event_color")}
+    tag = ""
+    if category:
+        labels = {"llm": "LLM", "tool": "TOOL",
+                  "sub_agent": "SUB_AGENT", "mcp": "MCP"}
+        tag = f"[{labels.get(category, category.upper())}] "
+    console_renderer = structlog.dev.ConsoleRenderer(
+        pad_level=False,
+        pad_event_to=0,
+        colors=False,
+    )
+    line = console_renderer(logger, method_name, render_dict)
+    return tag + line
+
+
+def setup_logging(
+    level: str = "INFO",
+    use_colors: bool = True,
+    log_file: Union[str, Path, None] = None,
+) -> None:
+    """Set up structured logging with optional category colors and optional log file."""
+    stream = sys.stdout
+    if log_file is not None:
+        path = Path(log_file).resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(path, "a", encoding="utf-8")
+        # Keep colors so tail -f logs/proxi.log shows colored output in the terminal
+        use_colors = True
+
     logging.basicConfig(
         format="%(message)s",
-        stream=sys.stdout,
+        stream=stream,
         level=getattr(logging, level.upper()),
     )
 
@@ -86,12 +120,14 @@ def setup_logging(level: str = "INFO", use_colors: bool = True) -> None:
             _colored_console_renderer,
         ]
     else:
+        # Plain format when explicitly requested (no ANSI)
         processors = [
             structlog.contextvars.merge_contextvars,
             structlog.processors.add_log_level,
             structlog.processors.StackInfoRenderer(),
             structlog.dev.set_exc_info,
-            structlog.processors.JSONRenderer(),
+            _event_category_processor,
+            _plain_console_renderer,
         ]
 
     structlog.configure(
@@ -100,7 +136,7 @@ def setup_logging(level: str = "INFO", use_colors: bool = True) -> None:
             getattr(logging, level.upper())
         ),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.PrintLoggerFactory(file=stream),
         cache_logger_on_first_use=True,
     )
 

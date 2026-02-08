@@ -49,22 +49,32 @@ async def run_bridge() -> None:
     if not sys.stdin.isatty() and hasattr(sys.stdin, "reconfigure"):
         sys.stdin.reconfigure(line_buffering=True)
 
-    setup_logging(level=os.environ.get("LOG_LEVEL", "WARNING"))
     working_dir = Path(os.environ.get("PROXI_WORKING_DIR", ".")).resolve()
+    log_dir = working_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "proxi.log"
+    setup_logging(level=os.environ.get("LOG_LEVEL", "INFO"), log_file=log_file)
     provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
     max_turns = int(os.environ.get("PROXI_MAX_TURNS", "50"))
     mcp_server = os.environ.get("PROXI_MCP_SERVER")
-    no_sub_agents = os.environ.get("PROXI_NO_SUB_AGENTS", "").lower() in ("1", "true", "yes")
+    no_sub_agents = os.environ.get(
+        "PROXI_NO_SUB_AGENTS", "").lower() in ("1", "true", "yes")
 
     try:
+        logger.info("initializing_llm", provider=provider)
         llm_client = create_llm_client(provider=provider)
     except ValueError as e:
         sys.stderr.write(f"Bridge config error: {e}\n")
         sys.stderr.flush()
         sys.exit(1)
 
+    logger.info("setting_up_tools")
     tool_registry = setup_tools(working_directory=working_dir)
-    sub_agent_manager = None if no_sub_agents else setup_sub_agents(llm_client)
+    if no_sub_agents:
+        sub_agent_manager = None
+    else:
+        logger.info("setting_up_sub_agents")
+        sub_agent_manager = setup_sub_agents(llm_client)
 
     emitter = StdioEmitter()
     loop = AgentLoop(
@@ -123,7 +133,9 @@ async def run_bridge() -> None:
                 task = cmd.get("task") or ""
                 if not task:
                     continue
-                emitter.emit({"type": "status_update", "label": "Running...", "status": "running"})
+                logger.info("starting_agent", task=task[:100])
+                emitter.emit({"type": "status_update",
+                             "label": "Running...", "status": "running"})
                 try:
                     prov = (cmd.get("provider") or provider).lower()
                     if prov != provider and state is None:
@@ -133,7 +145,8 @@ async def run_bridge() -> None:
                             loop.planner = type(loop.planner)(llm_client)
                         except ValueError:
                             pass
-                    turns = cmd.get("maxTurns") or cmd.get("max_turns") or max_turns
+                    turns = cmd.get("maxTurns") or cmd.get(
+                        "max_turns") or max_turns
                     loop.max_turns = turns
                     if state is None:
                         state = await loop.run(task)
@@ -141,8 +154,10 @@ async def run_bridge() -> None:
                         state = await loop.run_continue(state, task)
                 except Exception as e:
                     logger.exception("bridge_run_error")
-                    emitter.emit({"type": "text_stream", "content": f"[Error: {e!s}]"})
-                emitter.emit({"type": "status_update", "label": "Done", "status": "done"})
+                    emitter.emit(
+                        {"type": "text_stream", "content": f"[Error: {e!s}]"})
+                emitter.emit({"type": "status_update",
+                             "label": "Done", "status": "done"})
             elif msg_type == "user_input":
                 # Reserved for future HITL: pass value to a waiting handler
                 pass
