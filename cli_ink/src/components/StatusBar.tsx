@@ -12,14 +12,14 @@ type Props = {
 export function StatusBar({ statusLabel, statusKind, isProgress }: Props) {
   const showTool = statusKind === "tool" && statusLabel;
   const showSubagent = statusKind === "subagent" && statusLabel;
+  const showProgress = (statusKind === "progress" || (statusLabel && !showTool && !showSubagent)) && statusLabel;
 
   return (
     <Box paddingX={1} paddingY={0} height={1} flexShrink={0}>
       <Box gap={1}>
         {showTool && (
           <Text color="yellow">
-            {" "}
-            🛠️ Running: {statusLabel}
+            🛠️ Running: {statusLabel.replace(/^Tool:\s*/, "")}
             {isProgress && (
               <>
                 {" "}
@@ -30,8 +30,18 @@ export function StatusBar({ statusLabel, statusKind, isProgress }: Props) {
         )}
         {showSubagent && (
           <Text color="magenta">
-            {" "}
             🤖 {statusLabel}
+            {isProgress && (
+              <>
+                {" "}
+                <Spinner type="dots" />
+              </>
+            )}
+          </Text>
+        )}
+        {showProgress && (
+          <Text color="cyan">
+            {statusLabel}
             {isProgress && (
               <>
                 {" "}

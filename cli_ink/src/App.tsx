@@ -1,28 +1,39 @@
 /**
- * Minimal TUI for proxi bridge (Step 2).
- * - Spawns bridge with: uv run proxi-bridge from project root.
- * - Shows "Bridge: Ready" when we receive {"type":"ready"}.
- * - Single input; on Enter sends {"type":"start", "task": "..."} and shows response.
+ * Claude Code-style TUI for proxi agent.
+ * - Scrollable chat, token streaming, dynamic status bar, HITL forms.
+ * - Communicates with Python bridge via JSON-RPC over stdin/stdout.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import { spawn, ChildProcess } from "node:child_process";
 import path from "node:path";
-import TextInput from "ink-text-input";
-import { parseBridgeMessage, type BridgeMessage } from "./protocol.js";
+import { parseBridgeMessage, serializeTuiMessage, type BridgeMessage, type UserInputRequired } from "./protocol.js";
+import type { ChatMessage } from "./types.js";
+import { ChatArea } from "./components/ChatArea.js";
+import { InputArea } from "./components/InputArea.js";
+import { StatusBar } from "./components/StatusBar.js";
+import { HitlForm } from "./components/HitlForm.js";
 
-function serializeStart(task: string): string {
-  return JSON.stringify({ type: "start", task }) + "\n";
+type StatusKind = "tool" | "subagent" | "progress" | null;
+
+function inferStatusKind(label: string | null, status: string): { kind: StatusKind; isProgress: boolean } {
+  if (!label || status === "done") return { kind: null, isProgress: false };
+  if (label.startsWith("Tool:")) return { kind: "tool", isProgress: true };
+  if (label.includes("Subagent")) return { kind: "subagent", isProgress: true };
+  return { kind: "progress", isProgress: true };
 }
 
 export default function App() {
   const { stdout } = useStdout();
   const [bridgeReady, setBridgeReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [agentStatus, setAgentStatus] = useState<string | null>(null);
+  const [statusLabel, setStatusLabel] = useState<string | null>(null);
+  const [statusKind, setStatusKind] = useState<StatusKind>(null);
+  const [isProgress, setIsProgress] = useState(false);
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState("");
+  const [hitlSpec, setHitlSpec] = useState<UserInputRequired | null>(null);
 
   const childRef = useRef<ChildProcess | null>(null);
   const bufferRef = useRef("");
@@ -36,7 +47,6 @@ export default function App() {
       PYTHONPATH: projectRoot,
     };
 
-    // Use shell so stdin is forwarded to uv's child (the bridge)
     const proc = spawn("uv run proxi-bridge", [], {
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
@@ -82,6 +92,9 @@ export default function App() {
       }
       if (signal) setError((e) => e || `Bridge killed (${signal})`);
       setBridgeReady(false);
+      setStatusLabel(null);
+      setStatusKind(null);
+      setIsProgress(false);
     });
 
     return () => {
@@ -100,72 +113,93 @@ export default function App() {
         streamingRef.current += msg.content;
         setStreaming(streamingRef.current);
         break;
-      case "status_update":
-        setAgentStatus(msg.label && msg.status === "running" ? msg.label : null);
+      case "status_update": {
+        const { kind, isProgress: progress } = inferStatusKind(msg.label ?? null, msg.status);
+        setStatusLabel(msg.status === "done" ? null : (msg.label ?? null));
+        setStatusKind(msg.status === "done" ? null : kind);
+        setIsProgress(progress && msg.status === "running");
         if (streamingRef.current) {
           setMessages((m) => [...m, { role: "assistant", content: streamingRef.current }]);
           setStreaming("");
           streamingRef.current = "";
         }
         break;
+      }
+      case "user_input_required":
+        setHitlSpec(msg);
+        break;
       default:
         break;
     }
   }
 
-  const onSubmit = useCallback(() => {
-    const task = inputValue.trim();
-    if (!task) return;
+  const commitStreaming = useCallback(() => {
+    if (streamingRef.current) {
+      setMessages((m) => [...m, { role: "assistant", content: streamingRef.current }]);
+      setStreaming("");
+      streamingRef.current = "";
+    }
+  }, []);
+
+  const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
+    if (!task.trim()) return;
     setMessages((m) => [...m, { role: "user", content: task }]);
-    setInputValue("");
     setStreaming("");
     streamingRef.current = "";
     const proc = childRef.current;
     if (proc?.stdin?.writable) {
-      proc.stdin.write(serializeStart(task));
+      proc.stdin.write(serializeTuiMessage({ type: "start", task }));
     }
-  }, [inputValue]);
+  }, []);
+
+  const onHitlSubmit = useCallback((value: string | boolean | number) => {
+    const proc = childRef.current;
+    if (proc?.stdin?.writable) {
+      proc.stdin.write(serializeTuiMessage({ type: "user_input", value }));
+    }
+    setHitlSpec(null);
+  }, []);
+
+  const onHitlCancel = useCallback(() => {
+    const proc = childRef.current;
+    if (proc?.stdin?.writable) {
+      proc.stdin.write(serializeTuiMessage({ type: "user_input", value: false }));
+    }
+    setHitlSpec(null);
+  }, []);
+
+  const minHeight = Math.max(8, (stdout.rows ?? 24) - 2);
 
   return (
-    <Box flexDirection="column" paddingX={1}>
-      <Box marginBottom={1}>
-        <Text color="cyan">
-          Bridge: {bridgeReady ? "Ready" : "Starting..."}
-          {agentStatus ? `  |  ${agentStatus}` : ""}
-        </Text>
+    <Box flexDirection="column" paddingX={1} minHeight={minHeight}>
+      <Box flexDirection="column" flexGrow={1} overflow="hidden" minHeight={6}>
+        <ChatArea messages={messages} streamingContent={streaming} />
       </Box>
-      {error && (
-        <Box marginBottom={1}>
-          <Text color="red">{error}</Text>
-        </Box>
-      )}
-      <Box flexDirection="column" marginBottom={1} minHeight={4}>
-        {messages.map((msg, i) => (
-          <Box key={i}>
-            <Text color={msg.role === "user" ? "cyan" : "green"}>
-              {msg.role === "user" ? "> " : "  "}
-              {msg.content}
-            </Text>
-          </Box>
-        ))}
-        {streaming && (
-          <Box>
-            <Text color="green">  {streaming}</Text>
+
+      <Box flexShrink={0} flexDirection="column">
+        {error && (
+          <Box marginBottom={0}>
+            <Text color="red">{error}</Text>
           </Box>
         )}
-      </Box>
-      <Box>
-        <Text color="cyan">&gt; </Text>
-        {bridgeReady ? (
-          <TextInput
-            value={inputValue}
-            onChange={setInputValue}
-            onSubmit={onSubmit}
-            placeholder="Type a task and press Enter..."
-            showCursor
+        <StatusBar
+          statusLabel={statusLabel}
+          statusKind={statusKind}
+          isProgress={isProgress}
+        />
+        {hitlSpec ? (
+          <HitlForm
+            spec={hitlSpec}
+            onSubmit={onHitlSubmit}
+            onCancel={onHitlCancel}
           />
         ) : (
-          <Text dimColor>Waiting for bridge...</Text>
+          <InputArea
+            onSubmit={onSubmit}
+            onCommitStreaming={commitStreaming}
+            disabled={false}
+            bridgeReady={bridgeReady}
+          />
         )}
       </Box>
     </Box>

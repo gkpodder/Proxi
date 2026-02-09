@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from "react";
 import { Box, Text, useStdout } from "ink";
-import type { ChatMessage } from "../App.js";
+import type { ChatMessage } from "../types.js";
 
 type Props = {
   messages: ChatMessage[];
@@ -21,7 +21,7 @@ export function ChatArea({ messages, streamingContent }: Props) {
     else scrollRef.current = Math.max(0, totalLines - maxVisible);
   }, [totalLines, maxVisible, canScroll]);
 
-  const allLines: { role: "user" | "assistant"; line: string }[] = [];
+  const allLines: { role: string; line: string }[] = [];
   for (const m of messages) {
     const lines = wrapLines(m.content, width);
     for (const line of lines) allLines.push({ role: m.role, line });
@@ -41,7 +41,7 @@ export function ChatArea({ messages, streamingContent }: Props) {
         </Box>
       )}
       {visible.map(({ role, line }, i) => (
-        <Box key={`${start + i}-${line.slice(0, 20)}`}>
+        <Box key={`line-${start}-${i}`}>
           {role === "user" ? (
             <Text color="cyan">&gt; </Text>
           ) : (

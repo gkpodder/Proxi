@@ -55,7 +55,7 @@ async def run_bridge() -> None:
     log_file = log_dir / "proxi.log"
     setup_logging(level=os.environ.get("LOG_LEVEL", "INFO"), log_file=log_file)
     provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
-    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "50"))
+    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "20"))
     mcp_server = os.environ.get("PROXI_MCP_SERVER")
     no_sub_agents = os.environ.get(
         "PROXI_NO_SUB_AGENTS", "").lower() in ("1", "true", "yes")

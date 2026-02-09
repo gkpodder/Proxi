@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useRef } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
-import type { ChatMessage } from "../App.js";
 
 type Props = {
   onSubmit: (task: string, provider: "openai" | "anthropic", maxTurns: number) => void;
