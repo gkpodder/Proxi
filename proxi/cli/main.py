@@ -12,6 +12,8 @@ from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
+from proxi.mcp.multiplexer import MCPMultiplexer
+from proxi.mcp.calendar.tools import register_calendar_tools
 from proxi.observability.logging import setup_logging, get_logger
 from proxi.tools.datetime import DateTimeTool
 from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
@@ -50,6 +52,9 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     # Datetime tool
     registry.register(DateTimeTool())
 
+    # Register calendar tools
+    register_calendar_tools(registry)
+
     return registry
 
 
@@ -65,15 +70,27 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
     return manager
 
 
-async def setup_mcp(mcp_server: str | None = None) -> MCPAdapter | None:
-    """Set up MCP adapter if MCP server is specified."""
+async def setup_mcp(mcp_server: str | list | None = None) -> MCPAdapter | MCPMultiplexer | None:
+    """Set up MCP adapter if MCP server is specified. Supports single or multiple servers."""
     if not mcp_server:
         return None
 
-    # Parse MCP server command
-    # Format: "command:arg1:arg2" or just "command"
-    # Also support space-separated: "command arg1 arg2"
-    if " " in mcp_server and ":" not in mcp_server:
+    # Check if it's a list of servers (for multiplexing)
+    if isinstance(mcp_server, list) and len(mcp_server) > 0 and isinstance(mcp_server[0], list):
+        # Multiple MCP servers - use multiplexer
+        logger.info("setup_mcp_multiplexer", count=len(mcp_server))
+        multiplexer = MCPMultiplexer(mcp_server)
+        try:
+            await multiplexer.initialize()
+            return multiplexer
+        except Exception as e:
+            logger.error("mcp_multiplexer_setup_error", error=str(e), exc_info=True)
+            return None
+
+    # Single MCP server - use regular adapter
+    if isinstance(mcp_server, list):
+        command = mcp_server
+    elif " " in mcp_server and ":" not in mcp_server:
         # Space-separated format
         import shlex
         command = shlex.split(mcp_server)
@@ -84,6 +101,7 @@ async def setup_mcp(mcp_server: str | None = None) -> MCPAdapter | None:
         if len(parts) > 1:
             command.extend(parts[1:])
 
+    logger.debug("mcp_command_parsed", command=command)
     mcp_client = MCPClient(server_command=command)
     adapter = MCPAdapter(mcp_client)
 
@@ -147,12 +165,26 @@ async def main():
         help="Use the filesystem MCP server with the given path (requires Node.js/npx). Example: --mcp-filesystem /path/to/dir",
     )
     parser.add_argument(
+        "--mcp-gmail",
+        action="store_true",
+        help="Enable Gmail MCP server for email operations",
+    )
+    parser.add_argument(
+        "--mcp-notion",
+        action="store_true",
+        help="Enable Notion MCP server for note/page operations",
+    )
+    parser.add_argument(
         "--no-sub-agents",
         action="store_true",
         help="Disable sub-agents",
     )
 
     args = parser.parse_args()
+
+    # Load environment variables from .env file
+    from dotenv import load_dotenv
+    load_dotenv()
 
     # Set up logging
     setup_logging(level=args.log_level)
@@ -171,6 +203,21 @@ async def main():
         logger.error("No task provided")
         sys.exit(1)
 
+    # Auto-enable Gmail MCP if credentials are configured (let LLM decide when to use it)
+    if not args.mcp_gmail:
+        gmail_client_id = os.getenv("GMAIL_CLIENT_ID")
+        gmail_token = os.getenv("GMAIL_TOKEN_PATH", "token.json")
+        if gmail_client_id or os.path.exists(gmail_token):
+            args.mcp_gmail = True
+            logger.info("auto_enabled_gmail", reason="credentials configured")
+
+    # Auto-enable Notion MCP if credentials are configured (let LLM decide when to use it)
+    if not args.mcp_notion:
+        notion_api_key = os.getenv("NOTION_API_KEY")
+        if notion_api_key:
+            args.mcp_notion = True
+            logger.info("auto_enabled_notion", reason="credentials configured")
+
     # Set up working directory
     working_dir = Path(
         args.working_directory) if args.working_directory else Path.cwd()
@@ -187,6 +234,8 @@ async def main():
 
         # Set up MCP if specified
         mcp_server_cmd = args.mcp_server
+        mcp_servers_to_enable = []
+        
         if args.mcp_filesystem:
             # Shortcut for filesystem MCP server
             # Try to use npx if available, otherwise fall back to test server
@@ -199,9 +248,42 @@ async def main():
                     "npx_not_found", message="npx not found, filesystem MCP server requires Node.js. Install Node.js to use this feature.")
                 mcp_server_cmd = None
 
+        # Collect all MCP servers to enable (both Gmail and Notion if available)
+        if args.mcp_notion:
+            # Notion MCP server
+            notion_server_path = os.path.join(
+                os.path.dirname(__file__), "..", "mcp", "extensions", "notion.py"
+            )
+            notion_server_path = os.path.abspath(notion_server_path)
+            if os.path.exists(notion_server_path):
+                mcp_servers_to_enable.append([sys.executable, notion_server_path])
+                logger.info("notion_mcp_enabled", path=notion_server_path, python=sys.executable)
+            else:
+                logger.error("notion_server_not_found", path=notion_server_path)
+                sys.exit(1)
+        
+        if args.mcp_gmail:
+            # Gmail MCP server
+            gmail_server_path = os.path.join(
+                os.path.dirname(__file__), "..", "mcp", "extensions", "gmail.py"
+            )
+            gmail_server_path = os.path.abspath(gmail_server_path)
+            if os.path.exists(gmail_server_path):
+                mcp_servers_to_enable.append([sys.executable, gmail_server_path])
+                logger.info("gmail_mcp_enabled", path=gmail_server_path, python=sys.executable)
+            else:
+                logger.error("gmail_server_not_found", path=gmail_server_path)
+                sys.exit(1)
+
+        # Use multiplexer if multiple servers, otherwise use single adapter
+        if len(mcp_servers_to_enable) > 1:
+            mcp_server_cmd = mcp_servers_to_enable
+        elif len(mcp_servers_to_enable) == 1:
+            mcp_server_cmd = mcp_servers_to_enable[0]
+
         if mcp_server_cmd:
-            # Handle special shortcuts
-            if mcp_server_cmd.startswith("filesystem:"):
+            # Handle special shortcuts (only for string format)
+            if isinstance(mcp_server_cmd, str) and mcp_server_cmd.startswith("filesystem:"):
                 path = mcp_server_cmd.split(":", 1)[1]
                 import shutil
                 npx_path = shutil.which("npx")
@@ -213,7 +295,7 @@ async def main():
                     mcp_server_cmd = None
 
             if mcp_server_cmd:
-                logger.info("setting_up_mcp", server=mcp_server_cmd)
+                logger.info("setting_up_mcp", server=str(mcp_server_cmd))
                 mcp_adapter = await setup_mcp(mcp_server_cmd)
                 if mcp_adapter:
                     mcp_tools = await mcp_adapter.get_tools()
