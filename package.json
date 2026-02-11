@@ -1,0 +1,9 @@
+{
+  "name": "proxi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Proxi agent - TUI script runs from cli_ink",
+  "scripts": {
+    "proxi-tui": "cd cli_ink && npm run dev"
+  }
+}
