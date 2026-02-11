@@ -12,7 +12,7 @@ from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
-from proxi.observability.logging import setup_logging, get_logger
+from proxi.observability.logging import setup_logging, get_logger, init_log_manager
 from proxi.tools.datetime import DateTimeTool
 from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
 from proxi.tools.registry import ToolRegistry
@@ -154,8 +154,10 @@ async def main():
 
     args = parser.parse_args()
 
-    # Set up logging
-    setup_logging(level=args.log_level)
+    # Set up logging with timestamped directory
+    log_manager = init_log_manager(base_dir="logs")
+    log_manager.configure_logging(level=args.log_level, use_colors=True)
+    logger.info("log_directory", path=str(log_manager.get_session_dir()))
 
     # Get task
     if args.task:

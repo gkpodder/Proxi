@@ -1,6 +1,7 @@
 """Launcher for the Ink TUI: spawns the Node.js TUI with the Python bridge on PATH."""
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,16 +25,24 @@ def main() -> None:
 
     # Prefer npm run dev (uses tsx), else npx tsx
     os.chdir(cli_ink)
+    
+    # On Windows, we need to use shell=True for command resolution
+    use_shell = sys.platform == "win32"
+    
     if (cli_ink / "node_modules").is_dir():
+        cmd = "npm run dev" if use_shell else ["npm", "run", "dev"]
         ret = subprocess.call(
-            ["npm", "run", "dev"],
+            cmd,
             env=env,
             cwd=str(cli_ink),
+            shell=use_shell,
         )
     else:
+        cmd = "npx tsx src/index.tsx" if use_shell else ["npx", "tsx", "src/index.tsx"]
         ret = subprocess.call(
-            ["npx", "tsx", "src/index.tsx"],
+            cmd,
             env=env,
             cwd=str(cli_ink),
+            shell=use_shell,
         )
     sys.exit(ret if ret is not None else 0)
