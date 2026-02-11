@@ -9,6 +9,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, environment variables must be set manually
+
 from proxi.agents.registry import SubAgentManager, SubAgentRegistry
 from proxi.agents.summarizer import SummarizerAgent
 from proxi.cli.main import (
@@ -19,6 +26,7 @@ from proxi.cli.main import (
 )
 from proxi.core.loop import AgentLoop
 from proxi.core.state import AgentState
+from proxi.mcp.auto_config import get_auto_config
 from proxi.observability.logging import setup_logging, get_logger, init_log_manager
 
 logger = get_logger(__name__)
@@ -96,10 +104,13 @@ async def run_bridge() -> None:
         try:
             mcp_adapter = await asyncio.wait_for(setup_mcp(mcp_server), timeout=10.0)
             if mcp_adapter:
-                for tool in await mcp_adapter.get_tools():
-                    tool_registry.register(tool)
+                mcp_tools = await mcp_adapter.get_tools()
+                if mcp_tools:
+                    for tool in mcp_tools:
+                        tool_registry.register(tool)
+                    logger.info("mcp_tools_loaded", count=len(mcp_tools))
         except asyncio.TimeoutError:
-            logger.warning("mcp_setup_timeout", server=mcp_server)
+            logger.warning("mcp_setup_timeout", server=mcp_server, timeout=10.0)
         except Exception as e:
             logger.warning("mcp_setup_error", error=str(e))
 
@@ -138,6 +149,58 @@ async def run_bridge() -> None:
                 logger.info("starting_agent", task=task[:100])
                 emitter.emit({"type": "status_update",
                              "label": "Running...", "status": "running"})
+                
+                # Auto-detect and load MCP integrations if needed
+                if not mcp_adapter:
+                    auto_config = get_auto_config()
+                    detected_integrations = auto_config.detect_integrations(task)
+                    
+                    if detected_integrations:
+                        logger.info(
+                            "mcp_auto_detected",
+                            integrations=detected_integrations,
+                            message="Auto-detected MCP integrations from task"
+                        )
+                        
+                        valid_integrations = []
+                        for integration in detected_integrations:
+                            is_valid, msg = auto_config.check_prerequisites(integration)
+                            if is_valid:
+                                valid_integrations.append(integration)
+                            else:
+                                logger.warning(
+                                    "mcp_prerequisite_failed",
+                                    integration=integration,
+                                    message=msg
+                                )
+                        
+                        if valid_integrations:
+                            mcp_server_cmd = auto_config.get_mcp_command(valid_integrations)
+                            if mcp_server_cmd:
+                                logger.info(
+                                    "mcp_auto_loading",
+                                    integrations=valid_integrations,
+                                    message="Auto-loading MCP integrations"
+                                )
+                                try:
+                                    mcp_adapter = await asyncio.wait_for(
+                                        setup_mcp(mcp_server_cmd), timeout=10.0
+                                    )
+                                    if mcp_adapter:
+                                        mcp_tools = await mcp_adapter.get_tools()
+                                        if mcp_tools:
+                                            for tool in mcp_tools:
+                                                tool_registry.register(tool)
+                                            logger.info(
+                                                "mcp_auto_loaded",
+                                                integrations=valid_integrations,
+                                                count=len(mcp_tools)
+                                            )
+                                except asyncio.TimeoutError:
+                                    logger.warning("mcp_auto_load_timeout")
+                                except Exception as e:
+                                    logger.warning("mcp_auto_load_error", error=str(e))
+                
                 try:
                     prov = (cmd.get("provider") or provider).lower()
                     if prov != provider and state is None:

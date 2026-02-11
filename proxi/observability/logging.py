@@ -24,6 +24,7 @@ _EVENT_CATEGORY_MAP = {
     # LLM
     "llm_call": "llm",
     "llm_call_stream": "llm",
+    "llm_usage": "llm",
     "llm_generate": "llm",
     "planner_decide": "llm",
     # Tool

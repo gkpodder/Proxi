@@ -5,12 +5,20 @@ import os
 import sys
 from pathlib import Path
 
+# Load environment variables from .env file if it exists
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not installed, environment variables must be set manually
+
 from proxi.agents.registry import SubAgentManager, SubAgentRegistry
 from proxi.agents.summarizer import SummarizerAgent
 from proxi.core.loop import AgentLoop
 from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
 from proxi.mcp.adapters import MCPAdapter
+from proxi.mcp.auto_config import get_auto_config
 from proxi.mcp.client import MCPClient
 from proxi.observability.logging import setup_logging, get_logger, init_log_manager
 from proxi.tools.datetime import DateTimeTool
@@ -71,14 +79,22 @@ async def setup_mcp(mcp_server: str | None = None) -> MCPAdapter | None:
         return None
 
     # Parse MCP server command
-    # Format: "command:arg1:arg2" or just "command"
-    # Also support space-separated: "command arg1 arg2"
-    if " " in mcp_server and ":" not in mcp_server:
-        # Space-separated format
-        import shlex
-        command = shlex.split(mcp_server)
+    # Try space-separated format first (handles quoted paths)
+    # Fallback to colon-separated for backward compatibility
+    import shlex
+    
+    if " " in mcp_server:
+        # Space-separated format (supports quoted Windows paths)
+        try:
+            command = shlex.split(mcp_server)
+        except ValueError:
+            # If shlex parsing fails, try colon-separated
+            parts = mcp_server.split(":")
+            command = [parts[0]]
+            if len(parts) > 1:
+                command.extend(parts[1:])
     else:
-        # Colon-separated format
+        # Colon-separated format (no spaces)
         parts = mcp_server.split(":")
         command = [parts[0]]
         if len(parts) > 1:
@@ -89,8 +105,15 @@ async def setup_mcp(mcp_server: str | None = None) -> MCPAdapter | None:
 
     try:
         await adapter.initialize()
-        # Load MCP tools into tool registry
+        logger.info("mcp_initialized", message="MCP adapter initialized successfully")
         return adapter
+    except asyncio.TimeoutError:
+        logger.error(
+            "mcp_setup_timeout",
+            error="MCP server initialization timed out. The server may be blocking on authentication.",
+            exc_info=True
+        )
+        return None
     except Exception as e:
         logger.error("mcp_setup_error", error=str(e), exc_info=True)
         return None
@@ -187,8 +210,43 @@ async def main():
         logger.info("setting_up_tools")
         tool_registry = setup_tools(working_directory=working_dir)
 
-        # Set up MCP if specified
+        # Auto-detect MCP integrations from task if not explicitly specified
         mcp_server_cmd = args.mcp_server
+        if not mcp_server_cmd:
+            auto_config = get_auto_config()
+            detected_integrations = auto_config.detect_integrations(task)
+            
+            if detected_integrations:
+                logger.info(
+                    "mcp_auto_detected",
+                    integrations=detected_integrations,
+                    message="Auto-detected MCP integrations from task"
+                )
+                
+                # Check prerequisites for each integration
+                valid_integrations = []
+                for integration in detected_integrations:
+                    is_valid, msg = auto_config.check_prerequisites(integration)
+                    if is_valid:
+                        valid_integrations.append(integration)
+                    else:
+                        logger.warning(
+                            "mcp_prerequisite_failed",
+                            integration=integration,
+                            message=msg
+                        )
+                
+                if valid_integrations:
+                    mcp_server_cmd = auto_config.get_mcp_command(valid_integrations)
+                    if mcp_server_cmd:
+                        logger.info(
+                            "mcp_auto_loading",
+                            integrations=valid_integrations,
+                            message="Auto-loading MCP integrations"
+                        )
+
+        # Set up MCP if specified or auto-detected
+        mcp_server_cmd = mcp_server_cmd
         if args.mcp_filesystem:
             # Shortcut for filesystem MCP server
             # Try to use npx if available, otherwise fall back to test server
@@ -216,12 +274,45 @@ async def main():
 
             if mcp_server_cmd:
                 logger.info("setting_up_mcp", server=mcp_server_cmd)
-                mcp_adapter = await setup_mcp(mcp_server_cmd)
-                if mcp_adapter:
-                    mcp_tools = await mcp_adapter.get_tools()
-                    for tool in mcp_tools:
-                        tool_registry.register(tool)
-                        logger.info("mcp_tool_registered", tool=tool.name)
+                try:
+                    mcp_adapter = await asyncio.wait_for(
+                        setup_mcp(mcp_server_cmd), timeout=10.0
+                    )
+                    if mcp_adapter:
+                        mcp_tools = await mcp_adapter.get_tools()
+                        if mcp_tools:
+                            for tool in mcp_tools:
+                                tool_registry.register(tool)
+                                logger.info("mcp_tool_registered", tool=tool.name)
+                            logger.info(
+                                "mcp_tools_loaded",
+                                count=len(mcp_tools),
+                                message=f"Successfully loaded {len(mcp_tools)} MCP tool(s)"
+                            )
+                        else:
+                            logger.warning(
+                                "mcp_no_tools",
+                                message="MCP adapter initialized but returned no tools"
+                            )
+                    else:
+                        logger.warning(
+                            "mcp_setup_failed",
+                            message="MCP setup failed. Gmail integration will not be available. "
+                            "Check logs for details."
+                        )
+                except asyncio.TimeoutError:
+                    logger.error(
+                        "mcp_setup_timeout",
+                        message="MCP setup timed out after 10 seconds. "
+                        "Gmail integration will not be available."
+                    )
+                except Exception as e:
+                    logger.error(
+                        "mcp_setup_exception",
+                        error=str(e),
+                        message="MCP setup failed with exception",
+                        exc_info=True
+                    )
 
         # Set up sub-agents
         sub_agent_manager = None

@@ -131,6 +131,15 @@ class OpenAIClient:
             "finish_reason": choice.finish_reason,
         }
         
+        # Log non-streaming API call with usage data
+        self.logger.info(
+            "llm_usage",
+            model=self.model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+        )
+        
         api_logger.log_chat_completion(
             model=self.model,
             messages=openai_messages,
@@ -228,6 +237,7 @@ class OpenAIClient:
             "model": self.model,
             "messages": openai_messages,
             "stream": True,
+            "stream_options": {"include_usage": True},  # Request usage data in stream
         }
         if openai_tools:
             kwargs["tools"] = openai_tools
@@ -299,7 +309,15 @@ class OpenAIClient:
         else:
             decision = ModelDecision.respond(content=full_content, reasoning=None)
 
-        # Log streamed API call
+        # Log streamed API call with usage data
+        self.logger.info(
+            "llm_usage",
+            model=self.model,
+            prompt_tokens=usage["prompt_tokens"],
+            completion_tokens=usage["completion_tokens"],
+            total_tokens=usage["total_tokens"],
+        )
+        
         response_data_stream = {
             "choices": [
                 {
