@@ -19,7 +19,7 @@ from proxi.cli.main import (
 )
 from proxi.core.loop import AgentLoop
 from proxi.core.state import AgentState
-from proxi.observability.logging import setup_logging, get_logger
+from proxi.observability.logging import setup_logging, get_logger, init_log_manager
 
 logger = get_logger(__name__)
 
@@ -50,10 +50,12 @@ async def run_bridge() -> None:
         sys.stdin.reconfigure(line_buffering=True)
 
     working_dir = Path(os.environ.get("PROXI_WORKING_DIR", ".")).resolve()
-    log_dir = working_dir / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "proxi.log"
-    setup_logging(level=os.environ.get("LOG_LEVEL", "INFO"), log_file=log_file)
+    
+    # Initialize log manager for TUI session
+    log_manager = init_log_manager(base_dir=working_dir / "logs")
+    log_manager.configure_logging(level=os.environ.get("LOG_LEVEL", "INFO"), use_colors=False)
+    
+    logger.info("initializing_bridge", log_dir=str(log_manager.get_session_dir()))
     provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
     max_turns = int(os.environ.get("PROXI_MAX_TURNS", "20"))
     mcp_server = os.environ.get("PROXI_MCP_SERVER")

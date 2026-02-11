@@ -16,8 +16,10 @@ from proxi.llm.schemas import (
     ToolSpec,
 )
 from proxi.observability.logging import get_logger
+from proxi.observability.api_logger import OpenAIAPILogger
 
 logger = get_logger(__name__)
+api_logger = OpenAIAPILogger()
 
 
 class OpenAIClient:
@@ -109,6 +111,34 @@ class OpenAIClient:
         choice = response.choices[0]
         message = choice.message
 
+        # Log API call
+        usage = {
+            "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
+            "completion_tokens": response.usage.completion_tokens if response.usage else 0,
+            "total_tokens": response.usage.total_tokens if response.usage else 0,
+        }
+        
+        response_data = {
+            "choices": [
+                {
+                    "message": {
+                        "role": message.role,
+                        "content": message.content,
+                    },
+                    "finish_reason": choice.finish_reason,
+                }
+            ],
+            "finish_reason": choice.finish_reason,
+        }
+        
+        api_logger.log_chat_completion(
+            model=self.model,
+            messages=openai_messages,
+            tools=openai_tools,
+            response_data=response_data,
+            usage=usage,
+        )
+
         # Determine decision type
         if message.tool_calls:
             # Tool call decision
@@ -160,12 +190,6 @@ class OpenAIClient:
                 content=message.content or "",
                 reasoning=None,
             )
-
-        usage = {
-            "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-            "completion_tokens": response.usage.completion_tokens if response.usage else 0,
-            "total_tokens": response.usage.total_tokens if response.usage else 0,
-        }
 
         return ModelResponse(
             decision=decision,
@@ -274,6 +298,28 @@ class OpenAIClient:
                 decision.payload["tool_calls"] = tool_calls_acc
         else:
             decision = ModelDecision.respond(content=full_content, reasoning=None)
+
+        # Log streamed API call
+        response_data_stream = {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": full_content,
+                    },
+                    "finish_reason": finish_reason,
+                }
+            ],
+            "finish_reason": finish_reason,
+        }
+        
+        api_logger.log_chat_completion(
+            model=self.model,
+            messages=openai_messages,
+            tools=openai_tools,
+            response_data=response_data_stream,
+            usage=usage,
+        )
 
         yield "", ModelResponse(decision=decision, usage=usage, finish_reason=finish_reason)
 
