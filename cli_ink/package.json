@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "npm run build && node dist/index.js",
+    "start": "bun run build && bun dist/index.js",
     "dev": "tsx src/index.tsx",
+    "dev:bun": "bun --bun src/index.tsx",
     "bridge": "cd .. && uv run proxi-bridge"
   },
   "dependencies": {
