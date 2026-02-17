@@ -302,36 +302,64 @@ async def run_bridge(agent_id: str | None = None) -> None:
                         "status": "running",
                     }
                 )
-                try:
-                    prov = (cmd.get("provider") or provider).lower()
-                    if prov != provider and state is None:
-                        try:
-                            llm_client = create_llm_client(provider=prov)
-                            # Swap client on existing loop and rebuild planner
-                            loop.llm_client = llm_client
-                            loop.planner = type(loop.planner)(llm_client)
-                        except ValueError:
-                            pass
-                    turns = cmd.get("maxTurns") or cmd.get(
-                        "max_turns") or max_turns
-                    loop.max_turns = turns
 
+                prov = (cmd.get("provider") or provider).lower()
+                if prov != provider and state is None:
+                    try:
+                        llm_client = create_llm_client(provider=prov)
+                        loop.llm_client = llm_client
+                        loop.planner = type(loop.planner)(llm_client)
+                    except ValueError:
+                        pass
+                turns = cmd.get("maxTurns") or cmd.get("max_turns") or max_turns
+                loop.max_turns = turns
+
+                async def run_agent() -> AgentState:
                     if state is None:
-                        state = await loop.run(task)
-                    else:
-                        state = await loop.run_continue(state, task)
-                except Exception as e:
-                    logger.exception("bridge_run_error")
-                    emitter.emit(
-                        {"type": "text_stream", "content": f"[Error: {e!s}]"}
-                    )
-                emitter.emit(
-                    {
-                        "type": "status_update",
-                        "label": "Done",
-                        "status": "done",
-                    }
+                        return await loop.run(task)
+                    return await loop.run_continue(state, task)
+
+                agent_task = asyncio.create_task(run_agent())
+                next_cmd_task = asyncio.create_task(command_queue.get())
+
+                done, pending = await asyncio.wait(
+                    [agent_task, next_cmd_task],
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
+
+                if agent_task in done:
+                    next_cmd_task.cancel()
+                    try:
+                        await next_cmd_task
+                    except asyncio.CancelledError:
+                        pass
+                    try:
+                        state = agent_task.result()
+                    except Exception as e:
+                        logger.exception("bridge_run_error")
+                        emitter.emit(
+                            {"type": "text_stream", "content": f"[Error: {e!s}]"}
+                        )
+                    emitter.emit(
+                        {"type": "status_update", "label": "Done", "status": "done"}
+                    )
+                else:
+                    cmd = next_cmd_task.result()
+                    logger.info("request_aborted", task=task[:100])
+                    agent_task.cancel()
+                    try:
+                        await agent_task
+                    except asyncio.CancelledError:
+                        pass
+                    emitter.emit(
+                        {
+                            "type": "status_update",
+                            "label": "Aborted",
+                            "status": "done",
+                        }
+                    )
+                    if cmd is not None and cmd.get("type") != "abort":
+                        main_loop.call_soon_threadsafe(command_queue.put_nowait, cmd)
     except asyncio.CancelledError:
         pass
     finally:

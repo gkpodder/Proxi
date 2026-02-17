@@ -185,6 +185,19 @@ export default function App() {
     setHitlSpec(null);
   }, []);
 
+  const onAbort = useCallback(() => {
+    const proc = childRef.current;
+    if (proc?.stdin?.writable) {
+      proc.stdin.write(serializeTuiMessage({ type: "abort" as const }));
+    }
+    if (streamingRef.current) {
+      setMessages((m) => [...m, { role: "assistant", content: streamingRef.current }]);
+    }
+    setStreaming("");
+    streamingRef.current = "";
+    setMessages((m) => [...m, { role: "system", content: "Request aborted." }]);
+  }, []);
+
   const minHeight = Math.max(8, (stdout.rows ?? 24) - 2);
 
   return (
@@ -221,9 +234,11 @@ export default function App() {
           <InputArea
             onSubmit={onSubmit}
             onCommitStreaming={commitStreaming}
-            disabled={false}
+            disabled={isProgress}
             bridgeReady={bridgeReady}
             onSwitchAgent={onSwitchAgent}
+            onAbort={onAbort}
+            isRunning={isProgress}
           />
         )}
       </Box>

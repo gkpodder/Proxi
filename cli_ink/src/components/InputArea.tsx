@@ -9,6 +9,8 @@ type Props = {
   bridgeReady: boolean;
   inputAllowedOverride?: boolean; // true when we allow input after timeout even if bridge not ready
   onSwitchAgent?: () => void;
+  onAbort?: () => void;
+  isRunning?: boolean;
 };
 
 const HISTORY_MAX = 50;
@@ -20,6 +22,8 @@ export function InputArea({
   bridgeReady,
   inputAllowedOverride = false,
   onSwitchAgent,
+  onAbort,
+  isRunning = false,
 }: Props) {
   const [value, setValue] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -47,6 +51,10 @@ export function InputArea({
   }, [value, onSubmit, onCommitStreaming]);
 
   useInput((input, key) => {
+    if (isRunning && onAbort && key.escape) {
+      onAbort();
+      return;
+    }
     if (disabled) return;
     if (key.upArrow) {
       if (historyRef.current.length === 0) return;
@@ -84,9 +92,16 @@ export function InputArea({
             showCursor
           />
         ) : (
-          <Text dimColor>
-            {!bridgeReady ? "Starting bridge..." : "Waiting for response..."}
-          </Text>
+          <Box gap={1}>
+            <Text dimColor>
+              {!bridgeReady ? "Starting bridge..." : "Waiting for response..."}
+            </Text>
+            {isRunning && onAbort && (
+              <Text color="red" bold>
+                [Esc: Abort]
+              </Text>
+            )}
+          </Box>
         )}
       </Box>
     </Box>

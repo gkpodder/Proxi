@@ -79,10 +79,16 @@ export const SwitchAgentSchema = z.object({
 });
 export type SwitchAgent = z.infer<typeof SwitchAgentSchema>;
 
+export const AbortSchema = z.object({
+  type: z.literal("abort"),
+});
+export type Abort = z.infer<typeof AbortSchema>;
+
 export const TuiToBridgeSchema = z.union([
   StartTaskSchema,
   UserInputResponseSchema,
   SwitchAgentSchema,
+  AbortSchema,
 ]);
 export type TuiToBridge = z.infer<typeof TuiToBridgeSchema>;
 
