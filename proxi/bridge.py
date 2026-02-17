@@ -11,6 +11,13 @@ from typing import Any
 
 from proxi.cli.main import create_llm_client, setup_mcp, setup_sub_agents, setup_tools
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
+from proxi.cli.main import (
+    auto_load_mcp_servers,
+    create_llm_client,
+    setup_mcp,
+    setup_sub_agents,
+    setup_tools,
+)
 from proxi.core.loop import AgentLoop
 from proxi.core.state import AgentState
 from proxi.observability.logging import get_logger, init_log_manager
@@ -95,11 +102,26 @@ async def run_bridge(agent_id: str | None = None) -> None:
     # Tell TUI we are ready to accept commands (before slow MCP setup)
     emitter.emit({"type": "ready"})
 
-    mcp_adapter = None
+    mcp_adapters = []
+    
+    # Auto-load configured MCP servers unless explicitly disabled
+    no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
+    if not no_mcp:
+        try:
+            logger.info("auto_loading_mcp_servers")
+            mcp_adapters = await asyncio.wait_for(auto_load_mcp_servers(tool_registry), timeout=15.0)
+            logger.info("mcp_servers_loaded", count=len(mcp_adapters))
+        except asyncio.TimeoutError:
+            logger.warning("mcp_auto_load_timeout")
+        except Exception as e:
+            logger.warning("mcp_auto_load_error", error=str(e))
+    
+    # Also support explicit MCP server via environment variable
     if mcp_server:
         try:
             mcp_adapter = await asyncio.wait_for(setup_mcp(mcp_server), timeout=10.0)
             if mcp_adapter:
+                mcp_adapters.append(mcp_adapter)
                 for tool in await mcp_adapter.get_tools():
                     tool_registry.register(tool)
         except asyncio.TimeoutError:
@@ -364,8 +386,11 @@ async def run_bridge(agent_id: str | None = None) -> None:
         pass
     finally:
         emitter._closed = True
-        if mcp_adapter:
-            await mcp_adapter.close()
+        for adapter in mcp_adapters:
+            try:
+                await adapter.close()
+            except Exception as e:
+                logger.warning("mcp_close_error", error=str(e))
 
 
 def main() -> None:

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "gmail": {
+      "command": "uv",
+      "args": ["run", "--", "python", "-m", "proxi.mcp.servers.gmail.server"],
+      "description": "Gmail MCP server for reading and sending emails"
+    }
+  },
+  "imports": []
+}
