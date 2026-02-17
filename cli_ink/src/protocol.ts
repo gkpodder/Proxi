@@ -32,11 +32,19 @@ export const ReadySchema = z.object({
 });
 export type Ready = z.infer<typeof ReadySchema>;
 
+export const BootCompleteSchema = z.object({
+  type: z.literal("boot_complete"),
+  agentId: z.string(),
+  sessionId: z.string(),
+});
+export type BootComplete = z.infer<typeof BootCompleteSchema>;
+
 export const BridgeMessageSchema = z.discriminatedUnion("type", [
   TextStreamSchema,
   StatusUpdateSchema,
   UserInputRequiredSchema,
   ReadySchema,
+  BootCompleteSchema,
 ]);
 export type BridgeMessage = z.infer<typeof BridgeMessageSchema>;
 

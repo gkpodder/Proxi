@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 
+from proxi.core.prompt_builder import PromptBuilder
 from proxi.core.state import AgentState
 from proxi.llm.base import LLMClient
 from proxi.llm.schemas import ModelDecision, SubAgentSpec, ToolSpec
@@ -17,6 +18,7 @@ class Planner:
         """Initialize the planner."""
         self.llm_client = llm_client
         self.logger = logger
+        self.prompt_builder = PromptBuilder()
 
     async def decide(
         self,
@@ -43,13 +45,17 @@ class Planner:
             history_length=len(state.history),
         )
 
+        # Build prompt with static→incremental→volatile structure.
+        payload = self.prompt_builder.build(state, tools=tools)
+
         generate_stream = getattr(self.llm_client, "generate_stream", None)
         if stream_callback and generate_stream is not None:
             response = None
             async for chunk, resp in generate_stream(
-                messages=state.history,
+                messages=payload.messages,
                 tools=tools,
                 agents=agents or [],
+                system=payload.system,
             ):
                 if chunk:
                     await stream_callback(chunk)
@@ -57,15 +63,17 @@ class Planner:
                     response = resp
             if response is None:
                 response = await self.llm_client.generate(
-                    messages=state.history,
+                    messages=payload.messages,
                     tools=tools,
                     agents=agents or [],
+                    system=payload.system,
                 )
             return response.decision, response.usage
         else:
             response = await self.llm_client.generate(
-                messages=state.history,
+                messages=payload.messages,
                 tools=tools,
                 agents=agents or [],
+                system=payload.system,
             )
             return response.decision, response.usage

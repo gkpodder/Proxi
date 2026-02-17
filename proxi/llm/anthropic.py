@@ -61,6 +61,7 @@ class AnthropicClient:
         messages: Sequence[Message],
         tools: Sequence[ToolSpec] | None = None,
         agents: Sequence[SubAgentSpec] | None = None,
+        system: str | None = None,
     ) -> ModelResponse:
         """Generate a response from Anthropic."""
         self.logger.info("llm_call", model=self.model, provider="anthropic")
@@ -77,6 +78,11 @@ class AnthropicClient:
             "messages": anthropic_messages,
             "max_tokens": 4096,
         }
+
+        if system:
+            # Anthropic supports a top-level system prompt field; we keep
+            # messages restricted to user/assistant content.
+            kwargs["system"] = system
 
         if anthropic_tools:
             kwargs["tools"] = anthropic_tools
@@ -126,12 +132,13 @@ class AnthropicClient:
         messages: Sequence[Message],
         tools: Sequence[ToolSpec] | None = None,
         agents: Sequence[SubAgentSpec] | None = None,
+        system: str | None = None,
     ) -> AsyncIterator[tuple[str, ModelResponse | None]]:
         """
         Generate a response; yields content in one chunk then the full response.
         (Anthropic streaming can be added later for token-by-token.)
         """
-        response = await self.generate(messages, tools=tools, agents=agents)
+        response = await self.generate(messages, tools=tools, agents=agents, system=system)
         content = response.decision.payload.get("content") or ""
         if content:
             yield content, None

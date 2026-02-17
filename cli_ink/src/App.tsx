@@ -34,6 +34,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState("");
   const [hitlSpec, setHitlSpec] = useState<UserInputRequired | null>(null);
+  const [bootInfo, setBootInfo] = useState<{ agentId: string; sessionId: string } | null>(null);
 
   const childRef = useRef<ChildProcess | null>(null);
   const bufferRef = useRef("");
@@ -108,6 +109,9 @@ export default function App() {
       case "ready":
         setBridgeReady(true);
         setError(null);
+        break;
+      case "boot_complete":
+        setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
         break;
       case "text_stream":
         streamingRef.current += msg.content;
@@ -187,6 +191,13 @@ export default function App() {
           statusKind={statusKind}
           isProgress={isProgress}
         />
+        {bootInfo && (
+          <Box>
+            <Text dimColor>
+              Agent: {bootInfo.agentId} · Session: {bootInfo.sessionId}
+            </Text>
+          </Box>
+        )}
         {hitlSpec ? (
           <HitlForm
             spec={hitlSpec}

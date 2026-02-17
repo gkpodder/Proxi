@@ -1,20 +1,12 @@
 """OpenAI LLM client implementation."""
 
-import json
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 from openai import AsyncOpenAI
 
 from proxi.core.state import Message
-from proxi.llm.schemas import (
-    DecisionType,
-    ModelDecision,
-    ModelResponse,
-    SubAgentSpec,
-    ToolCall,
-    ToolSpec,
-)
+from proxi.llm.schemas import ModelDecision, ModelResponse, SubAgentSpec, ToolCall, ToolSpec
 from proxi.observability.logging import get_logger
 from proxi.observability.api_logger import OpenAIAPILogger
 
@@ -70,10 +62,15 @@ class OpenAIClient:
         messages: Sequence[Message],
         tools: Sequence[ToolSpec] | None = None,
         agents: Sequence[SubAgentSpec] | None = None,
+        system: str | None = None,
     ) -> ModelResponse:
         """Generate a response from OpenAI."""
         self.logger.info("llm_call", model=self.model, provider="openai")
         openai_messages = self._convert_messages(messages)
+        # Prepend a system message when provided. PromptBuilder ensures that
+        # `messages` themselves do not contain a separate system message.
+        if system:
+            openai_messages = [{"role": "system", "content": system}] + openai_messages
         openai_tools = self._convert_tools(tools) if tools else None
 
         # Convert sub-agents to tools since OpenAI doesn't natively support sub-agents
@@ -202,6 +199,7 @@ class OpenAIClient:
         messages: Sequence[Message],
         tools: Sequence[ToolSpec] | None = None,
         agents: Sequence[SubAgentSpec] | None = None,
+        system: str | None = None,
     ) -> AsyncIterator[tuple[str, ModelResponse | None]]:
         """
         Generate a response with streaming. Yields (content_delta, None) for each
@@ -209,6 +207,8 @@ class OpenAIClient:
         """
         self.logger.info("llm_call_stream", model=self.model, provider="openai")
         openai_messages = self._convert_messages(messages)
+        if system:
+            openai_messages = [{"role": "system", "content": system}] + openai_messages
         openai_tools = self._convert_tools(tools) if tools else None
         agent_tools = []
         if agents:
@@ -236,7 +236,6 @@ class OpenAIClient:
         stream = await self.client.chat.completions.create(**kwargs)
         content_parts: list[str] = []
         tool_calls_acc: list[dict[str, Any]] = []
-        current_tool: dict[str, Any] | None = None
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         finish_reason: str | None = None
 

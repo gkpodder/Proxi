@@ -1,11 +1,13 @@
 """Agent state management for tracking turns, history, and context."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
+import json
 
 
 class TurnStatus(str, Enum):
@@ -30,6 +32,26 @@ class AgentStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+class WorkspaceConfig(BaseModel):
+    """Configuration for the current workspace context.
+
+    This is attached to the AgentState so that prompt builders and tools
+    can locate global, agent, and session files on disk without needing
+    to re-discover the workspace layout.
+    """
+
+    workspace_root: Annotated[str, Field(description="Root of the Proxi workspace (e.g. ~/.proxi)")]
+    agent_id: Annotated[str, Field(description="Current agent identifier")]
+    session_id: Annotated[str, Field(description="Current session identifier")]
+
+    global_system_prompt_path: Annotated[str, Field(description="Path to global/system_prompt.md")]
+    soul_path: Annotated[str, Field(description="Path to agents/<agent_id>/Soul.md")]
+
+    history_path: Annotated[str, Field(description="Path to sessions/<session_id>/history.jsonl")]
+    plan_path: Annotated[str, Field(description="Path to sessions/<session_id>/plan.md (optional)")]
+    todos_path: Annotated[str, Field(description="Path to sessions/<session_id>/todos.md (optional)")]
 
 
 @dataclass
@@ -71,9 +93,21 @@ class AgentState(BaseModel):
     start_time: Annotated[float | None, Field(default=None)]
     end_time: Annotated[float | None, Field(default=None)]
 
+    # Workspace context (optional)
+    workspace: Annotated[WorkspaceConfig | None, Field(default=None, description="Current workspace context, if any")]
+
     def add_message(self, message: Message) -> None:
-        """Add a message to the history."""
+        """Add a message to the history and append to history.jsonl if configured."""
         self.history.append(message)
+
+        # Persist only user/assistant messages into history.jsonl so that
+        # chat history can be reconstructed later without tool/system noise.
+        if (
+            self.workspace is not None
+            and message.role in ("user", "assistant")
+            and self.workspace.history_path
+        ):
+            self._append_history_jsonl(message)
 
     def add_turn(self, turn: TurnState) -> None:
         """Add a turn state."""
@@ -96,3 +130,16 @@ class AgentState(BaseModel):
             and self.current_turn < self.max_turns
             and self.status == AgentStatus.RUNNING
         )
+
+    # --- Internal helpers -------------------------------------------------
+
+    def _append_history_jsonl(self, message: Message) -> None:
+        """Append a single message to the workspace history.jsonl file."""
+        try:
+            path = Path(self.workspace.history_path)  # type: ignore[union-attr]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                f.write(message.model_dump_json() + "\n")
+        except Exception:
+            # History persistence is best-effort; failures should not break the loop.
+            return
