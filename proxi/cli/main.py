@@ -17,7 +17,7 @@ from proxi.tools.datetime import DateTimeTool
 from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
 from proxi.tools.registry import ToolRegistry
 from proxi.tools.shell import ExecuteCommandTool
-from proxi.tools.workspace_tools import ManageTodosTool, ReadSoulTool, UpdatePlanTool
+from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.workspace import WorkspaceManager
 
 logger = get_logger(__name__)
@@ -242,7 +242,7 @@ async def main():
         workspace_config = session.workspace_config
 
         # Register workspace-scoped tools now that paths are known
-        tool_registry.register(UpdatePlanTool(workspace_config))
+        tool_registry.register(ManagePlanTool(workspace_config))
         tool_registry.register(ManageTodosTool(workspace_config))
         tool_registry.register(ReadSoulTool(workspace_config))
 

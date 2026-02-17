@@ -97,11 +97,19 @@ class WorkspaceManager:
             # Initial content describes workspace capabilities.
             content = (
                 "You are Proxi, a helpful AI assistant.\n\n"
-                "You have a session-specific workspace on disk. For complex tasks, use the\n"
-                "`update_plan` tool to maintain a strategy and `manage_todos` to track\n"
-                "progress. These files are optional; only create them if they help you\n"
-                "stay organized. Your current workspace state will be provided to you at\n"
-                "the start of each turn if it exists.\n"
+                "You have a session-specific workspace with two optional tools:\n"
+                "- `manage_plan`: Read or update a plan.md file for your current strategy.\n"
+                "- `manage_todos`: Read or update a todos.md file for tracking task progress.\n\n"
+                "These tools are OPTIONAL. Only use them for complex, multi-step tasks\n"
+                "where maintaining state across turns is genuinely helpful. For simple\n"
+                "or one-shot requests, respond directly without creating a plan or todos.\n\n"
+                "When working on a multi-step task:\n"
+                "- Call `manage_plan` (no arguments) to read your current plan, or pass\n"
+                "  `content` to create/replace it.\n"
+                "- Call `manage_todos` (no arguments) to read your current todo list, or\n"
+                "  pass `content` to create/replace it.\n"
+                "- After completing a step, consider updating your todos to check off\n"
+                "  finished items so you stay on track.\n"
             )
             path.write_text(content, encoding="utf-8")
         return path

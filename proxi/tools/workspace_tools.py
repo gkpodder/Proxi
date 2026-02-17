@@ -9,42 +9,58 @@ from proxi.core.state import WorkspaceConfig
 from proxi.tools.base import BaseTool, ToolResult
 
 
-class UpdatePlanTool(BaseTool):
-    """Tool for updating the current session plan.md."""
+class ManagePlanTool(BaseTool):
+    """Tool for reading or updating the current session plan.md."""
 
     def __init__(self, workspace: WorkspaceConfig):
         super().__init__(
-            name="update_plan",
-            description="Create or update the current session plan.md file.",
+            name="manage_plan",
+            description=(
+                "Read or update plan.md in the current session workspace. "
+                "If 'content' is provided, it overwrites the file; otherwise "
+                "the current contents are returned."
+            ),
             parameters_schema={
                 "type": "object",
                 "properties": {
                     "content": {
                         "type": "string",
-                        "description": "Full content to write into plan.md (overwrites existing).",
+                        "description": "Optional full content to write into plan.md.",
                     },
                 },
-                "required": ["content"],
             },
         )
         self._workspace = workspace
 
     async def execute(self, arguments: dict[str, Any]) -> ToolResult:
+        path = Path(self._workspace.plan_path)
         content = arguments.get("content")
-        if content is None:
-            return ToolResult(
-                success=False,
-                output="",
-                error="content is required",
-            )
+
         try:
-            path = Path(self._workspace.plan_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(str(content), encoding="utf-8")
+            if content is not None:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(str(content), encoding="utf-8")
+                return ToolResult(
+                    success=True,
+                    output="plan.md updated",
+                    metadata={"path": str(path), "size": len(str(content))},
+                    error=None,
+                )
+
+            # Read-only mode if content not provided
+            if not path.exists():
+                return ToolResult(
+                    success=True,
+                    output="",
+                    metadata={"path": str(path), "size": 0},
+                    error=None,
+                )
+
+            text = path.read_text(encoding="utf-8")
             return ToolResult(
                 success=True,
-                output="plan.md updated",
-                metadata={"path": str(path), "size": len(str(content))},
+                output=text,
+                metadata={"path": str(path), "size": len(text)},
                 error=None,
             )
         except Exception as e:

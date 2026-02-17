@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from proxi.cli.main import create_llm_client, setup_mcp, setup_sub_agents, setup_tools
-from proxi.tools.workspace_tools import ManageTodosTool, ReadSoulTool, UpdatePlanTool
+from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.core.loop import AgentLoop
 from proxi.core.state import AgentState
 from proxi.observability.logging import get_logger, init_log_manager
@@ -233,7 +233,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
         workspace_config = session.workspace_config
 
         # Register workspace-scoped tools now that session paths are known
-        tool_registry.register(UpdatePlanTool(workspace_config))
+        tool_registry.register(ManagePlanTool(workspace_config))
         tool_registry.register(ManageTodosTool(workspace_config))
         tool_registry.register(ReadSoulTool(workspace_config))
 

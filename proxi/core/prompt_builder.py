@@ -1,4 +1,4 @@
-"""PromptBuilder: assemble static→incremental→volatile prompt structure.
+"""PromptBuilder: assemble static→incremental prompt structure.
 
 This centralises how prompts are constructed so that:
 
@@ -7,9 +7,9 @@ This centralises how prompts are constructed so that:
    - agents/<agent_id>/Soul.md
    - Deterministic textual tool definitions
 2. **Chat History (INCREMENTAL)** is the sequence of prior messages.
-3. **Workspace Context (VOLATILE)** for the current session (plan.md, todos.md)
-   is injected only into the *content of the final user message*.
-4. **Current Request (LIVE)** is the newest user content, at the tail of history.
+
+Workspace context (plan.md, todos.md) is NOT injected automatically.
+The agent pulls it on demand via manage_plan / manage_todos tools.
 """
 
 from __future__ import annotations
@@ -30,57 +30,25 @@ class PromptPayload:
 
 
 class PromptBuilder:
-    """Builds prompts following the Static→Incremental→Volatile structure."""
+    """Builds prompts following the Static→Incremental structure."""
 
     def build(self, state: AgentState, tools: Sequence[ToolSpec] | None = None) -> PromptPayload:
-        """Build a PromptPayload from agent state and tools."""
+        """Build a PromptPayload from agent state and tools.
+
+        Messages are passed through unmodified to preserve prompt-cache
+        stability.  Workspace context (plan/todos) is NOT injected here;
+        the agent pulls it on demand via tool calls.
+        """
         workspace = state.workspace
 
         system_prefix = None
         if workspace is not None:
             system_prefix = self._build_system_prefix(workspace, tools or [])
 
-        # Rebuild messages so that only the *last* user message content is
-        # augmented with workspace context; all earlier messages remain byte-stable.
         if not state.history:
             return PromptPayload(messages=[], system=system_prefix)
 
-        base_messages = list(state.history)
-
-        # Compute workspace context block (plan/todos) if present.
-        workspace_block = ""
-        if workspace is not None:
-            workspace_block = self._build_workspace_block(
-                plan_path=Path(workspace.plan_path),
-                todos_path=Path(workspace.todos_path),
-            )
-
-        # Only modify the *final* user message; do not inject new messages in between.
-        modified_messages: list[Message] = []
-        *prefix, last = base_messages
-        modified_messages.extend(prefix)
-
-        if last.role == "user" and workspace_block:
-            # Inject workspace context at the top of the last user message content.
-            original_content = last.content or ""
-            new_content = (
-                f"{workspace_block}\n\n{original_content}".strip()
-                if original_content
-                else workspace_block
-            )
-            modified_messages.append(
-                Message(
-                    role="user",
-                    content=new_content,
-                    name=last.name,
-                    tool_call_id=last.tool_call_id,
-                    tool_calls=last.tool_calls,
-                )
-            )
-        else:
-            modified_messages.append(last)
-
-        return PromptPayload(messages=modified_messages, system=system_prefix)
+        return PromptPayload(messages=list(state.history), system=system_prefix)
 
     # --- Internal helpers -------------------------------------------------
 
@@ -119,41 +87,4 @@ class PromptBuilder:
             parts.append(tools_block)
 
         return "\n\n".join(parts).strip()
-
-    def _build_workspace_block(self, plan_path: Path, todos_path: Path) -> str:
-        """Build the volatile workspace context block from plan/todos."""
-        plan_text = ""
-        todos_text = ""
-
-        try:
-            if plan_path.exists():
-                plan_text = plan_path.read_text(encoding="utf-8").strip()
-        except Exception:
-            plan_text = ""
-
-        try:
-            if todos_path.exists():
-                todos_text = todos_path.read_text(encoding="utf-8").strip()
-        except Exception:
-            todos_text = ""
-
-        if not plan_text and not todos_text:
-            return ""
-
-        parts: list[str] = ["## CURRENT WORKSPACE CONTEXT"]
-
-        if plan_text:
-            parts.append("### PLAN")
-            parts.append("<workspace_plan>")
-            parts.append(plan_text)
-            parts.append("</workspace_plan>")
-
-        if todos_text:
-            parts.append("### TODOS")
-            parts.append("<workspace_todos>")
-            parts.append(todos_text)
-            parts.append("</workspace_todos>")
-
-        parts.append("--- END WORKSPACE CONTEXT ---")
-        return "\n".join(parts)
 
