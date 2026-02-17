@@ -45,12 +45,14 @@ async def run_bridge(agent_id: str | None = None) -> None:
         sys.stdin.reconfigure(line_buffering=True)
 
     working_dir = Path(os.environ.get("PROXI_WORKING_DIR", ".")).resolve()
-    
+
     # Initialize log manager for TUI session
     log_manager = init_log_manager(base_dir=working_dir / "logs")
-    log_manager.configure_logging(level=os.environ.get("LOG_LEVEL", "INFO"), use_colors=False)
-    
-    logger.info("initializing_bridge", log_dir=str(log_manager.get_session_dir()))
+    log_manager.configure_logging(level=os.environ.get(
+        "LOG_LEVEL", "INFO"), use_colors=False)
+
+    logger.info("initializing_bridge", log_dir=str(
+        log_manager.get_session_dir()))
     provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
     max_turns = int(os.environ.get("PROXI_MAX_TURNS", "20"))
     mcp_server = os.environ.get("PROXI_MCP_SERVER")
@@ -119,9 +121,11 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 obj = json.loads(line)
                 msg_type = obj.get("type")
                 if msg_type == "user_input":
-                    main_loop.call_soon_threadsafe(user_input_queue.put_nowait, obj)
+                    main_loop.call_soon_threadsafe(
+                        user_input_queue.put_nowait, obj)
                 else:
-                    main_loop.call_soon_threadsafe(command_queue.put_nowait, obj)
+                    main_loop.call_soon_threadsafe(
+                        command_queue.put_nowait, obj)
             except json.JSONDecodeError:
                 continue
         main_loop.call_soon_threadsafe(command_queue.put_nowait, None)
@@ -187,7 +191,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 agent_info = workspace_manager.create_agent(
                     name=str(name or "Proxi"),
                     persona=str(persona or "Helpful, patient, and clear."),
-                    mission=str(mission or "Assist the user with their tasks."),
+                    mission=str(
+                        mission or "Assist the user with their tasks."),
                 )
             elif len(agents) == 1:
                 agent_info = agents[0]
@@ -269,12 +274,14 @@ async def run_bridge(agent_id: str | None = None) -> None:
                             loop.planner = type(loop.planner)(llm_client)
                         except ValueError:
                             pass
-                    turns = cmd.get("maxTurns") or cmd.get("max_turns") or max_turns
+                    turns = cmd.get("maxTurns") or cmd.get(
+                        "max_turns") or max_turns
                     loop.max_turns = turns
 
                     if state is None:
                         # Attach workspace to initial state
-                        loop.workspace = workspace_config  # type: ignore[attr-defined]
+                        # type: ignore[attr-defined]
+                        loop.workspace = workspace_config
                         state = await loop.run(task)
                     else:
                         state = await loop.run_continue(state, task)
@@ -302,7 +309,8 @@ def main() -> None:
     """Entry point for proxi-bridge."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Proxi bridge for TUI clients")
+    parser = argparse.ArgumentParser(
+        description="Proxi bridge for TUI clients")
     parser.add_argument(
         "--agent-id",
         type=str,

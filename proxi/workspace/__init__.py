@@ -199,4 +199,3 @@ class WorkspaceManager:
         value = value.strip().lower()
         allowed = "abcdefghijklmnopqrstuvwxyz0123456789-_"
         return "".join(ch if ch in allowed else "-" for ch in value)
-
