@@ -43,6 +43,26 @@ class OpenAIClient:
             result.append(openai_msg)
         return result
 
+    def _build_usage(self, u: Any) -> dict[str, Any]:
+        """Build usage dict including prompt_tokens_details.cached_tokens when present."""
+        if not u:
+            return {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": 0,
+            }
+        usage: dict[str, Any] = {
+            "prompt_tokens": u.prompt_tokens or 0,
+            "completion_tokens": u.completion_tokens or 0,
+            "total_tokens": u.total_tokens or 0,
+        }
+        ptd = getattr(u, "prompt_tokens_details", None)
+        if ptd is not None:
+            cached = getattr(ptd, "cached_tokens", None)
+            if cached is not None:
+                usage["prompt_tokens_details"] = {"cached_tokens": cached}
+        return usage
+
     def _convert_tools(self, tools: Sequence[ToolSpec]) -> list[dict[str, Any]]:
         """Convert tool specs to OpenAI format."""
         return [
@@ -110,11 +130,7 @@ class OpenAIClient:
         message = choice.message
 
         # Log API call
-        usage = {
-            "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-            "completion_tokens": response.usage.completion_tokens if response.usage else 0,
-            "total_tokens": response.usage.total_tokens if response.usage else 0,
-        }
+        usage = self._build_usage(response.usage)
 
         response_data = {
             "choices": [
@@ -232,6 +248,7 @@ class OpenAIClient:
             "model": self.model,
             "messages": openai_messages,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         if openai_tools:
             kwargs["tools"] = openai_tools
@@ -240,10 +257,13 @@ class OpenAIClient:
         stream = await self.client.chat.completions.create(**kwargs)
         content_parts: list[str] = []
         tool_calls_acc: list[dict[str, Any]] = []
-        usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        usage: dict[str, Any] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         finish_reason: str | None = None
 
         async for chunk in stream:
+            # Capture usage first - the final chunk has usage but empty choices
+            if getattr(chunk, "usage", None) and chunk.usage:
+                usage = self._build_usage(chunk.usage)
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -273,12 +293,6 @@ class OpenAIClient:
                                     tool_calls_acc[idx]["function"]["arguments"] or "") + (tc.function.arguments or "")
             if chunk.choices[0].finish_reason:
                 finish_reason = chunk.choices[0].finish_reason
-            if getattr(chunk, "usage", None) and chunk.usage:
-                usage = {
-                    "prompt_tokens": chunk.usage.prompt_tokens or 0,
-                    "completion_tokens": chunk.usage.completion_tokens or 0,
-                    "total_tokens": chunk.usage.total_tokens or 0,
-                }
 
         full_content = "".join(content_parts)
         if tool_calls_acc:

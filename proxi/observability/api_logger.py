@@ -14,7 +14,7 @@ class OpenAIAPILogger:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
         response_data: dict[str, Any],
-        usage: dict[str, int],
+        usage: dict[str, Any],
     ) -> None:
         """Log a chat completion API call with clean, readable output."""
         log_manager = get_log_manager()

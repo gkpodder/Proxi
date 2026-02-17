@@ -95,5 +95,5 @@ class ModelResponse(BaseModel):
     """Complete response from the model."""
 
     decision: ModelDecision
-    usage: Annotated[dict[str, int], Field(description="Token usage information")]
+    usage: Annotated[dict[str, Any], Field(description="Token usage (prompt_tokens, completion_tokens, total_tokens, optional prompt_tokens_details)")]
     finish_reason: Annotated[str | None, Field(default=None, description="Finish reason")]
