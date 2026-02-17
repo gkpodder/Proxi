@@ -19,7 +19,7 @@ Primary Agent (Planner / Orchestrator)
    ↓
 ┌──────────────┬──────────────┬──────────────┐
 │   Tools      │   MCPs       │  Sub-Agents  │
-│ (stateless)  │ (external)  │ (stateful)   │
+│ (stateless)  │ (external)   │ (stateful)   │
 └──────────────┴──────────────┴──────────────┘
 ```
 
@@ -47,13 +47,14 @@ Where ACT can be:
 - asyncio for async operations
 - Pydantic for data validation
 - Structlog for structured logging
+- Bun and Ink for TUI
 
 ## Installation
 
 **Prerequisites**
 
-- **Python 3.12+** and [uv](https://docs.astral.sh/uv/) (install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or your package manager).
-- For the **TUI**: **Node.js** and npm (e.g. from [nodejs.org](https://nodejs.org/) or `nvm`).
+- **Python 3.11+** and [uv](https://docs.astral.sh/uv/) (install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or your package manager).
+- For the **TUI**: **Bun** (see installation instructions at https://bun.sh).
 
 **Steps**
 
@@ -64,10 +65,11 @@ From the project root:
 uv sync
 ```
 
-To use the **interactive TUI**, install the frontend once:
+To use the **interactive TUI**, install the frontend dependencies once with Bun:
 
 ```bash
-cd cli_ink && npm install && cd ..
+# Install JS dependencies for the Ink TUI
+bun install
 ```
 
 You can run `proxi` via `uv run proxi` (no global install) or, after `uv sync`, use the `proxi` script if your environment has the project’s virtualenv on `PATH`.
@@ -120,9 +122,23 @@ uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path
 The **recommended way** to use Proxi interactively is to run **`proxi`** (or `uv run proxi`). That command:
 
 1. Starts the **agent bridge** (Python) in the background.
-2. Launches the **Ink TUI** (Node.js) so you can type tasks and see responses in a chat-style interface.
+2. Launches the **Ink TUI** (Bun + Ink/React) so you can type tasks and see responses in a chat-style interface.
 
-**Requirements:** `uv`, Node.js, `npm`, and `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`). Ensure you have run `npm install` inside `cli_ink` at least once (see [Installation](#installation)).
+**Requirements:** `uv`, Bun, and `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`). Ensure you have run `bun install` at the project root at least once (see [Installation](#installation)).
+
+To run the TUI directly with Bun (without going through the `proxi` CLI wrapper), you can also use:
+
+```bash
+# From project root, using the helper script
+bun run proxi-tui
+
+# Or from inside cli_ink/ for development
+cd cli_ink
+bun run dev        # runs the TUI in watch mode via tsx
+
+# Or run the built CLI
+bun run start      # runs: bun run build && bun dist/index.js
+```
 
 **Optional verification**
 

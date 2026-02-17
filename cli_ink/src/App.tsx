@@ -34,6 +34,7 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState("");
   const [hitlSpec, setHitlSpec] = useState<UserInputRequired | null>(null);
+  const [bootInfo, setBootInfo] = useState<{ agentId: string; sessionId: string } | null>(null);
 
   const childRef = useRef<ChildProcess | null>(null);
   const bufferRef = useRef("");
@@ -109,6 +110,9 @@ export default function App() {
         setBridgeReady(true);
         setError(null);
         break;
+      case "boot_complete":
+        setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
+        break;
       case "text_stream":
         streamingRef.current += msg.content;
         setStreaming(streamingRef.current);
@@ -141,6 +145,19 @@ export default function App() {
     }
   }, []);
 
+  const onSwitchAgent = useCallback(() => {
+    const proc = childRef.current;
+    if (proc?.stdin?.writable) {
+      proc.stdin.write(serializeTuiMessage({ type: "switch_agent" as const }));
+    }
+    // Clear current streaming buffer and note the switch in the chat log
+    if (streamingRef.current) {
+      setMessages((m) => [...m, { role: "assistant", content: streamingRef.current }]);
+      setStreaming("");
+      streamingRef.current = "";
+    }
+    setMessages((m) => [...m, { role: "system", content: "Switching agent..." }]);
+  }, []);
   const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
     if (!task.trim()) return;
     setMessages((m) => [...m, { role: "user", content: task }]);
@@ -168,6 +185,19 @@ export default function App() {
     setHitlSpec(null);
   }, []);
 
+  const onAbort = useCallback(() => {
+    const proc = childRef.current;
+    if (proc?.stdin?.writable) {
+      proc.stdin.write(serializeTuiMessage({ type: "abort" as const }));
+    }
+    if (streamingRef.current) {
+      setMessages((m) => [...m, { role: "assistant", content: streamingRef.current }]);
+    }
+    setStreaming("");
+    streamingRef.current = "";
+    setMessages((m) => [...m, { role: "system", content: "Request aborted." }]);
+  }, []);
+
   const minHeight = Math.max(8, (stdout.rows ?? 24) - 2);
 
   return (
@@ -187,6 +217,13 @@ export default function App() {
           statusKind={statusKind}
           isProgress={isProgress}
         />
+        {bootInfo && (
+          <Box>
+            <Text dimColor>
+              Agent: {bootInfo.agentId} · Session: {bootInfo.sessionId}
+            </Text>
+          </Box>
+        )}
         {hitlSpec ? (
           <HitlForm
             spec={hitlSpec}
@@ -197,8 +234,11 @@ export default function App() {
           <InputArea
             onSubmit={onSubmit}
             onCommitStreaming={commitStreaming}
-            disabled={false}
+            disabled={isProgress}
             bridgeReady={bridgeReady}
+            onSwitchAgent={onSwitchAgent}
+            onAbort={onAbort}
+            isRunning={isProgress}
           />
         )}
       </Box>

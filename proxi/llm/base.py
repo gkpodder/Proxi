@@ -15,14 +15,16 @@ class LLMClient(Protocol):
         messages: Sequence[Message],
         tools: Sequence[ToolSpec] | None = None,
         agents: Sequence[SubAgentSpec] | None = None,
+        system: str | None = None,
     ) -> ModelResponse:
         """
         Generate a response from the model.
 
         Args:
-            messages: Conversation history
+            messages: Conversation history (already assembled by PromptBuilder)
             tools: Available tools
             agents: Available sub-agents
+            system: Optional system prompt string (for providers with a top-level system field)
 
         Returns:
             Model response with decision and usage

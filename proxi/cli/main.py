@@ -17,6 +17,8 @@ from proxi.tools.datetime import DateTimeTool
 from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
 from proxi.tools.registry import ToolRegistry
 from proxi.tools.shell import ExecuteCommandTool
+from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
+from proxi.workspace import WorkspaceManager
 
 logger = get_logger(__name__)
 
@@ -44,8 +46,8 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     registry.register(WriteFileTool())
     registry.register(ListDirectoryTool())
 
-    # Shell tool
-    registry.register(ExecuteCommandTool(working_directory=working_directory))
+    # Shell tool (not registered right now as it is not safe)
+    # registry.register(ExecuteCommandTool(working_directory=working_directory))
 
     # Datetime tool
     registry.register(DateTimeTool())
@@ -151,6 +153,11 @@ async def main():
         action="store_true",
         help="Disable sub-agents",
     )
+    parser.add_argument(
+        "--agent-id",
+        type=str,
+        help="Agent workspace ID to use (defaults to 'default' if not present)",
+    )
 
     args = parser.parse_args()
 
@@ -186,6 +193,58 @@ async def main():
         # Set up tools
         logger.info("setting_up_tools")
         tool_registry = setup_tools(working_directory=working_dir)
+
+        # Workspace setup (non-interactive CLI: explicit agent-id or infer)
+        workspace_manager = WorkspaceManager()
+        workspace_manager.ensure_global_system_prompt()
+
+        agents = workspace_manager.list_agents()
+
+        if args.agent_id:
+            agent_id = args.agent_id
+            existing = {a.agent_id: a for a in agents}
+            if agent_id in existing:
+                agent_info = existing[agent_id]
+            else:
+                agent_info = workspace_manager.create_agent(
+                    name=agent_id,
+                    persona="General-purpose CLI agent.",
+                    mission="Execute one-shot CLI tasks for the user.",
+                    agent_id=agent_id,
+                )
+        else:
+            if not agents:
+                agent_info = workspace_manager.create_agent(
+                    name="default",
+                    persona="General-purpose CLI agent.",
+                    mission="Execute one-shot CLI tasks for the user.",
+                    agent_id="default",
+                )
+            elif len(agents) == 1:
+                agent_info = agents[0]
+            else:
+                # Multiple agents but no --agent-id; require explicit selection
+                names = ", ".join(sorted(a.agent_id for a in agents))
+                logger.error(
+                    "multiple_agents_found",
+                    message=(
+                        "Multiple agents exist; please specify one "
+                        "with --agent-id. Available agents: %s" % names
+                    ),
+                )
+                print(
+                    f"Multiple agents found: {names}. Please re-run with --agent-id <name>.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+        session = workspace_manager.create_single_session(agent_info)
+        workspace_config = session.workspace_config
+
+        # Register workspace-scoped tools now that paths are known
+        tool_registry.register(ManagePlanTool(workspace_config))
+        tool_registry.register(ManageTodosTool(workspace_config))
+        tool_registry.register(ReadSoulTool(workspace_config))
 
         # Set up MCP if specified
         mcp_server_cmd = args.mcp_server
@@ -236,6 +295,7 @@ async def main():
             sub_agent_manager=sub_agent_manager,
             max_turns=args.max_turns,
             enable_reflection=not args.no_reflection,
+            workspace=workspace_config,
         )
 
         # Run the agent

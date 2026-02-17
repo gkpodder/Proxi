@@ -7,7 +7,7 @@ from typing import Any, Protocol
 from proxi.agents.registry import SubAgentManager
 from proxi.core.planner import Planner
 from proxi.core.reflection import Reflector
-from proxi.core.state import AgentState, AgentStatus, Message, TurnState, TurnStatus
+from proxi.core.state import AgentState, AgentStatus, Message, TurnState, TurnStatus, WorkspaceConfig
 from proxi.llm.base import LLMClient
 from proxi.llm.schemas import DecisionType, ModelDecision, ToolCall
 from proxi.observability.logging import get_logger
@@ -36,6 +36,7 @@ class AgentLoop:
         max_turns: int = 50,
         enable_reflection: bool = True,
         emitter: BridgeEmitter | None = None,
+        workspace: WorkspaceConfig | None = None,
     ):
         """Initialize the agent loop."""
         self.llm_client = llm_client
@@ -46,6 +47,7 @@ class AgentLoop:
         self.max_turns = max_turns
         self.emitter = emitter
         self.logger = logger
+        self.workspace = workspace
 
     async def run(self, initial_message: str) -> AgentState:
         """
@@ -61,6 +63,7 @@ class AgentLoop:
             status=AgentStatus.RUNNING,
             max_turns=self.max_turns,
             start_time=time.time(),
+            workspace=self.workspace,
         )
         state.add_message(Message(role="user", content=initial_message))
         self.logger.info("agent_loop_start", message=initial_message[:100])

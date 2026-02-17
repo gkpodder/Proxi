@@ -32,11 +32,19 @@ export const ReadySchema = z.object({
 });
 export type Ready = z.infer<typeof ReadySchema>;
 
+export const BootCompleteSchema = z.object({
+  type: z.literal("boot_complete"),
+  agentId: z.string(),
+  sessionId: z.string(),
+});
+export type BootComplete = z.infer<typeof BootCompleteSchema>;
+
 export const BridgeMessageSchema = z.discriminatedUnion("type", [
   TextStreamSchema,
   StatusUpdateSchema,
   UserInputRequiredSchema,
   ReadySchema,
+  BootCompleteSchema,
 ]);
 export type BridgeMessage = z.infer<typeof BridgeMessageSchema>;
 
@@ -66,7 +74,22 @@ export const UserInputResponseSchema = z.object({
 });
 export type UserInputResponse = z.infer<typeof UserInputResponseSchema>;
 
-export const TuiToBridgeSchema = z.union([StartTaskSchema, UserInputResponseSchema]);
+export const SwitchAgentSchema = z.object({
+  type: z.literal("switch_agent"),
+});
+export type SwitchAgent = z.infer<typeof SwitchAgentSchema>;
+
+export const AbortSchema = z.object({
+  type: z.literal("abort"),
+});
+export type Abort = z.infer<typeof AbortSchema>;
+
+export const TuiToBridgeSchema = z.union([
+  StartTaskSchema,
+  UserInputResponseSchema,
+  SwitchAgentSchema,
+  AbortSchema,
+]);
 export type TuiToBridge = z.infer<typeof TuiToBridgeSchema>;
 
 export function serializeTuiMessage(msg: TuiToBridge): string {
