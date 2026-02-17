@@ -145,6 +145,19 @@ export default function App() {
     }
   }, []);
 
+  const onSwitchAgent = useCallback(() => {
+    const proc = childRef.current;
+    if (proc?.stdin?.writable) {
+      proc.stdin.write(serializeTuiMessage({ type: "switch_agent" as const }));
+    }
+    // Clear current streaming buffer and note the switch in the chat log
+    if (streamingRef.current) {
+      setMessages((m) => [...m, { role: "assistant", content: streamingRef.current }]);
+      setStreaming("");
+      streamingRef.current = "";
+    }
+    setMessages((m) => [...m, { role: "system", content: "Switching agent..." }]);
+  }, []);
   const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
     if (!task.trim()) return;
     setMessages((m) => [...m, { role: "user", content: task }]);
@@ -210,6 +223,7 @@ export default function App() {
             onCommitStreaming={commitStreaming}
             disabled={false}
             bridgeReady={bridgeReady}
+            onSwitchAgent={onSwitchAgent}
           />
         )}
       </Box>

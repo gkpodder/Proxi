@@ -74,7 +74,16 @@ export const UserInputResponseSchema = z.object({
 });
 export type UserInputResponse = z.infer<typeof UserInputResponseSchema>;
 
-export const TuiToBridgeSchema = z.union([StartTaskSchema, UserInputResponseSchema]);
+export const SwitchAgentSchema = z.object({
+  type: z.literal("switch_agent"),
+});
+export type SwitchAgent = z.infer<typeof SwitchAgentSchema>;
+
+export const TuiToBridgeSchema = z.union([
+  StartTaskSchema,
+  UserInputResponseSchema,
+  SwitchAgentSchema,
+]);
 export type TuiToBridge = z.infer<typeof TuiToBridgeSchema>;
 
 export function serializeTuiMessage(msg: TuiToBridge): string {

@@ -8,6 +8,7 @@ type Props = {
   disabled: boolean;
   bridgeReady: boolean;
   inputAllowedOverride?: boolean; // true when we allow input after timeout even if bridge not ready
+  onSwitchAgent?: () => void;
 };
 
 const HISTORY_MAX = 50;
@@ -18,6 +19,7 @@ export function InputArea({
   disabled,
   bridgeReady,
   inputAllowedOverride = false,
+  onSwitchAgent,
 }: Props) {
   const [value, setValue] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -28,6 +30,11 @@ export function InputArea({
   const submit = useCallback(() => {
     const task = value.trim();
     if (!task) return;
+    if (task === "/agent" || task === "/switch-agent") {
+      onSwitchAgent?.();
+      setValue("");
+      return;
+    }
     onCommitStreaming();
     onSubmit(task, "openai", 50);
     setValue("");

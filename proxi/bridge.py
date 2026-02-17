@@ -157,13 +157,35 @@ async def run_bridge(agent_id: str | None = None) -> None:
             if cmd.get("type") == "user_input":
                 return cmd.get("value")
 
-    async def bootstrap_workspace() -> tuple[WorkspaceManager, Any]:
-        """Select or create an agent and single-session workspace."""
+    async def bootstrap_workspace(force_interactive: bool = False) -> tuple[WorkspaceManager, Any]:
+        """Select or create an agent and single-session workspace.
+
+        If force_interactive is True, ignore any CLI-provided agent_id and
+        always drive selection/creation via TUI prompts.
+        """
+
+        async def create_agent_interactively() -> Any:
+            """Run the interactive identity flow to create a new agent."""
+            name = await request_user_input("text", "Enter a name for this agent:")
+            persona = await request_user_input(
+                "text",
+                "Briefly describe this agent's persona/voice:",
+            )
+            mission = await request_user_input(
+                "text",
+                "What is this agent's primary mission?",
+            )
+            return workspace_manager.create_agent(
+                name=str(name or "Proxi"),
+                persona=str(persona or "Helpful, patient, and clear."),
+                mission=str(mission or "Assist the user with their tasks."),
+            )
+
         # Discover existing agents
         agents = workspace_manager.list_agents()
         agent_info = None
 
-        if agent_id:
+        if agent_id and not force_interactive:
             # Non-interactive: prefer explicit agent_id
             for a in agents:
                 if a.agent_id == agent_id:
@@ -177,41 +199,35 @@ async def run_bridge(agent_id: str | None = None) -> None:
                     agent_id=agent_id,
                 )
         else:
+            create_label = "[+] Create new agent"
             if not agents:
-                # Creation flow: ask for identity details
-                name = await request_user_input("text", "Enter a name for this agent:")
-                persona = await request_user_input(
-                    "text",
-                    "Briefly describe this agent's persona/voice:",
-                )
-                mission = await request_user_input(
-                    "text",
-                    "What is this agent's primary mission?",
-                )
-                agent_info = workspace_manager.create_agent(
-                    name=str(name or "Proxi"),
-                    persona=str(persona or "Helpful, patient, and clear."),
-                    mission=str(
-                        mission or "Assist the user with their tasks."),
-                )
-            elif len(agents) == 1:
-                agent_info = agents[0]
+                # No agents yet: force creation flow
+                agent_info = await create_agent_interactively()
             else:
-                # Multiple agents: let the user select by agent_id
-                options = [a.agent_id for a in agents]
+                # One or more agents: let the user select or create new
+                option_ids = [a.agent_id for a in agents]
+                options = option_ids + [create_label]
+                prompt = (
+                    "Select an agent workspace or create a new one:"
+                    if len(agents) == 1
+                    else "Select an agent workspace (or create a new one):"
+                )
                 choice = await request_user_input(
                     "select",
-                    "Select an agent workspace:",
+                    prompt,
                     options=options,
                 )
                 choice_str = str(choice)
-                for a in agents:
-                    if a.agent_id == choice_str:
-                        agent_info = a
-                        break
-                if agent_info is None:
-                    # Fallback to first if something went wrong
-                    agent_info = agents[0]
+                if choice_str == create_label:
+                    agent_info = await create_agent_interactively()
+                else:
+                    for a in agents:
+                        if a.agent_id == choice_str:
+                            agent_info = a
+                            break
+                    if agent_info is None:
+                        # Fallback to first if something went wrong
+                        agent_info = agents[0]
 
         session = workspace_manager.create_single_session(agent_info)
         workspace_config = session.workspace_config
@@ -237,8 +253,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
         )
         return workspace_manager, workspace_config
 
+    # Bootstrap workspace at startup so the TUI can drive selection/creation
+    _, workspace_config = await bootstrap_workspace()
+    # Attach workspace configuration to the agent loop up front
+    loop.workspace = workspace_config  # type: ignore[attr-defined]
+
     state: AgentState | None = None
-    workspace_config: Any | None = None
 
     # Main command loop
     try:
@@ -247,14 +267,32 @@ async def run_bridge(agent_id: str | None = None) -> None:
             if cmd is None:
                 break
             msg_type = cmd.get("type")
+
+            if msg_type == "switch_agent":
+                # Reset state and re-run interactive selection/creation flow
+                state = None
+                emitter.emit(
+                    {
+                        "type": "status_update",
+                        "label": "Switching agent...",
+                        "status": "running",
+                    }
+                )
+                _, workspace_config = await bootstrap_workspace(force_interactive=True)
+                loop.workspace = workspace_config  # type: ignore[attr-defined]
+                emitter.emit(
+                    {
+                        "type": "status_update",
+                        "label": "Agent switch complete",
+                        "status": "done",
+                    }
+                )
+                continue
+
             if msg_type == "start":
                 task = cmd.get("task") or ""
                 if not task:
                     continue
-
-                # Ensure workspace is bootstrapped before the first task
-                if workspace_config is None:
-                    _, workspace_config = await bootstrap_workspace()
 
                 logger.info("starting_agent", task=task[:100])
                 emitter.emit(
@@ -279,9 +317,6 @@ async def run_bridge(agent_id: str | None = None) -> None:
                     loop.max_turns = turns
 
                     if state is None:
-                        # Attach workspace to initial state
-                        # type: ignore[attr-defined]
-                        loop.workspace = workspace_config
                         state = await loop.run(task)
                     else:
                         state = await loop.run_continue(state, task)

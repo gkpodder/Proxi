@@ -46,8 +46,8 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     registry.register(WriteFileTool())
     registry.register(ListDirectoryTool())
 
-    # Shell tool
-    registry.register(ExecuteCommandTool(working_directory=working_directory))
+    # Shell tool (not registered right now as it is not safe)
+    # registry.register(ExecuteCommandTool(working_directory=working_directory))
 
     # Datetime tool
     registry.register(DateTimeTool())
