@@ -1,24 +1,37 @@
 #!/usr/bin/env python3
-"""Gmail MCP Server - Read and send emails via Gmail API."""
+"""Combined MCP Server for Gmail and Notion."""
 
 import asyncio
 import json
 import sys
 from typing import Any
 
-from proxi.mcp.servers.gmail.gmail_tools import GmailTools
+from proxi.mcp.servers.gmail_tools import GmailTools
+from proxi.mcp.servers.notion_tools import NotionTools
 from proxi.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-class GmailMCPServer:
-    """MCP server for Gmail API operations."""
+class CombinedMCPServer:
+    """MCP server for Gmail and Notion operations."""
 
-    def __init__(self):
-        """Initialize the Gmail MCP server."""
-        self.tools = GmailTools()
-        self.request_id = 0
+    def __init__(self) -> None:
+        """Initialize the combined MCP server."""
+        self._gmail: GmailTools | None = None
+        self._notion: NotionTools | None = None
+
+    def _get_gmail(self) -> GmailTools:
+        """Lazily initialize Gmail tools to avoid blocking initialize."""
+        if self._gmail is None:
+            self._gmail = GmailTools()
+        return self._gmail
+
+    def _get_notion(self) -> NotionTools:
+        """Lazily initialize Notion tools to avoid blocking initialize."""
+        if self._notion is None:
+            self._notion = NotionTools()
+        return self._notion
 
     async def handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle initialize request."""
@@ -26,7 +39,7 @@ class GmailMCPServer:
             "protocolVersion": "2024-11-05",
             "capabilities": {},
             "serverInfo": {
-                "name": "gmail-mcp",
+                "name": "proxi-mcp",
                 "version": "1.0.0",
             },
         }
@@ -59,26 +72,11 @@ class GmailMCPServer:
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "to": {
-                                "type": "string",
-                                "description": "Recipient email address",
-                            },
-                            "subject": {
-                                "type": "string",
-                                "description": "Email subject",
-                            },
-                            "body": {
-                                "type": "string",
-                                "description": "Email body (plain text or HTML)",
-                            },
-                            "cc": {
-                                "type": "string",
-                                "description": "CC recipients (comma-separated)",
-                            },
-                            "bcc": {
-                                "type": "string",
-                                "description": "BCC recipients (comma-separated)",
-                            },
+                            "to": {"type": "string", "description": "Recipient email address"},
+                            "subject": {"type": "string", "description": "Email subject"},
+                            "body": {"type": "string", "description": "Email body (plain text or HTML)"},
+                            "cc": {"type": "string", "description": "CC recipients (comma-separated)"},
+                            "bcc": {"type": "string", "description": "BCC recipients (comma-separated)"},
                         },
                         "required": ["to", "subject", "body"],
                     },
@@ -97,6 +95,55 @@ class GmailMCPServer:
                         "required": ["email_id"],
                     },
                 },
+                {
+                    "name": "notion_list_children",
+                    "description": "List child pages/databases under the configured parent page",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum number of items to retrieve (default: 10)",
+                            }
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "notion_create_page",
+                    "description": "Create a new Notion page under the configured parent page",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string", "description": "Page title"},
+                            "content": {"type": "string", "description": "Optional page content"},
+                        },
+                        "required": ["title"],
+                    },
+                },
+                {
+                    "name": "notion_append_to_page",
+                    "description": "Append a paragraph to an existing Notion page",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "page_id": {"type": "string", "description": "Notion page ID"},
+                            "content": {"type": "string", "description": "Content to append"},
+                        },
+                        "required": ["page_id", "content"],
+                    },
+                },
+                {
+                    "name": "notion_get_page",
+                    "description": "Get details for a Notion page",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "page_id": {"type": "string", "description": "Notion page ID"},
+                        },
+                        "required": ["page_id"],
+                    },
+                },
             ]
         }
 
@@ -106,34 +153,52 @@ class GmailMCPServer:
             if name == "read_emails":
                 max_results = arguments.get("max_results", 10)
                 query = arguments.get("query", "")
-                result = await self.tools.read_emails(max_results, query)
+                result = await self._get_gmail().read_emails(max_results, query)
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
-            elif name == "send_email":
+            if name == "send_email":
                 to = arguments.get("to")
                 subject = arguments.get("subject")
                 body = arguments.get("body")
                 cc = arguments.get("cc")
                 bcc = arguments.get("bcc")
-
-                result = await self.tools.send_email(to, subject, body, cc, bcc)
+                result = await self._get_gmail().send_email(to, subject, body, cc, bcc)
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
-            elif name == "get_email":
+            if name == "get_email":
                 email_id = arguments.get("email_id")
-                result = await self.tools.get_email(email_id)
+                result = await self._get_gmail().get_email(email_id)
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
-            else:
-                return {
-                    "content": [
-                        {"type": "text", "text": f"Unknown tool: {name}"}
-                    ],
-                    "isError": True,
-                }
+            if name == "notion_list_children":
+                max_results = arguments.get("max_results", 10)
+                result = await self._get_notion().list_children(max_results)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "notion_create_page":
+                title = arguments.get("title")
+                content = arguments.get("content")
+                result = await self._get_notion().create_page(title, content)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "notion_append_to_page":
+                page_id = arguments.get("page_id")
+                content = arguments.get("content")
+                result = await self._get_notion().append_to_page(page_id, content)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "notion_get_page":
+                page_id = arguments.get("page_id")
+                result = await self._get_notion().get_page(page_id)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            return {
+                "content": [{"type": "text", "text": f"Unknown tool: {name}"}],
+                "isError": True,
+            }
 
         except Exception as e:
-            logger.error("gmail_tool_error", tool=name, error=str(e))
+            logger.error("combined_tool_error", tool=name, error=str(e))
             return {
                 "content": [{"type": "text", "text": f"Error: {str(e)}"}],
                 "isError": True,
@@ -180,7 +245,7 @@ class GmailMCPServer:
 
     def run(self) -> None:
         """Run the MCP server (synchronous version for stdio)."""
-        logger.info("gmail_mcp_server_started")
+        logger.info("combined_mcp_server_started")
 
         try:
             while True:
@@ -200,12 +265,12 @@ class GmailMCPServer:
                     logger.error("server_error", error=str(e))
 
         except KeyboardInterrupt:
-            logger.info("gmail_mcp_server_stopped")
+            logger.info("combined_mcp_server_stopped")
         except Exception as e:
-            logger.error("gmail_mcp_fatal_error", error=str(e))
+            logger.error("combined_mcp_fatal_error", error=str(e))
             sys.exit(1)
 
 
 if __name__ == "__main__":
-    server = GmailMCPServer()
+    server = CombinedMCPServer()
     server.run()

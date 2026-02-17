@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "gmail": {
+    "proxi": {
       "command": "uv",
-      "args": ["run", "--", "python", "-m", "proxi.mcp.servers.gmail.server"],
-      "description": "Gmail MCP server for reading and sending emails"
+      "args": ["run", "--", "python", "-m", "proxi.mcp.servers.server"],
+      "description": "Combined MCP server for Gmail and Notion"
     }
   },
   "imports": []

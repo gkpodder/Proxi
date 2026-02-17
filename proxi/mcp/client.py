@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import subprocess
 from typing import Any
 
@@ -27,6 +28,7 @@ class MCPClient:
         self.pending_requests: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self.logger = logger
         self._read_task: asyncio.Task | None = None
+        self._stderr_task: asyncio.Task | None = None
 
     async def _get_next_request_id(self) -> int:
         """Get the next request ID."""
@@ -71,7 +73,38 @@ class MCPClient:
                 self.logger.error("mcp_read_error", error=str(e))
                 break
 
-    async def _send_request(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        self._fail_pending_requests("MCP server closed connection")
+
+    async def _read_stderr(self) -> None:
+        """Background task to read stderr from MCP server."""
+        if not self.process or not self.process.stderr:
+            return
+
+        while True:
+            try:
+                line = await self.process.stderr.readline()
+                if not line:
+                    break
+                line_str = line.decode(errors="replace").strip()
+                if line_str:
+                    self.logger.warning("mcp_server_stderr", line=line_str[:500])
+            except Exception as e:
+                self.logger.error("mcp_stderr_error", error=str(e))
+                break
+
+    def _fail_pending_requests(self, message: str) -> None:
+        """Fail all pending requests with a runtime error."""
+        for request_id, future in list(self.pending_requests.items()):
+            if not future.done():
+                future.set_exception(RuntimeError(message))
+            self.pending_requests.pop(request_id, None)
+
+    async def _send_request(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
         """Send a JSON-RPC request and wait for response."""
         if not self.process or not self.process.stdin:
             raise RuntimeError("MCP client not connected")
@@ -98,7 +131,8 @@ class MCPClient:
 
         # Wait for response with timeout
         try:
-            result = await asyncio.wait_for(future, timeout=30.0)
+            wait_timeout = 30.0 if timeout is None else timeout
+            result = await asyncio.wait_for(future, timeout=wait_timeout)
             return result
         except asyncio.TimeoutError:
             self.pending_requests.pop(request_id, None)
@@ -125,8 +159,10 @@ class MCPClient:
 
         # Start background read loop
         self._read_task = asyncio.create_task(self._read_loop())
+        self._stderr_task = asyncio.create_task(self._read_stderr())
 
         # Send initialize request
+        init_timeout = float(os.getenv("PROXI_MCP_INIT_TIMEOUT", "60"))
         result = await self._send_request(
             "initialize",
             {
@@ -137,6 +173,7 @@ class MCPClient:
                     "version": "0.1.0",
                 },
             },
+            timeout=init_timeout,
         )
 
         # Send initialized notification
@@ -197,6 +234,13 @@ class MCPClient:
             except asyncio.CancelledError:
                 pass
 
+        if self._stderr_task:
+            self._stderr_task.cancel()
+            try:
+                await self._stderr_task
+            except asyncio.CancelledError:
+                pass
+
         # Close stdin to signal server to shutdown
         if self.process and self.process.stdin:
             try:
@@ -223,5 +267,6 @@ class MCPClient:
 
         self.process = None
         self._read_task = None
+        self._stderr_task = None
         self.initialized = False
         self.logger.info("mcp_client_closed")
