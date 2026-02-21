@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
-import type { UserInputRequired } from "../protocol.js";
+import type { UserInputRequiredBootstrap } from "../protocol.js";
 
 type Props = {
-  spec: UserInputRequired;
+  spec: UserInputRequiredBootstrap;
   onSubmit: (value: string | boolean | number) => void;
   onCancel: () => void;
 };

@@ -12,6 +12,7 @@ class DecisionType(str, Enum):
     RESPOND = "respond"
     TOOL_CALL = "tool_call"
     SUB_AGENT_CALL = "sub_agent_call"
+    REQUEST_USER_INPUT = "request_user_input"  # triggered by show_collaborative_form
 
 
 class ToolSpec(BaseModel):

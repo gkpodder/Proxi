@@ -13,10 +13,15 @@ class ToolRegistry:
     def __init__(self):
         """Initialize the registry."""
         self._tools: dict[str, Tool] = {}
+        self._raw_specs: list[ToolSpec] = []
 
     def register(self, tool: Tool) -> None:
         """Register a tool."""
         self._tools[tool.name] = tool
+
+    def register_raw_spec(self, spec: ToolSpec) -> None:
+        """Register a raw tool spec (e.g. for tools that are intercepted, not executed)."""
+        self._raw_specs.append(spec)
 
     def get(self, name: str) -> Tool | None:
         """Get a tool by name."""
@@ -28,7 +33,8 @@ class ToolRegistry:
 
     def to_specs(self) -> list[ToolSpec]:
         """Convert all tools to specifications."""
-        return [ToolSpec(**tool.to_spec()) for tool in self._tools.values()]
+        tool_specs = [ToolSpec(**tool.to_spec()) for tool in self._tools.values()]
+        return tool_specs + self._raw_specs
 
     async def execute(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a tool."""

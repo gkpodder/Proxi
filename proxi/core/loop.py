@@ -25,6 +25,18 @@ class BridgeEmitter(Protocol):
         ...
 
 
+class FormBridge(Protocol):
+    """Protocol for requesting structured form input from the user."""
+
+    async def request_form(
+        self,
+        tool_call_id: str,
+        form_request: Any,  # FormRequest
+    ) -> dict[str, Any]:
+        """Emit user_input_required and await user_input_response. Returns raw payload."""
+        ...
+
+
 class AgentLoop:
     """Main agent loop controller."""
 
@@ -36,6 +48,7 @@ class AgentLoop:
         max_turns: int = 50,
         enable_reflection: bool = True,
         emitter: BridgeEmitter | None = None,
+        form_bridge: FormBridge | None = None,
         workspace: WorkspaceConfig | None = None,
     ):
         """Initialize the agent loop."""
@@ -46,6 +59,7 @@ class AgentLoop:
         self.reflector = Reflector(enabled=enable_reflection)
         self.max_turns = max_turns
         self.emitter = emitter
+        self.form_bridge = form_bridge
         self.logger = logger
         self.workspace = workspace
 
@@ -315,7 +329,14 @@ class AgentLoop:
         if decision.type == DecisionType.TOOL_CALL:
             payload = decision.payload
             tool_name = payload.get("name")
+            tool_call_id = payload.get("id", "")
             arguments = payload.get("arguments", {})
+
+            # Intercept show_collaborative_form — never execute via registry
+            if tool_name == "show_collaborative_form":
+                return await self._handle_show_collaborative_form(
+                    state, tool_call_id, arguments, turn
+                )
 
             self.logger.info("tool_call", tool=tool_name,
                              turn=turn.turn_number)
@@ -422,6 +443,88 @@ class AgentLoop:
                 "type": "unknown",
                 "error": f"Unknown decision type: {decision.type}",
             }
+
+    async def _handle_show_collaborative_form(
+        self,
+        state: AgentState,
+        tool_call_id: str,
+        arguments: dict[str, Any] | str,
+        turn: TurnState,
+    ) -> dict[str, Any]:
+        """Intercept show_collaborative_form: validate, emit to TUI, await response."""
+        from pydantic import ValidationError
+
+        from proxi.interaction.models import FormResponse
+        from proxi.interaction.tool import parse_form_tool_call
+
+        args_str = (
+            json.dumps(arguments)
+            if isinstance(arguments, dict)
+            else str(arguments or "{}")
+        )
+        try:
+            form_request = parse_form_tool_call(args_str)
+        except (ValidationError, json.JSONDecodeError) as e:
+            return {
+                "type": "tool_call",
+                "tool": "show_collaborative_form",
+                "success": False,
+                "output": "",
+                "error": f"Schema validation error — fix and retry:\n{e}",
+                "metadata": {},
+            }
+
+        if self.form_bridge is None:
+            return {
+                "type": "tool_call",
+                "tool": "show_collaborative_form",
+                "success": False,
+                "output": "",
+                "error": "Form input not available in headless mode. Use TUI/bridge to enable collaborative forms.",
+                "metadata": {},
+            }
+
+        self.logger.info("form_request", goal=form_request.goal)
+        if self.emitter:
+            self.emitter.emit({
+                "type": "status_update",
+                "label": "Awaiting user input",
+                "status": "running",
+            })
+
+        raw_response = await self.form_bridge.request_form(
+            tool_call_id, form_request
+        )
+        form_response = FormResponse(
+            answers=raw_response.get("answers", {}),
+            skipped=raw_response.get("skipped", False),
+            form_goal=form_request.goal,
+        )
+        state.add_interaction_record(form_request, form_response)
+
+        if form_response.skipped:
+            content = "User cancelled the form."
+        else:
+            content = json.dumps({
+                "goal": form_request.goal,
+                "answers": form_response.answers,
+            })
+
+        if self.emitter:
+            self.emitter.emit({
+                "type": "status_update",
+                "label": "Form completed",
+                "status": "done",
+            })
+
+        return {
+            "type": "tool_call",
+            "tool": "show_collaborative_form",
+            "success": True,
+            "output": content,
+            "error": None,
+            "metadata": {},
+        }
 
     def _observe(self, action_result: dict[str, Any]) -> str:
         """Generate observation from action result."""

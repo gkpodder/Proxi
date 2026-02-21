@@ -19,13 +19,55 @@ export const StatusUpdateSchema = z.object({
 });
 export type StatusUpdate = z.infer<typeof StatusUpdateSchema>;
 
-export const UserInputRequiredSchema = z.object({
+// Bootstrap flow (agent selection, create agent): method + prompt + options
+export const UserInputRequiredBootstrapSchema = z.object({
   type: z.literal("user_input_required"),
   method: z.enum(["select", "confirm", "text"]),
   options: z.array(z.string()).optional(),
   prompt: z.string().optional(),
 });
+export type UserInputRequiredBootstrap = z.infer<typeof UserInputRequiredBootstrapSchema>;
+
+// Collaborative form flow (show_collaborative_form): payload with questions
+export const QuestionSchema = z.object({
+  id: z.string(),
+  type: z.enum(["choice", "multiselect", "yesno", "text"]),
+  question: z.string(),
+  options: z.array(z.string()).nullable().optional(),
+  placeholder: z.string().nullable().optional(),
+  hint: z.string().nullable().optional(),
+  required: z.boolean().optional(),
+  show_if: z.record(z.string(), z.unknown()).nullable().optional(),
+  why: z.string(),
+});
+export type Question = z.infer<typeof QuestionSchema>;
+
+export const CollaborativeFormPayloadSchema = z.object({
+  tool_call_id: z.string(),
+  goal: z.string(),
+  title: z.string().nullable().optional(),
+  questions: z.array(QuestionSchema),
+  allow_skip: z.boolean().optional(),
+});
+export type CollaborativeFormPayload = z.infer<typeof CollaborativeFormPayloadSchema>;
+
+export const UserInputRequiredFormSchema = z.object({
+  type: z.literal("user_input_required"),
+  payload: CollaborativeFormPayloadSchema,
+});
+export type UserInputRequiredForm = z.infer<typeof UserInputRequiredFormSchema>;
+
+export const UserInputRequiredSchema = z.union([
+  UserInputRequiredBootstrapSchema,
+  UserInputRequiredFormSchema,
+]);
 export type UserInputRequired = z.infer<typeof UserInputRequiredSchema>;
+
+export function isCollaborativeFormRequired(
+  msg: UserInputRequired
+): msg is UserInputRequiredForm {
+  return "payload" in msg && Array.isArray((msg as UserInputRequiredForm).payload?.questions);
+}
 
 export const ReadySchema = z.object({
   type: z.literal("ready"),
@@ -39,10 +81,11 @@ export const BootCompleteSchema = z.object({
 });
 export type BootComplete = z.infer<typeof BootCompleteSchema>;
 
-export const BridgeMessageSchema = z.discriminatedUnion("type", [
+export const BridgeMessageSchema = z.union([
   TextStreamSchema,
   StatusUpdateSchema,
-  UserInputRequiredSchema,
+  UserInputRequiredBootstrapSchema,
+  UserInputRequiredFormSchema,
   ReadySchema,
   BootCompleteSchema,
 ]);
@@ -74,6 +117,16 @@ export const UserInputResponseSchema = z.object({
 });
 export type UserInputResponse = z.infer<typeof UserInputResponseSchema>;
 
+export const UserInputResponseFormSchema = z.object({
+  type: z.literal("user_input_response"),
+  payload: z.object({
+    tool_call_id: z.string(),
+    answers: z.record(z.string(), z.unknown()),
+    skipped: z.boolean(),
+  }),
+});
+export type UserInputResponseForm = z.infer<typeof UserInputResponseFormSchema>;
+
 export const SwitchAgentSchema = z.object({
   type: z.literal("switch_agent"),
 });
@@ -87,6 +140,7 @@ export type Abort = z.infer<typeof AbortSchema>;
 export const TuiToBridgeSchema = z.union([
   StartTaskSchema,
   UserInputResponseSchema,
+  UserInputResponseFormSchema,
   SwitchAgentSchema,
   AbortSchema,
 ]);

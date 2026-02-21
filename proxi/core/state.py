@@ -2,12 +2,16 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 import json
+
+if TYPE_CHECKING:
+    from proxi.interaction.models import FormRequest, FormResponse
 
 
 class TurnStatus(str, Enum):
@@ -96,6 +100,9 @@ class AgentState(BaseModel):
     # Workspace context (optional)
     workspace: Annotated[WorkspaceConfig | None, Field(default=None, description="Current workspace context, if any")]
 
+    # Form interaction history
+    interaction_history: Annotated[list[dict[str, Any]], Field(default_factory=list, description="Records of form interactions")]
+
     def add_message(self, message: Message) -> None:
         """Add a message to the history and append to history.jsonl if configured."""
         self.history.append(message)
@@ -133,6 +140,26 @@ class AgentState(BaseModel):
 
     # --- Internal helpers -------------------------------------------------
 
+    def add_interaction_record(self, req: "FormRequest", res: "FormResponse") -> None:
+        """Add an interaction record and persist to history.jsonl if configured."""
+        record = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "goal": req.goal,
+            "questions": [q.id for q in req.questions],
+            "answers": res.answers,
+            "skipped": res.skipped,
+        }
+        self.interaction_history.append(record)
+
+        if self.workspace is not None and self.workspace.history_path:
+            self._append_to_history_file({
+                "type": "interaction",
+                "goal": req.goal,
+                "questions": [q.id for q in req.questions],
+                "answers": res.answers,
+                "skipped": res.skipped,
+            })
+
     def _append_history_jsonl(self, message: Message) -> None:
         """Append a single message to the workspace history.jsonl file."""
         try:
@@ -140,6 +167,17 @@ class AgentState(BaseModel):
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("a", encoding="utf-8") as f:
                 f.write(message.model_dump_json() + "\n")
+        except Exception:
+            # History persistence is best-effort; failures should not break the loop.
+            return
+
+    def _append_to_history_file(self, obj: dict[str, Any]) -> None:
+        """Append a JSON object to the workspace history.jsonl file."""
+        try:
+            path = Path(self.workspace.history_path)  # type: ignore[union-attr]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(obj) + "\n")
         except Exception:
             # History persistence is best-effort; failures should not break the loop.
             return

@@ -7,12 +7,19 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Text, useStdout } from "ink";
 import { spawn, ChildProcess } from "node:child_process";
 import path from "node:path";
-import { parseBridgeMessage, serializeTuiMessage, type BridgeMessage, type UserInputRequired } from "./protocol.js";
+import {
+  parseBridgeMessage,
+  serializeTuiMessage,
+  type BridgeMessage,
+  type UserInputRequired,
+  isCollaborativeFormRequired,
+} from "./protocol.js";
 import type { ChatMessage } from "./types.js";
 import { ChatArea } from "./components/ChatArea.js";
 import { InputArea } from "./components/InputArea.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { HitlForm } from "./components/HitlForm.js";
+import { AnswerForm } from "./components/AnswerForm.js";
 
 type StatusKind = "tool" | "subagent" | "progress" | null;
 
@@ -185,6 +192,22 @@ export default function App() {
     setHitlSpec(null);
   }, []);
 
+  const onAnswerFormSubmit = useCallback(
+    (result: { tool_call_id: string; answers: Record<string, unknown>; skipped: boolean }) => {
+      const proc = childRef.current;
+      if (proc?.stdin?.writable) {
+        proc.stdin.write(
+          serializeTuiMessage({
+            type: "user_input_response",
+            payload: result,
+          })
+        );
+      }
+      setHitlSpec(null);
+    },
+    []
+  );
+
   const onAbort = useCallback(() => {
     const proc = childRef.current;
     if (proc?.stdin?.writable) {
@@ -225,11 +248,18 @@ export default function App() {
           </Box>
         )}
         {hitlSpec ? (
-          <HitlForm
-            spec={hitlSpec}
-            onSubmit={onHitlSubmit}
-            onCancel={onHitlCancel}
-          />
+          isCollaborativeFormRequired(hitlSpec) ? (
+            <AnswerForm
+              payload={hitlSpec.payload}
+              onSubmit={onAnswerFormSubmit}
+            />
+          ) : (
+            <HitlForm
+              spec={hitlSpec as import("./protocol.js").UserInputRequiredBootstrap}
+              onSubmit={onHitlSubmit}
+              onCancel={onHitlCancel}
+            />
+          )
         ) : (
           <InputArea
             onSubmit={onSubmit}

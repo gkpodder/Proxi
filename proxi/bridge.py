@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from proxi.cli.main import create_llm_client, setup_mcp, setup_sub_agents, setup_tools
+from proxi.interaction.tool import get_show_collaborative_form_spec
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.core.loop import AgentLoop
 from proxi.core.state import AgentState
@@ -69,6 +70,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
 
     logger.info("setting_up_tools")
     tool_registry = setup_tools(working_directory=working_dir)
+    tool_registry.register_raw_spec(get_show_collaborative_form_spec())
     if no_sub_agents:
         sub_agent_manager = None
     else:
@@ -81,6 +83,66 @@ async def run_bridge(agent_id: str | None = None) -> None:
     workspace_manager = WorkspaceManager()
     workspace_manager.ensure_global_system_prompt()
 
+    # Queues for command messages, user_input (bootstrap), and form responses
+    command_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    user_input_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    form_response_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    main_loop = asyncio.get_running_loop()
+
+    def stdin_reader() -> None:
+        for line in sys.stdin:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                msg_type = obj.get("type")
+                if msg_type == "user_input":
+                    main_loop.call_soon_threadsafe(
+                        user_input_queue.put_nowait, obj)
+                elif msg_type == "user_input_response":
+                    main_loop.call_soon_threadsafe(
+                        form_response_queue.put_nowait, obj)
+                else:
+                    main_loop.call_soon_threadsafe(
+                        command_queue.put_nowait, obj)
+            except json.JSONDecodeError:
+                continue
+        main_loop.call_soon_threadsafe(command_queue.put_nowait, None)
+        main_loop.call_soon_threadsafe(user_input_queue.put_nowait, None)
+        main_loop.call_soon_threadsafe(form_response_queue.put_nowait, None)
+
+    async def run_reader() -> None:
+        await asyncio.to_thread(stdin_reader)
+
+    asyncio.create_task(run_reader())
+
+    class FormBridgeImpl:
+        """Form bridge: emits user_input_required and awaits user_input_response."""
+
+        async def request_form(
+            self, tool_call_id: str, form_request: Any
+        ) -> dict[str, Any]:
+            emitter.emit({
+                "type": "user_input_required",
+                "payload": {
+                    "tool_call_id": tool_call_id,
+                    "goal": form_request.goal,
+                    "title": form_request.title,
+                    "questions": [q.model_dump() for q in form_request.questions],
+                    "allow_skip": form_request.allow_skip,
+                },
+            })
+            while True:
+                msg = await form_response_queue.get()
+                if msg is None:
+                    raise asyncio.CancelledError("Input stream closed")
+                payload = msg.get("payload", msg)
+                if payload.get("tool_call_id") == tool_call_id:
+                    return payload
+
+    form_bridge = FormBridgeImpl()
+
     # Create initial agent loop (workspace will be attached after bootstrap)
     loop = AgentLoop(
         llm_client=llm_client,
@@ -89,6 +151,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
         max_turns=max_turns,
         enable_reflection=True,
         emitter=emitter,
+        form_bridge=form_bridge,
         workspace=None,
     )
 
@@ -106,35 +169,6 @@ async def run_bridge(agent_id: str | None = None) -> None:
             logger.warning("mcp_setup_timeout", server=mcp_server)
         except Exception as e:
             logger.warning("mcp_setup_error", error=str(e))
-
-    # Separate queues for command messages and user_input responses
-    command_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-    user_input_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-    main_loop = asyncio.get_running_loop()
-
-    def stdin_reader() -> None:
-        for line in sys.stdin:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-                msg_type = obj.get("type")
-                if msg_type == "user_input":
-                    main_loop.call_soon_threadsafe(
-                        user_input_queue.put_nowait, obj)
-                else:
-                    main_loop.call_soon_threadsafe(
-                        command_queue.put_nowait, obj)
-            except json.JSONDecodeError:
-                continue
-        main_loop.call_soon_threadsafe(command_queue.put_nowait, None)
-        main_loop.call_soon_threadsafe(user_input_queue.put_nowait, None)
-
-    async def run_reader() -> None:
-        await asyncio.to_thread(stdin_reader)
-
-    asyncio.create_task(run_reader())
 
     async def request_user_input(
         method: str,
