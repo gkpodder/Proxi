@@ -1,9 +1,11 @@
 """CLI entry point for proxi."""
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from proxi.agents.registry import SubAgentManager, SubAgentRegistry
 from proxi.agents.summarizer import SummarizerAgent
@@ -67,10 +69,85 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
     return manager
 
 
+async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]:
+    """Auto-load all configured MCP servers from mcporter config.\n
+    Returns list of loaded adapters for cleanup.
+    """
+    config = load_mcporter_config()
+    mcp_servers = config.get("mcpServers", {})
+    loaded_adapters = []
+    
+    for server_name in mcp_servers:
+        try:
+            logger.info("auto_loading_mcp_server", server=server_name)
+            adapter = await setup_mcp_from_mcporter_config(server_name)
+            if adapter:
+                mcp_tools = await adapter.get_tools()
+                for tool in mcp_tools:
+                    tool_registry.register(tool)
+                    logger.info("mcp_tool_registered", server=server_name, tool=tool.name)
+                loaded_adapters.append(adapter)
+        except Exception as e:
+            logger.warning("auto_load_mcp_server_error", server=server_name, error=str(e))
+    
+    return loaded_adapters
+
+
+def load_mcporter_config() -> dict[str, Any]:
+    """Load mcporter configuration from config/mcporter.json."""
+    import json
+    config_path = Path("config/mcporter.json")
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning("mcporter_config_load_error", error=str(e))
+    return {}
+
+
+async def setup_mcp_from_mcporter_config(server_name: str) -> MCPAdapter | None:
+    """Set up MCP adapter from mcporter configuration."""
+    config = load_mcporter_config()
+    mcp_servers = config.get("mcpServers", {})
+    
+    if server_name not in mcp_servers:
+        logger.warning("mcp_server_not_found_in_config", server=server_name)
+        return None
+    
+    server_config = mcp_servers[server_name]
+    command = server_config.get("command")
+    args = server_config.get("args", [])
+    
+    if not command:
+        logger.error("mcp_server_invalid_config", server=server_name)
+        return None
+    
+    # Build full command
+    full_command = [command] + args
+    
+    mcp_client = MCPClient(server_command=full_command)
+    adapter = MCPAdapter(mcp_client)
+    
+    try:
+        await adapter.initialize()
+        logger.info("mcp_server_initialized_from_config", server=server_name)
+        return adapter
+    except Exception as e:
+        logger.error("mcp_setup_error", server=server_name, error=str(e), exc_info=True)
+        return None
+
+
 async def setup_mcp(mcp_server: str | None = None) -> MCPAdapter | None:
     """Set up MCP adapter if MCP server is specified."""
     if not mcp_server:
         return None
+
+    # Check if it's a mcporter config server shortcut (e.g., "gmail")
+    config = load_mcporter_config()
+    mcp_servers = config.get("mcpServers", {})
+    if mcp_server in mcp_servers:
+        return await setup_mcp_from_mcporter_config(mcp_server)
 
     # Parse MCP server command
     # Format: "command:arg1:arg2" or just "command"
@@ -149,6 +226,11 @@ async def main():
         help="Use the filesystem MCP server with the given path (requires Node.js/npx). Example: --mcp-filesystem /path/to/dir",
     )
     parser.add_argument(
+        "--no-mcp",
+        action="store_true",
+        help="Disable auto-loading of configured MCP servers",
+    )
+    parser.add_argument(
         "--no-sub-agents",
         action="store_true",
         help="Disable sub-agents",
@@ -184,7 +266,7 @@ async def main():
     working_dir = Path(
         args.working_directory) if args.working_directory else Path.cwd()
 
-    mcp_adapter = None
+    mcp_adapters: list[MCPAdapter] = []
     try:
         # Create LLM client
         logger.info("initializing_llm", provider=args.provider)
@@ -246,7 +328,13 @@ async def main():
         tool_registry.register(ManageTodosTool(workspace_config))
         tool_registry.register(ReadSoulTool(workspace_config))
 
-        # Set up MCP if specified
+        # Set up MCP adapters (auto-load by default from mcporter config)
+        if not args.no_mcp:
+            # Auto-load all configured MCP servers from mcporter config
+            logger.info("auto_loading_mcp_servers")
+            mcp_adapters = await auto_load_mcp_servers(tool_registry)
+
+        # Set up explicit MCP server if specified
         mcp_server_cmd = args.mcp_server
         if args.mcp_filesystem:
             # Shortcut for filesystem MCP server
@@ -274,9 +362,10 @@ async def main():
                     mcp_server_cmd = None
 
             if mcp_server_cmd:
-                logger.info("setting_up_mcp", server=mcp_server_cmd)
+                logger.info("setting_up_explicit_mcp", server=mcp_server_cmd)
                 mcp_adapter = await setup_mcp(mcp_server_cmd)
                 if mcp_adapter:
+                    mcp_adapters.append(mcp_adapter)
                     mcp_tools = await mcp_adapter.get_tools()
                     for tool in mcp_tools:
                         tool_registry.register(tool)
@@ -320,21 +409,21 @@ async def main():
                 print("-" * 80)
                 print(last_message.content)
 
-        # Cleanup MCP if used
-        if mcp_adapter:
-            await mcp_adapter.close()
+        # Cleanup all MCP adapters
+        for adapter in mcp_adapters:
+            await adapter.close()
 
         sys.exit(0 if state.status.value == "completed" else 1)
 
     except KeyboardInterrupt:
         logger.info("interrupted_by_user")
-        if mcp_adapter:
-            await mcp_adapter.close()
+        for adapter in mcp_adapters:
+            await adapter.close()
         sys.exit(130)
     except Exception as e:
         logger.error("fatal_error", error=str(e), exc_info=True)
-        if mcp_adapter:
-            await mcp_adapter.close()
+        for adapter in mcp_adapters:
+            await adapter.close()
         sys.exit(1)
 
 

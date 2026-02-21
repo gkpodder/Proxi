@@ -25,6 +25,16 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.8.0",
 ]
+gmail = [
+    "google-auth-oauthlib>=1.2.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-api-python-client>=2.106.0",
+    "python-dotenv>=1.0.0",
+]
+notion = [
+    "notion-client>=2.2.1",
+    "python-dotenv>=1.0.0",
+]
 
 [build-system]
 requires = ["hatchling"]
