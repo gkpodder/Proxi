@@ -4,6 +4,7 @@
   "private": true,
   "description": "Proxi agent - TUI script runs from cli_ink",
   "scripts": {
-    "proxi-tui": "cd cli_ink && bun run dev"
+    "proxi-tui": "cd cli_ink && bun run dev",
+    "proxi-react": "cd react_frontend && npm start"
   }
 }
