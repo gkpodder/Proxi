@@ -342,6 +342,11 @@ class AgentLoop:
                              turn=turn.turn_number)
             if self.emitter:
                 self.emitter.emit({
+                    "type": "tool_start",
+                    "tool": tool_name,
+                    "arguments": arguments,
+                })
+                self.emitter.emit({
                     "type": "status_update",
                     "label": f"Tool: {tool_name}",
                     "status": "running",
@@ -350,6 +355,20 @@ class AgentLoop:
             result = await self.tool_registry.execute(tool_name, arguments)
 
             if self.emitter:
+                if result.output:
+                    first_line = result.output.strip().split("\n")[0].strip()
+                    if first_line and len(first_line) <= 100:
+                        self.emitter.emit({
+                            "type": "tool_log",
+                            "content": first_line,
+                        })
+                self.emitter.emit({
+                    "type": "tool_done",
+                    "tool": tool_name,
+                    "success": result.success,
+                    "output": result.output,
+                    "error": result.error,
+                })
                 self.emitter.emit({
                     "type": "status_update",
                     "label": f"Tool: {tool_name}",
@@ -401,6 +420,11 @@ class AgentLoop:
             )
             if self.emitter:
                 self.emitter.emit({
+                    "type": "subagent_start",
+                    "agent": agent_name,
+                    "task": task,
+                })
+                self.emitter.emit({
                     "type": "status_update",
                     "label": f"Subagent {agent_name} is thinking...",
                     "status": "running",
@@ -415,6 +439,11 @@ class AgentLoop:
             )
 
             if self.emitter:
+                self.emitter.emit({
+                    "type": "subagent_done",
+                    "agent": agent_name,
+                    "success": result.success,
+                })
                 self.emitter.emit({
                     "type": "status_update",
                     "label": f"Subagent {agent_name}",

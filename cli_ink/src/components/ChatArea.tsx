@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import { Box, Text, useStdout } from "ink";
 import type { ChatMessage } from "../types.js";
+import { FigletTitle, FIGLET_LINE_COUNT } from "./FigletTitle.js";
 
 type Props = {
   messages: ChatMessage[];
@@ -10,11 +11,14 @@ type Props = {
 export function ChatArea({ messages, streamingContent }: Props) {
   const { stdout } = useStdout();
   const width = stdout.columns - 2;
-  const totalLines = messages.reduce((acc, m) => acc + wrapLines(m.content, width).length, 0)
-    + wrapLines(streamingContent, width).length;
+  const contentLines =
+    messages.reduce((acc, m) => acc + wrapLines(m.content, width).length, 0) +
+    wrapLines(streamingContent, width).length;
+  const totalLines = FIGLET_LINE_COUNT + contentLines;
   const scrollRef = useRef(0);
   const maxVisible = Math.max(1, (stdout.rows ?? 24) - 6);
   const canScroll = totalLines > maxVisible;
+  const hasContent = contentLines > 0;
 
   useEffect(() => {
     if (!canScroll) scrollRef.current = 0;
@@ -31,25 +35,44 @@ export function ChatArea({ messages, streamingContent }: Props) {
   }
 
   const start = canScroll ? scrollRef.current : 0;
-  const visible = allLines.slice(start, start + maxVisible);
+  const end = start + maxVisible;
+
+  // Figlet occupies lines 0..FIGLET_LINE_COUNT-1. Messages start at FIGLET_LINE_COUNT.
+  const figletStart = Math.max(0, start);
+  const figletEnd = Math.min(FIGLET_LINE_COUNT, end);
+  const figletVisible = figletEnd > figletStart;
+  const figletCount = figletVisible ? figletEnd - figletStart : 0;
+
+  const msgStart = Math.max(0, start - FIGLET_LINE_COUNT);
+  const msgEnd = Math.max(msgStart, end - FIGLET_LINE_COUNT);
+  const visibleMessages = allLines.slice(msgStart, msgEnd);
 
   return (
     <Box flexDirection="column" overflow="hidden" flexGrow={1}>
-      {visible.length === 0 && (
-        <Box paddingY={1}>
-          <Text dimColor>Enter a task and press Enter. Use ↑/↓ to scroll.</Text>
-        </Box>
-      )}
-      {visible.map(({ role, line }, i) => (
-        <Box key={`line-${start}-${i}`}>
-          {role === "user" ? (
-            <Text color="cyan">&gt; </Text>
-          ) : (
-            <Text color="green">  </Text>
+      {!hasContent ? (
+        <>
+          <FigletTitle />
+          <Box paddingY={1}>
+            <Text dimColor>Enter a task and press Enter. Use ↑/↓ to scroll.</Text>
+          </Box>
+        </>
+      ) : (
+        <>
+          {figletVisible && (
+            <FigletTitle startLine={figletStart} maxLines={figletCount} />
           )}
-          <Text wrap="wrap">{line}</Text>
-        </Box>
-      ))}
+          {visibleMessages.map(({ role, line }, i) => (
+            <Box key={`line-${msgStart}-${i}`}>
+              {role === "user" ? (
+                <Text color="cyan">&gt; </Text>
+              ) : (
+                <Text color="green">  </Text>
+              )}
+              <Text wrap="wrap">{line}</Text>
+            </Box>
+          ))}
+        </>
+      )}
     </Box>
   );
 }

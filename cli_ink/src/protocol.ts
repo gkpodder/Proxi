@@ -19,6 +19,42 @@ export const StatusUpdateSchema = z.object({
 });
 export type StatusUpdate = z.infer<typeof StatusUpdateSchema>;
 
+export const ToolStartSchema = z.object({
+  type: z.literal("tool_start"),
+  tool: z.string(),
+  arguments: z.record(z.unknown()).optional(),
+});
+export type ToolStart = z.infer<typeof ToolStartSchema>;
+
+export const ToolDoneSchema = z.object({
+  type: z.literal("tool_done"),
+  tool: z.string(),
+  success: z.boolean(),
+  output: z.string().optional(),
+  error: z.string().optional(),
+});
+export type ToolDone = z.infer<typeof ToolDoneSchema>;
+
+export const ToolLogSchema = z.object({
+  type: z.literal("tool_log"),
+  content: z.string(),
+});
+export type ToolLog = z.infer<typeof ToolLogSchema>;
+
+export const SubagentStartSchema = z.object({
+  type: z.literal("subagent_start"),
+  agent: z.string(),
+  task: z.string(),
+});
+export type SubagentStart = z.infer<typeof SubagentStartSchema>;
+
+export const SubagentDoneSchema = z.object({
+  type: z.literal("subagent_done"),
+  agent: z.string(),
+  success: z.boolean(),
+});
+export type SubagentDone = z.infer<typeof SubagentDoneSchema>;
+
 // Bootstrap flow (agent selection, create agent): method + prompt + options
 export const UserInputRequiredBootstrapSchema = z.object({
   type: z.literal("user_input_required"),
@@ -84,6 +120,11 @@ export type BootComplete = z.infer<typeof BootCompleteSchema>;
 export const BridgeMessageSchema = z.union([
   TextStreamSchema,
   StatusUpdateSchema,
+  ToolStartSchema,
+  ToolDoneSchema,
+  ToolLogSchema,
+  SubagentStartSchema,
+  SubagentDoneSchema,
   UserInputRequiredBootstrapSchema,
   UserInputRequiredFormSchema,
   ReadySchema,

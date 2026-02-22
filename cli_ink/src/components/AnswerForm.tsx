@@ -4,7 +4,7 @@
  * Supports choice, multiselect, yesno, text. Appends "Other (type your own)" for choice/multiselect.
  */
 import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useFocusManager } from "ink";
 import TextInput from "ink-text-input";
 import type { CollaborativeFormPayload, Question } from "../protocol.js";
 
@@ -51,6 +51,13 @@ type Props = {
 
 export function AnswerForm({ payload, onSubmit }: Props) {
   const { tool_call_id, goal, title, questions, allow_skip = false } = payload;
+  const { disableFocus, enableFocus } = useFocusManager();
+
+  useEffect(() => {
+    disableFocus();
+    return () => enableFocus();
+  }, [disableFocus, enableFocus]);
+
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectIndex, setSelectIndex] = useState(0);
@@ -254,7 +261,10 @@ export function AnswerForm({ payload, onSubmit }: Props) {
 
     if (currentQ.type === "multiselect" && optionsWithOther.length > 0 && !isOtherSelected) {
       if (key.upArrow) setSelectIndex((i) => (i <= 0 ? optionsWithOther.length - 1 : i - 1));
-      if (key.downArrow) setSelectIndex((i) => (i >= optionsWithOther.length - 1 ? 0 : i + 1));
+      if (key.downArrow) {
+        setSelectIndex((i) => (i >= optionsWithOther.length - 1 ? 0 : i + 1));
+        return;
+      }
       if (input === " ") {
         const idx = selectIndexRef.current;
         if (optionsWithOther[idx] === OTHER_OPTION) {
