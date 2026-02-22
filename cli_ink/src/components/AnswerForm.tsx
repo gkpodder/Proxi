@@ -261,7 +261,10 @@ export function AnswerForm({ payload, onSubmit }: Props) {
 
     if (currentQ.type === "multiselect" && optionsWithOther.length > 0 && !isOtherSelected) {
       if (key.upArrow) setSelectIndex((i) => (i <= 0 ? optionsWithOther.length - 1 : i - 1));
-      if (key.downArrow) setSelectIndex((i) => (i >= optionsWithOther.length - 1 ? 0 : i + 1));
+      if (key.downArrow) {
+        setSelectIndex((i) => (i >= optionsWithOther.length - 1 ? 0 : i + 1));
+        return;
+      }
       if (input === " ") {
         const idx = selectIndexRef.current;
         if (optionsWithOther[idx] === OTHER_OPTION) {

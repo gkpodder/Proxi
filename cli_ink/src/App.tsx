@@ -20,6 +20,8 @@ import { InputArea } from "./components/InputArea.js";
 import { StatusBar } from "./components/StatusBar.js";
 import { HitlForm } from "./components/HitlForm.js";
 import { AnswerForm } from "./components/AnswerForm.js";
+import { CommandPalette } from "./components/CommandPalette.js";
+import { PlanTodosOverlay } from "./components/PlanTodosOverlay.js";
 
 type StatusKind = "tool" | "subagent" | "progress" | null;
 
@@ -41,6 +43,9 @@ export default function App() {
   const [bootInfo, setBootInfo] = useState<{ agentId: string; sessionId: string } | null>(null);
   const [scrollback, setScrollback] = useState<ScrollbackItem[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [planTodosOverlay, setPlanTodosOverlay] = useState<"plan" | "todos" | null>(null);
+  const [inputHistory, setInputHistory] = useState<string[]>([]);
 
   const childRef = useRef<ChildProcess | null>(null);
   const bufferRef = useRef("");
@@ -216,6 +221,10 @@ export default function App() {
 
   const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
     if (!task.trim()) return;
+    setInputHistory((prev) => {
+      const next = [task, ...prev.filter((t) => t !== task)].slice(0, 50);
+      return next;
+    });
     commitStreamToScrollback();
     setScrollback((s) => {
       const last = s[s.length - 1];
@@ -274,6 +283,40 @@ export default function App() {
     commitStreamToScrollback();
   }, [commitStreamToScrollback]);
 
+  const onCommand = useCallback(
+    (cmdId: string) => {
+      switch (cmdId) {
+        case "agent":
+          onSwitchAgent();
+          break;
+        case "clear":
+          setScrollback([]);
+          break;
+        case "plan":
+          setPlanTodosOverlay("plan");
+          break;
+        case "todos":
+          setPlanTodosOverlay("todos");
+          break;
+        case "help":
+          setScrollback((s) => [
+            ...s,
+            { type: "agent_line", content: "/agent - Switch active agent", isFirst: true },
+            { type: "agent_line", content: "/clear - Clear conversation", isFirst: false },
+            { type: "agent_line", content: "/plan - View current plan", isFirst: false },
+            { type: "agent_line", content: "/todos - View open todos", isFirst: false },
+            { type: "agent_line", content: "/help - Show all commands", isFirst: false },
+            { type: "agent_line", content: "/exit - Exit Proxi", isFirst: false },
+          ]);
+          break;
+        case "exit":
+          process.exit(0);
+          break;
+      }
+    },
+    [onSwitchAgent]
+  );
+
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
 
   return (
@@ -289,14 +332,10 @@ export default function App() {
           statusLabel={statusLabel}
           statusKind={statusKind}
           isProgress={isProgress}
+          agentId={bootInfo?.agentId}
+          sessionId={bootInfo?.sessionId}
+          isWaitingForInput={!!hitlSpec}
         />
-        {bootInfo && (
-          <Box>
-            <Text dimColor>
-              Agent: {bootInfo.agentId} · Session: {bootInfo.sessionId}
-            </Text>
-          </Box>
-        )}
         {hitlSpec ? (
           isCollaborativeFormRequired(hitlSpec) ? (
             <AnswerForm
@@ -310,6 +349,18 @@ export default function App() {
               onCancel={onHitlCancel}
             />
           )
+        ) : commandPaletteOpen ? (
+          <CommandPalette
+            onDismiss={() => setCommandPaletteOpen(false)}
+            onCommand={onCommand}
+          />
+        ) : planTodosOverlay && bootInfo ? (
+          <PlanTodosOverlay
+            type={planTodosOverlay}
+            agentId={bootInfo.agentId}
+            sessionId={bootInfo.sessionId}
+            onDismiss={() => setPlanTodosOverlay(null)}
+          />
         ) : (
           <InputArea
             onSubmit={onSubmit}
@@ -318,7 +369,9 @@ export default function App() {
             bridgeReady={bridgeReady}
             onSwitchAgent={onSwitchAgent}
             onAbort={onAbort}
+            onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             isRunning={isProgress}
+            inputHistory={inputHistory}
           />
         )}
       </Box>
