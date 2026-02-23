@@ -97,7 +97,8 @@ export function AnswerForm({ payload, onSubmit }: Props) {
       (currentQ.type === "choice" || currentQ.type === "multiselect") &&
       isOtherSelected
     ) {
-      if (otherValue.trim() === "") return;
+      const isLastQuestion = currentIndex >= totalVisible - 1;
+      if (otherValue.trim() === "" && isLastQuestion) return;
       const val =
         currentQ.type === "choice"
           ? otherValue.trim()
@@ -145,7 +146,8 @@ export function AnswerForm({ payload, onSubmit }: Props) {
 
     if (currentQ.type === "text") {
       const val = textValue.trim();
-      if (currentQ.required !== false && val === "") return;
+      const isLastQuestion = currentIndex >= totalVisible - 1;
+      if (isLastQuestion && currentQ.required !== false && val === "") return;
       setAnswers((a) => ({ ...a, [currentQ.id]: val }));
       setTextValue("");
     }
