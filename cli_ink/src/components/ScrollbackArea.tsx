@@ -39,9 +39,10 @@ function renderItem(item: ScrollbackItem, index: number, prevItem: ScrollbackIte
   switch (item.type) {
     case "user":
       return (
-        <Box key={index}>
-          <Text color={theme.purple}>  &gt; </Text>
-          <Text color={theme.purple}>{item.content}</Text>
+        <Box key={index} paddingX={1}>
+          <Text backgroundColor={theme.purpleFaint} color={theme.purple}>
+            {"  > "}{item.content}
+          </Text>
         </Box>
       );
     case "spacing":

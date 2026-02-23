@@ -6,6 +6,7 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { Box, Text, useInput, useFocusManager } from "ink";
 import TextInput from "ink-text-input";
+import { theme } from "../theme.js";
 import type { CollaborativeFormPayload, Question } from "../protocol.js";
 
 const OTHER_OPTION = "Other (type your own)";
@@ -302,39 +303,47 @@ export function AnswerForm({ payload, onSubmit }: Props) {
     .join(" ");
 
   return (
-    <Box flexDirection="column" paddingX={1} flexShrink={0} borderStyle="round" borderColor="cyan">
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      flexShrink={0}
+      borderStyle="round"
+      borderColor={theme.purpleDim}
+    >
       <Box marginBottom={1}>
-        <Text bold color="cyan">
+        <Text bold color={theme.purple}>
           {title || goal}
         </Text>
       </Box>
       <Box marginBottom={0}>
-        <Text dimColor>
+        <Text color={theme.mist}>
           Questions ({safeIndex + 1}/{totalVisible}) {progressDots}
         </Text>
       </Box>
 
       <Box flexDirection="column" marginTop={1}>
-        <Text color="yellow">Q: {currentQ?.question ?? "(No question text)"}</Text>
+        <Text color={theme.purple} bold>
+          Q: {currentQ?.question ?? "(No question text)"}
+        </Text>
         {currentQ?.hint && (
           <Box marginLeft={2} marginTop={0}>
-            <Text dimColor italic>
+            <Text color={theme.mist} italic>
               — {currentQ.hint}
             </Text>
           </Box>
         )}
 
         <Box marginTop={1} flexDirection="column">
-          <Text color="green">A:</Text>
+          <Text color={theme.purple}>A:</Text>
 
           {currentQ.type === "yesno" && (
             <Box gap={1} marginTop={0}>
-              <Text bold color="green">
+              <Text bold color={theme.mint}>
                 Y
               </Text>
-              <Text> Yes</Text>
-              <Text dimColor> N No</Text>
-              {allow_skip && <Text dimColor> Esc cancel</Text>}
+              <Text color={theme.white}> Yes</Text>
+              <Text color={theme.mist}> N No</Text>
+              {allow_skip && <Text color={theme.mist}> Esc cancel</Text>}
             </Box>
           )}
 
@@ -342,7 +351,10 @@ export function AnswerForm({ payload, onSubmit }: Props) {
             !isOtherSelected &&
             optionsWithOther.map((opt, i) => (
               <Box key={opt}>
-                <Text color={i === selectIndex ? "green" : "white"}>
+                <Text
+                  color={i === selectIndex ? theme.purple : theme.white}
+                  backgroundColor={i === selectIndex ? theme.purpleFaint : undefined}
+                >
                   {i === selectIndex ? "› " : "  "}
                   {opt}
                 </Text>
@@ -351,7 +363,7 @@ export function AnswerForm({ payload, onSubmit }: Props) {
 
           {currentQ.type === "choice" && isOtherSelected && (
             <Box marginTop={0} flexDirection="column">
-              <Text dimColor>Type your answer:</Text>
+              <Text color={theme.mist}>Type your answer:</Text>
               <TextInput
                 value={otherValue}
                 onChange={setOtherValue}
@@ -366,7 +378,10 @@ export function AnswerForm({ payload, onSubmit }: Props) {
             !isOtherSelected &&
             optionsWithOther.map((opt, i) => (
               <Box key={opt}>
-                <Text color={i === selectIndex ? "green" : "white"}>
+                <Text
+                  color={i === selectIndex ? theme.purple : theme.white}
+                  backgroundColor={i === selectIndex ? theme.purpleFaint : undefined}
+                >
                   {i === selectIndex ? "› " : "  "}
                   {multiselectSet.has(i) ? "[✓] " : "[ ] "}
                   {opt}
@@ -376,7 +391,7 @@ export function AnswerForm({ payload, onSubmit }: Props) {
 
           {currentQ.type === "multiselect" && isOtherSelected && (
             <Box marginTop={0} flexDirection="column">
-              <Text dimColor>Type your custom option:</Text>
+              <Text color={theme.mist}>Type your custom option:</Text>
               <TextInput
                 value={otherValue}
                 onChange={setOtherValue}
@@ -402,7 +417,7 @@ export function AnswerForm({ payload, onSubmit }: Props) {
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>
+        <Text color={theme.mist}>
           Enter confirm · Tab next · Shift+Tab prev
           {currentQ.type === "multiselect" && " · Space toggle"}
           {currentQ.type === "text" && " · Shift+Enter newline"}

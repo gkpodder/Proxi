@@ -4,7 +4,7 @@
  * - Communicates with Python bridge via JSON-RPC over stdin/stdout.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Text, useStdout } from "ink";
+import { Box, Text, useInput, useStdout } from "ink";
 import { spawn, ChildProcess } from "node:child_process";
 import path from "node:path";
 import {
@@ -50,6 +50,18 @@ export default function App() {
   const childRef = useRef<ChildProcess | null>(null);
   const bufferRef = useRef("");
   const streamingRef = useRef("");
+  const overlayRef = useRef({ planTodosOverlay, commandPaletteOpen });
+  overlayRef.current = { planTodosOverlay, commandPaletteOpen };
+
+  useInput(
+    (_, key) => {
+      if (!key.escape) return;
+      const { planTodosOverlay: plan, commandPaletteOpen: palette } = overlayRef.current;
+      if (plan) setPlanTodosOverlay(null);
+      else if (palette) setCommandPaletteOpen(false);
+    },
+    { isActive: planTodosOverlay !== null || commandPaletteOpen }
+  );
 
   useEffect(() => {
     const projectRoot = path.resolve(process.cwd(), "..");

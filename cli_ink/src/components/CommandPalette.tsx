@@ -2,8 +2,9 @@
  * Command palette overlay. Triggered by `/` as first character in input.
  * Filters commands in real-time. ↑/↓ to navigate, Enter to execute, Esc to dismiss.
  */
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Box, Text, useInput } from "ink";
+import TextInput from "ink-text-input";
 import { theme } from "../theme.js";
 
 export type CommandDef = {
@@ -43,7 +44,15 @@ export function CommandPalette({ onDismiss, onCommand }: Props) {
   const maxIdx = Math.max(0, filtered.length - 1);
   const selectedIdx = Math.min(selected, maxIdx);
 
-  useInput((input, key) => {
+  const handleSubmit = useCallback(() => {
+    if (filtered[selectedIdx]) {
+      onCommand(filtered[selectedIdx]!.id);
+      onDismiss();
+    }
+  }, [filtered, selectedIdx, onCommand, onDismiss]);
+
+  // useInput for escape + arrows only; TextInput handles typing/backspace/delete/enter
+  useInput((_input, key) => {
     if (key.escape) {
       onDismiss();
       return;
@@ -55,18 +64,6 @@ export function CommandPalette({ onDismiss, onCommand }: Props) {
     if (key.downArrow) {
       setSelected((i) => (i >= maxIdx ? 0 : i + 1));
       return;
-    }
-    if (key.return && filtered[selectedIdx]) {
-      onCommand(filtered[selectedIdx]!.id);
-      onDismiss();
-    }
-    if (key.backspace) {
-      setFilter((f) => f.slice(0, -1));
-      setSelected(0);
-    }
-    if (input.length > 0) {
-      setFilter((f) => f + input);
-      setSelected(0);
     }
   });
 
@@ -81,10 +78,17 @@ export function CommandPalette({ onDismiss, onCommand }: Props) {
     >
       <Box marginBottom={0}>
         <Text color={theme.purple}>/</Text>
-        <Text color={filter ? theme.white : theme.mist}>
-          {" "}{filter || "filter commands..."}
-        </Text>
-        <Text color={theme.purpleDim}>▌</Text>
+        <Text color={theme.purple}> </Text>
+        <TextInput
+          value={filter}
+          onChange={(v) => {
+            setFilter(v);
+            setSelected(0);
+          }}
+          onSubmit={handleSubmit}
+          placeholder="filter commands..."
+          showCursor
+        />
       </Box>
       <Box flexDirection="column">
         {filtered.length === 0 ? (
