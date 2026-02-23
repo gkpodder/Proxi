@@ -2,37 +2,25 @@ name: CI
 
 on:
   push:
-    branches: [main, master, develop]
+    branches: [main, staging]
   pull_request:
-    branches: [main, master, develop]
+    branches: [main, staging]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"]
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r src/requirements.txt
+          pip install -e ".[dev]"
 
       - name: Run tests
-        run: |
-          pytest test/ -v
-
-      - name: Check test coverage
-        run: |
-          pip install pytest-cov
-          pytest test/ --cov=src --cov-report=term-missing
-        continue-on-error: true
+        run: pytest tests/ -v
