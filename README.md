@@ -17,33 +17,61 @@ User Goal
    ↓
 Primary Agent (Planner / Orchestrator)
    ↓
-┌──────────────┬──────────────┬──────────────┐
-│   Tools      │   MCPs       │  Sub-Agents  │
-│ (stateless)  │ (external)   │ (stateful)   │
-└──────────────┴──────────────┴──────────────┘
+┌──────────────┬──────────────┬──────────────┬─────────────────────────┐
+│   Tools      │   MCPs       │  Sub-Agents  │ show_collaborative_form │
+│ (stateless)  │ (external)   │ (stateful)   │  (human-in-the-loop)    │
+└──────────────┴──────────────┴──────────────┴─────────────────────────┘
 ```
 
 The agent loop follows: **REASON → DECIDE → ACT → OBSERVE → REFLECT → LOOP**
 
-Where ACT can be:
-- Tool execution
-- MCP call
-- Sub-agent invocation
+Each turn progresses through states: `PENDING` → `DECIDING` → `ACTING` → `OBSERVING` → `REFLECTING` → `COMPLETED`. The **DECIDE** step produces exactly one of:
+
+| Decision Type | Description |
+|---------------|-------------|
+| `RESPOND` | Communicate with the user (answers, confirmations, clarifications) |
+| `TOOL_CALL` | Execute a tool (including MCP tools) |
+| `SUB_AGENT_CALL` | Delegate to a specialised sub-agent |
+| `REQUEST_USER_INPUT` | Call `show_collaborative_form` when blocked by missing information |
+
+**TUI integration:** The loop emits events via a `BridgeEmitter` (JSON lines to stdout) for streaming text, tool/subagent status, and status updates. When the agent needs structured input, a `FormBridge` sends `user_input_required` to the TUI and awaits `user_input_response` before continuing.
+
+**Workspace context:** Each session is attached to a `WorkspaceConfig` that provides paths for `Soul.md`, `plan.md`, `todos.md`, and `history.jsonl`. Workspace-scoped tools (`manage_plan`, `manage_todos`, `read_soul`) operate on these files.
+
+## Workspace Layout
+
+Proxi uses a filesystem-backed workspace under `~/.proxi/` (or `$PROXI_HOME`):
+
+```
+~/.proxi/
+├── global/
+│   └── system_prompt.md      # Global instructions for all agents
+└── agents/
+    └── <agent_id>/
+        ├── Soul.md           # Agent persona, voice, mission
+        ├── config.yaml       # (reserved for future use)
+        └── sessions/
+            └── <session_id>/
+                ├── history.jsonl
+                ├── plan.md    # Created via manage_plan tool
+                └── todos.md   # Created via manage_todos tool
+```
+
+On TUI startup, the bridge runs an interactive bootstrap: select an existing agent or create a new one. A single ephemeral session is created per agent. Use `/agent` in the TUI to switch agents.
 
 ## Tech Stack
 
-- Python 3.11+
-- UV for build system and package management
+- **Python 3.12+** with UV for build system and package management
 - asyncio for async operations
 - Pydantic for data validation
 - Structlog for structured logging
-- Bun and Ink for TUI
+- **Bun** and **Ink** (React) for the TUI — scrollback-native, no alt-screen
 
 ## Installation
 
 **Prerequisites**
 
-- **Python 3.11+** and [uv](https://docs.astral.sh/uv/) (install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or your package manager).
+- **Python 3.12+** and [uv](https://docs.astral.sh/uv/) (install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or your package manager).
 - For the **TUI**: **Bun** (see installation instructions at https://bun.sh).
 
 **Steps**
@@ -59,6 +87,7 @@ To use the **interactive TUI**, install the frontend dependencies once with Bun:
 
 ```bash
 # Install JS dependencies for the Ink TUI
+cd cli_ink/
 bun install
 ```
 
@@ -74,6 +103,17 @@ export OPENAI_API_KEY="your-key-here"
 export ANTHROPIC_API_KEY="your-key-here"
 ```
 
+**Optional environment variables**
+
+| Variable | Description |
+|----------|-------------|
+| `PROXI_HOME` | Override workspace root (default: `~/.proxi`) |
+| `PROXI_WORKING_DIR` | Working directory for the bridge (default: `.`) |
+| `PROXI_PROVIDER` | LLM provider: `openai` or `anthropic` (default: `openai`) |
+| `PROXI_MAX_TURNS` | Max turns per task (default: `20`) |
+| `PROXI_MCP_SERVER` | MCP server command (e.g. `npx:@modelcontextprotocol/server-filesystem /path`) |
+| `PROXI_NO_SUB_AGENTS` | Set to `1` to disable sub-agents |
+
 **Interactive TUI (default)**
 
 From the project root:
@@ -84,7 +124,7 @@ proxi
 uv run proxi
 ```
 
-This starts the Ink TUI and the agent bridge so you can chat and run tasks in the terminal. The TUI runs the same agent loop (tools, MCP, sub-agents) behind the scenes.
+This starts the Ink TUI and the agent bridge so you can chat and run tasks in the terminal. The TUI runs the same agent loop (tools, MCP, sub-agents, collaborative forms) behind the scenes. The bridge communicates with the TUI via JSON lines over stdin/stdout.
 
 **One-shot agent (CLI)**
 
@@ -107,16 +147,17 @@ uv run proxi-run --mcp-filesystem "." "List all files in the current directory"
 uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
 ```
 
-### TUI (Terminal UI)
 
-The **recommended way** to use Proxi interactively is to run **`proxi`** (or `uv run proxi`). That command:
+**TUI features:**
 
-1. Starts the **agent bridge** (Python) in the background.
-2. Launches the **Ink TUI** (Bun + Ink/React) so you can type tasks and see responses in a chat-style interface.
+- **Scrollback-native layout** — conversation prints into the terminal's native scrollback buffer; only the status bar and input area are Ink-managed. Preserves native scroll, Cmd+F search, and text selection.
+- **Command palette** — type `/` to open. Commands: `/agent` (switch agent), `/clear` (clear conversation), `/plan` (view plan.md), `/todos` (view todos.md), `/help`, `/exit`.
+- **Collaborative forms** — when the agent calls `show_collaborative_form`, a form overlay appears for structured input (choice, multiselect, yesno, text). Supports `show_if` for conditional questions.
+- **Plan / Todos overlay** — `/plan` and `/todos` display the current session's `plan.md` and `todos.md` in an overlay (Esc to close).
+- **Agent bootstrap** — on first run (or when no agents exist), you're prompted to create an agent (name, persona, mission). With existing agents, you select one or create new.
+- **Input history** — up/down arrows when the input is empty cycle through previous messages.
 
-**Requirements:** `uv`, Bun, and `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`). Ensure you have run `bun install` at the project root at least once (see [Installation](#installation)).
-
-To run the TUI directly with Bun (without going through the `proxi` CLI wrapper), you can also use:
+To run the TUI directly with Bun (without going through the `proxi` CLI wrapper):
 
 ```bash
 # From project root, using the helper script
@@ -133,4 +174,4 @@ bun run start      # runs: bun run build && bun dist/index.js
 **Optional verification**
 
 - **Bridge only:** From project root, run `uv run proxi-bridge`. You should see `{"type":"ready"}`. (Ctrl+C to exit.) This checks that the Python agent bridge starts correctly.
-- **Full flow:** Run `proxi`; you should see “Bridge: Ready” and a prompt. Type a task and press Enter.
+- **Full flow:** Run `proxi`; you should see the boot sequence, agent selection (if applicable), and a prompt. Type a task and press Enter.
