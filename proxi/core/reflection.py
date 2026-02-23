@@ -1,7 +1,12 @@
 """Reflection and verification logic."""
 
+from typing import TYPE_CHECKING
+
 from proxi.core.state import AgentState, TurnState, TurnStatus
 from proxi.observability.logging import get_logger
+
+if TYPE_CHECKING:
+    from proxi.interaction.models import FormRequest, FormResponse
 
 logger = get_logger(__name__)
 
@@ -47,6 +52,23 @@ class Reflector:
             self.logger.debug("reflection_generated", turn=turn.turn_number)
 
         return reflection
+
+    async def reflect_on_interaction(
+        self,
+        form_request: "FormRequest",
+        form_response: "FormResponse",
+        subsequent_reasoning: str,
+    ) -> str | None:
+        """
+        Evaluate whether the form answers resolved the stated goal.
+        Returns reflection text or None. Can be extended with LLM-based evaluation.
+        """
+        if not self.enabled:
+            return None
+        # Stub: full LLM-based evaluation per spec can be added later
+        if form_response.skipped:
+            return "User cancelled the form; agent should adapt accordingly."
+        return None
 
     def should_retry(self, state: AgentState, turn: TurnState) -> bool:
         """

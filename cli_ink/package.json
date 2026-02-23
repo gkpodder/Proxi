@@ -11,6 +11,7 @@
     "bridge": "cd .. && uv run proxi-bridge"
   },
   "dependencies": {
+    "figlet": "^1.10.0",
     "ink": "^5.0.0",
     "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",

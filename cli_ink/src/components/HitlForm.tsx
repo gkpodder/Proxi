@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
-import type { UserInputRequired } from "../protocol.js";
+import { theme } from "../theme.js";
+import type { UserInputRequiredBootstrap } from "../protocol.js";
 
 type Props = {
-  spec: UserInputRequired;
+  spec: UserInputRequiredBootstrap;
   onSubmit: (value: string | boolean | number) => void;
   onCancel: () => void;
 };
@@ -57,14 +58,22 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
 
   if (spec.method === "confirm") {
     return (
-      <Box paddingX={1} flexShrink={0} gap={1}>
-        <Text color="yellow">{(spec.prompt ?? "Confirm?")}</Text>
+      <Box
+        paddingX={1}
+        flexShrink={0}
+        gap={1}
+        borderStyle="round"
+        borderColor={theme.purpleDim}
+      >
+        <Text color={theme.purple} bold>
+          {(spec.prompt ?? "Confirm?")}
+        </Text>
         <Box gap={1}>
-          <Text bold color="green" underline>
+          <Text bold color={theme.mint} underline>
             Y
           </Text>
-          <Text> Yes</Text>
-          <Text dimColor> N No (Esc cancel)</Text>
+          <Text color={theme.white}> Yes</Text>
+          <Text color={theme.mist}> N No (Esc cancel)</Text>
         </Box>
       </Box>
     );
@@ -72,25 +81,45 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
 
   if (spec.method === "select" && options.length > 0) {
     return (
-      <Box paddingX={1} flexDirection="column" flexShrink={0} gap={0}>
-        <Text color="yellow">{spec.prompt ?? "Choose one:"}</Text>
+      <Box
+        paddingX={1}
+        flexDirection="column"
+        flexShrink={0}
+        gap={0}
+        borderStyle="round"
+        borderColor={theme.purpleDim}
+      >
+        <Text color={theme.purple} bold>
+          {spec.prompt ?? "Choose one:"}
+        </Text>
         {options.map((opt, i) => (
           <Box key={opt}>
-            <Text color={i === selectIndex ? "green" : "white"}>
+            <Text
+              color={i === selectIndex ? theme.purple : theme.white}
+              backgroundColor={i === selectIndex ? theme.purpleFaint : undefined}
+            >
               {i === selectIndex ? "› " : "  "}
               {opt}
             </Text>
           </Box>
         ))}
-        <Text dimColor> Enter confirm · ↑↓ select · Esc cancel</Text>
+        <Text color={theme.mist}> Enter confirm · ↑↓ select · Esc cancel</Text>
       </Box>
     );
   }
 
   if (spec.method === "text") {
     return (
-      <Box paddingX={1} flexShrink={0} gap={1}>
-        <Text color="yellow">{(spec.prompt ?? "Enter value:")}</Text>
+      <Box
+        paddingX={1}
+        flexShrink={0}
+        gap={1}
+        borderStyle="round"
+        borderColor={theme.purpleDim}
+      >
+        <Text color={theme.purple} bold>
+          {(spec.prompt ?? "Enter value:")}
+        </Text>
         <TextInput
           value={textValue}
           onChange={setTextValue}
@@ -98,14 +127,14 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
           placeholder=""
           showCursor
         />
-        <Text dimColor> Esc cancel</Text>
+        <Text color={theme.mist}> Esc cancel</Text>
       </Box>
     );
   }
 
   return (
     <Box paddingX={1}>
-      <Text dimColor>Unknown input method</Text>
+      <Text color={theme.mist}>Unknown input method</Text>
     </Box>
   );
 }
