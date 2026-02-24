@@ -215,6 +215,21 @@ export function AnswerForm({ payload, onSubmit }: Props) {
 
     if (!currentQ) return;
 
+    // Tab / Shift+Tab for question switching (must run before yesno block which returns early)
+    if (key.tab && !key.shift) {
+      if (currentQ.type === "yesno") {
+        if (currentIndex >= totalVisible - 1) return;
+        setCurrentIndex((i) => i + 1);
+      } else {
+        advanceOrSubmit();
+      }
+      return;
+    }
+    if (key.tab && key.shift) {
+      goBack();
+      return;
+    }
+
     if (currentQ.type === "yesno") {
       if (input.toLowerCase() === "y") {
         setAnswers((a) => ({ ...a, [currentQ.id]: true }));
@@ -240,15 +255,6 @@ export function AnswerForm({ payload, onSubmit }: Props) {
           setCurrentIndex((i) => i + 1);
         }
       }
-      return;
-    }
-
-    if (key.tab && !key.shift) {
-      advanceOrSubmit();
-      return;
-    }
-    if (key.tab && key.shift) {
-      goBack();
       return;
     }
     if (key.return && !key.shift) {

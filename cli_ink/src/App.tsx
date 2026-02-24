@@ -361,12 +361,16 @@ export default function App() {
               onCancel={onHitlCancel}
             />
           )
+        ) : !bootInfo ? (
+          <Box paddingX={1} flexShrink={0}>
+            <Text dimColor>Connecting…</Text>
+          </Box>
         ) : commandPaletteOpen ? (
           <CommandPalette
             onDismiss={() => setCommandPaletteOpen(false)}
             onCommand={onCommand}
           />
-        ) : planTodosOverlay && bootInfo ? (
+        ) : planTodosOverlay ? (
           <PlanTodosOverlay
             type={planTodosOverlay}
             agentId={bootInfo.agentId}
