@@ -370,6 +370,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 turns = cmd.get("maxTurns") or cmd.get("max_turns") or max_turns
                 loop.max_turns = turns
 
+                state_before_run = state.model_copy(deep=True) if state is not None else None
+
                 async def run_agent() -> AgentState:
                     if state is None:
                         return await loop.run(task)
@@ -407,6 +409,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
                         await agent_task
                     except asyncio.CancelledError:
                         pass
+                    if state_before_run is not None:
+                        state = state_before_run
                     emitter.emit(
                         {
                             "type": "status_update",

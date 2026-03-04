@@ -480,3 +480,95 @@ button:disabled {
   border-color: #3b82f6;
   color: #1d4ed8;
 }
+
+.modalContentWide {
+  max-width: 640px;
+}
+
+.selectedOption {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+.app.light .selectedOption {
+  background: rgba(59, 130, 246, 0.08);
+  color: #1d4ed8;
+}
+
+.formQuestion {
+  color: #e5e5e5;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.app.light .formQuestion {
+  color: #1f2937;
+}
+
+.formHint {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.formProgress {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.formAnswerBlock {
+  margin-bottom: 12px;
+}
+
+.formActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.primaryBtn {
+  border-color: #3b82f6;
+  color: #93c5fd;
+}
+
+.app.light .primaryBtn {
+  color: #1d4ed8;
+}
+
+.formTextInputWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.formTextInput,
+.formTextarea {
+  width: 100%;
+  background: #0a0a0a;
+  border: 1px solid #333;
+  color: #e5e5e5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.formTextarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.formTextInput:focus,
+.formTextarea:focus {
+  border-color: #3b82f6;
+}
+
+.app.light .formTextInput,
+.app.light .formTextarea {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #1f2937;
+}
