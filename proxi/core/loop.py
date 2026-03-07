@@ -394,16 +394,29 @@ class AgentLoop:
             payload = decision.payload
             agent_name = payload.get("agent")
             task = payload.get("task", "")
-            context_refs_list = payload.get("context_refs", [])
+            context_refs_payload = payload.get("context_refs", [])
 
             # Build context from state
             from proxi.agents.base import AgentContext
 
             # Get relevant context references from state
-            context_refs = {}
-            for ref_id in context_refs_list:
-                if ref_id in state.context_refs:
-                    context_refs[ref_id] = state.context_refs[ref_id]
+            context_refs: dict[str, Any] = {}
+            if isinstance(context_refs_payload, dict):
+                context_refs.update(context_refs_payload)
+            elif isinstance(context_refs_payload, list):
+                for ref_id in context_refs_payload:
+                    if ref_id in state.context_refs:
+                        context_refs[ref_id] = state.context_refs[ref_id]
+
+            if self.emitter:
+                def progress_hook(payload: dict[str, Any]) -> None:
+                    self.emitter.emit({
+                        "type": "subagent_progress",
+                        "agent": agent_name,
+                        "payload": payload,
+                    })
+
+                context_refs["__progress_hook__"] = progress_hook
 
             context = AgentContext(
                 task=task,
@@ -433,9 +446,9 @@ class AgentLoop:
             result = await self.sub_agent_manager.run(
                 agent_name=agent_name,
                 context=context,
-                max_turns=10,  # Default budgets for sub-agents
-                max_tokens=2000,
-                max_time=30.0,
+                max_turns=20 if agent_name == "browser" else 10,
+                max_tokens=8000 if agent_name == "browser" else 2000,
+                max_time=90.0 if agent_name == "browser" else 30.0,
             )
 
             if self.emitter:

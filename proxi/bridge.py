@@ -9,9 +9,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from proxi.cli.main import create_llm_client, setup_mcp, setup_sub_agents, setup_tools
-from proxi.interaction.tool import get_show_collaborative_form_spec
-from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.cli.main import (
     auto_load_mcp_servers,
     create_llm_client,
@@ -21,7 +18,10 @@ from proxi.cli.main import (
 )
 from proxi.core.loop import AgentLoop
 from proxi.core.state import AgentState
+from proxi.interaction.tool import get_show_collaborative_form_spec
 from proxi.observability.logging import get_logger, init_log_manager
+from proxi.tools.browser import get_browser_session_manager
+from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.workspace import WorkspaceManager
 
 logger = get_logger(__name__)
@@ -66,6 +66,11 @@ async def run_bridge(agent_id: str | None = None) -> None:
     mcp_server = os.environ.get("PROXI_MCP_SERVER")
     no_sub_agents = os.environ.get(
         "PROXI_NO_SUB_AGENTS", "").lower() in ("1", "true", "yes")
+    enable_vision_verification = os.environ.get(
+        "PROXI_DISABLE_VISION_VERIFICATION", ""
+    ).lower() not in ("1", "true", "yes")
+    vision_model = os.environ.get("PROXI_VISION_MODEL", "gpt-4o-mini")
+    vision_max_checks = int(os.environ.get("PROXI_VISION_MAX_CHECKS", "6"))
 
     try:
         logger.info("initializing_llm", provider=provider)
@@ -82,7 +87,13 @@ async def run_bridge(agent_id: str | None = None) -> None:
         sub_agent_manager = None
     else:
         logger.info("setting_up_sub_agents")
-        sub_agent_manager = setup_sub_agents(llm_client)
+        sub_agent_manager = setup_sub_agents(
+            llm_client,
+            tool_registry,
+            enable_vision_verification=enable_vision_verification,
+            vision_model=vision_model,
+            max_vision_checks=max(0, vision_max_checks),
+        )
 
     emitter = StdioEmitter()
 
@@ -429,6 +440,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 await adapter.close()
             except Exception as e:
                 logger.warning("mcp_close_error", error=str(e))
+        browser_session_manager = get_browser_session_manager(tool_registry)
+        if browser_session_manager is not None:
+            try:
+                await browser_session_manager.close_all()
+            except Exception as e:
+                logger.warning("browser_session_close_error", error=str(e))
 
 
 def main() -> None:
