@@ -147,6 +147,13 @@ uv run proxi-run --mcp-filesystem "." "List all files in the current directory"
 uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
 ```
 
+**Browser sub-agent (new from-scratch worker)**
+
+- Registered as `browser` and available when sub-agents are enabled.
+- Intended for web-heavy tasks: research, scraping/navigation workflows, form automation, monitoring checks, and travel/shopping discovery.
+- Runs as a dedicated worker loop and reports progress events back through the bridge when running in TUI mode.
+- Requires at least one web-capable tool (for example, MCP-provided browser/web tools like fetch/open tools).
+
 
 **TUI features:**
 

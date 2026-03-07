@@ -7,14 +7,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from proxi.agents.browser import BrowserSubAgent
 from proxi.agents.registry import SubAgentManager, SubAgentRegistry
 from proxi.agents.summarizer import SummarizerAgent
 from proxi.core.loop import AgentLoop
 from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
+from proxi.llm.vision_verifier import VisionVerifier, VisionPlanner
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
 from proxi.observability.logging import setup_logging, get_logger, init_log_manager
+from proxi.tools.browser import BrowserSessionManager, get_browser_session_manager, register_browser_tools
 from proxi.tools.datetime import DateTimeTool
 from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
 from proxi.tools.registry import ToolRegistry
@@ -54,16 +57,57 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     # Datetime tool
     registry.register(DateTimeTool())
 
+    # Native browser tools (Playwright-backed)
+    artifacts_root = Path("browser_artifacts")
+    headless = os.environ.get("PROXI_BROWSER_HEADLESS", "true").lower() in ("1", "true", "yes")
+    browser_session_manager = BrowserSessionManager(
+        artifacts_root=artifacts_root,
+        headless=headless,
+    )
+    register_browser_tools(registry, browser_session_manager)
+    setattr(registry, "_browser_session_manager", browser_session_manager)
+
     return registry
 
 
-def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentManager:
+def setup_sub_agents(
+    llm_client: OpenAIClient | AnthropicClient,
+    tool_registry: ToolRegistry,
+    *,
+    enable_vision_verification: bool = True,
+    vision_model: str = "gpt-4o-mini",
+    max_vision_checks: int = 6,
+) -> SubAgentManager:
     """Set up the sub-agent registry and manager."""
     registry = SubAgentRegistry()
 
     # Register summarizer agent
     summarizer = SummarizerAgent(llm_client)
     registry.register(summarizer)
+
+    # Register browser agent (fresh implementation)
+    vision_verifier = VisionVerifier(
+        model=vision_model,
+        api_key=os.getenv("OPENAI_API_KEY"),
+        enabled=enable_vision_verification,
+    )
+    
+    # Vision planner for intelligent action planning
+    vision_planner = VisionPlanner(
+        model="gpt-4o-mini",  # Use cheap model for planning
+        api_key=os.getenv("OPENAI_API_KEY"),
+        enabled=True,
+    )
+
+    browser_agent = BrowserSubAgent(
+        llm_client=llm_client,
+        tool_registry=tool_registry,
+        vision_verifier=vision_verifier,
+        vision_planner=vision_planner,
+        max_vision_checks=max_vision_checks,
+        use_vision_planning=True,
+    )
+    registry.register(browser_agent)
 
     manager = SubAgentManager(registry)
     return manager
@@ -240,6 +284,23 @@ async def main():
         type=str,
         help="Agent workspace ID to use (defaults to 'default' if not present)",
     )
+    parser.add_argument(
+        "--vision-model",
+        type=str,
+        default=os.getenv("PROXI_VISION_MODEL", "gpt-4o-mini"),
+        help="Vision verification model for browser sub-agent (default: gpt-4o-mini)",
+    )
+    parser.add_argument(
+        "--vision-max-checks",
+        type=int,
+        default=int(os.getenv("PROXI_VISION_MAX_CHECKS", "6")),
+        help="Max vision verification checks per browser sub-agent run",
+    )
+    parser.add_argument(
+        "--disable-vision-verification",
+        action="store_true",
+        help="Disable screenshot+vision verification in browser sub-agent",
+    )
 
     args = parser.parse_args()
 
@@ -267,6 +328,7 @@ async def main():
         args.working_directory) if args.working_directory else Path.cwd()
 
     mcp_adapters: list[MCPAdapter] = []
+    tool_registry: ToolRegistry | None = None
     try:
         # Create LLM client
         logger.info("initializing_llm", provider=args.provider)
@@ -375,7 +437,13 @@ async def main():
         sub_agent_manager = None
         if not args.no_sub_agents:
             logger.info("setting_up_sub_agents")
-            sub_agent_manager = setup_sub_agents(llm_client)
+            sub_agent_manager = setup_sub_agents(
+                llm_client,
+                tool_registry,
+                enable_vision_verification=not args.disable_vision_verification,
+                vision_model=args.vision_model,
+                max_vision_checks=max(0, args.vision_max_checks),
+            )
 
         # Create agent loop
         loop = AgentLoop(
@@ -413,17 +481,29 @@ async def main():
         for adapter in mcp_adapters:
             await adapter.close()
 
+        browser_session_manager = get_browser_session_manager(tool_registry)
+        if browser_session_manager is not None:
+            await browser_session_manager.close_all()
+
         sys.exit(0 if state.status.value == "completed" else 1)
 
     except KeyboardInterrupt:
         logger.info("interrupted_by_user")
         for adapter in mcp_adapters:
             await adapter.close()
+        if tool_registry is not None:
+            browser_session_manager = get_browser_session_manager(tool_registry)
+            if browser_session_manager is not None:
+                await browser_session_manager.close_all()
         sys.exit(130)
     except Exception as e:
         logger.error("fatal_error", error=str(e), exc_info=True)
         for adapter in mcp_adapters:
             await adapter.close()
+        if tool_registry is not None:
+            browser_session_manager = get_browser_session_manager(tool_registry)
+            if browser_session_manager is not None:
+                await browser_session_manager.close_all()
         sys.exit(1)
 
 
