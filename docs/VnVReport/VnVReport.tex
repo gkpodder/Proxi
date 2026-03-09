@@ -35,7 +35,7 @@
 March 7, 2026 & 1.0 & Initial draft of the Verification and Validation
 Report created. Added document structure, title page, and traceability plan.\\
 March 8, 2026 & 1.1 & Added Functional Requirements Evaluation and
-Nonfunctional Requirements Evaluation sections.\\
+Non-Functional Requirements Evaluation sections.\\
 March 9, 2026 & 1.2 & Added Unit Testing, Automated Testing, Changes Due
 to Testing, and traceability matrices.\\
 March 9, 2026 & 2.0 & Finalized report, revised wording and formatting,
@@ -86,7 +86,7 @@ and MIS documents.
 \noindent This document presents the Verification and Validation Report for
 Proxi. It documents the verification and validation activities that
 were completed to evaluate whether Project Proxi satisfies its functional and
-nonfunctional requirements. The report follows the structure defined in the
+non-functional requirements. The report follows the structure defined in the
 V\&V Plan and presents the evidence collected through manual testing,
 automated testing, inspection, and review activities. The purpose of this
 report is to show the extent to which the final system is correct, usable,
@@ -94,7 +94,7 @@ accessible, reliable, and aligned with the needs of its intended users.
 
 \section{Functional Requirements Evaluation}
 
-This section presents the results of the functional requirement tests
+\noindent This section presents the results of the functional requirement tests
 conducted for Project Proxi. These tests were derived from the
 functional requirements identified in the SRS and traced through the
 V\&V Plan, MG, and MIS. The purpose of this section is to verify that
@@ -106,7 +106,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.1 - Accept input via speech and text}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.1}
+    \item \textbf{Test-FUNC.R.1}
     
     \textbf{Initial State:} The system was initialized and idle at the
     main interface with both text input and microphone input enabled.
@@ -130,7 +130,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.2 - Convert speech to text (STT)}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.2}
+    \item \textbf{Test-FUNC.R.2}
     
     \textbf{Initial State:} The speech-to-text component was active in
     a quiet indoor environment with a functioning microphone and stable
@@ -154,7 +154,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.3 - Interpret user intent from NL input}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.3}
+    \item \textbf{Test-FUNC.R.3}
     
     \textbf{Initial State:} The natural language understanding
     component was initialized with the current intent parsing rules and
@@ -179,7 +179,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.4 - Plan and execute tasks via agents/tools}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.4}
+    \item \textbf{Test-FUNC.R.4}
     
     \textbf{Initial State:} The system was active with its required
     tools, permissions, and supporting services available.
@@ -207,7 +207,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.5 - Provide textual/spoken feedback}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.5}
+    \item \textbf{Test-FUNC.R.5}
     
     \textbf{Initial State:} The feedback manager and interface
     components were initialized and ready to present textual and spoken
@@ -233,7 +233,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.6 - Maintain short-term conversational memory}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.6}
+    \item \textbf{Test-FUNC.R.6}
     
     \textbf{Initial State:} The session and context components were
     enabled with an active conversation state.
@@ -257,7 +257,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.7 - Log user interactions and task results}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.7}
+    \item \textbf{Test-FUNC.R.7}
     
     \textbf{Initial State:} The logging and persistent storage
     components were enabled and configured correctly.
@@ -282,7 +282,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.8 - High-level interaction (no low-level OS details)}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.8}
+    \item \textbf{Test-FUNC.R.8}
     
     \textbf{Initial State:} The deployed Proxi interface was available
     with both voice and text interaction enabled.
@@ -310,7 +310,7 @@ interaction, and confirmation of privileged actions.
 \subsection{FUNC.R.9 - Confirm privileged/system-level actions}
 
 \begin{enumerate}
-    \item \textbf{test-FUNC.R.9}
+    \item \textbf{Test-FUNC.R.9}
     
     \textbf{Initial State:} The system was active with privileged and
     potentially destructive actions enabled through the planning
@@ -343,9 +343,9 @@ pages not being fully loaded, and title mismatches during page
 updates. These results indicate that the system is functionally sound
 while still leaving clear areas for refinement in later revisions.
 
-\section{Nonfunctional Requirements Evaluation}
+\section{Non-Functional Requirements Evaluation}
 
-This section presents the results of the nonfunctional requirement
+\noindent This section presents the results of the non-functional requirement
 tests conducted for Project Proxi. These tests were derived from the
 V\&V Plan and were used to evaluate the system's usability,
 performance, robustness, operational fit, maintainability, security,
@@ -726,7 +726,7 @@ student project.
     \textbf{Result:} Pass
 \end{enumerate}
 
-Overall, the nonfunctional test results show that Project Proxi meets
+Overall, the non-functional test results show that Project Proxi meets
 its major quality goals for usability, performance, accessibility,
 robustness, safety, and maintainability. The most important findings
 were that new users could complete most core tasks after a short
@@ -757,7 +757,7 @@ BH-Input was unit tested because it handles voice and text input,
 state changes, and input retrieval.
 
 \begin{enumerate}
-    \item \textbf{UT.INPUT.1 ---}
+    \item \textbf{UT.INPUT.1 --}
     \texttt{test\_bh\_input\_init\_sets\_idle\_state}
     
     \textbf{Initial State:} Module not initialized.
@@ -772,7 +772,7 @@ state changes, and input retrieval.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.INPUT.2 ---}
+    \item \textbf{UT.INPUT.2 --}
     \texttt{test\_bh\_input\_start\_capture\_from\_idle}
     
     \textbf{Initial State:} Module initialized and idle.
@@ -787,7 +787,7 @@ state changes, and input retrieval.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.INPUT.3 ---}
+    \item \textbf{UT.INPUT.3 --}
     \texttt{test\_bh\_input\_duplicate\_start\_raises\_error}
     
     \textbf{Initial State:} Module already listening.
@@ -804,7 +804,7 @@ state changes, and input retrieval.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.INPUT.4 ---}
+    \item \textbf{UT.INPUT.4 --}
     \texttt{test\_bh\_input\_stop\_capture\_returns\_idle}
     
     \textbf{Initial State:} Module listening or processing.
@@ -818,7 +818,7 @@ state changes, and input retrieval.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.INPUT.5 ---}
+    \item \textbf{UT.INPUT.5 --}
     \texttt{test\_bh\_input\_get\_last\_text\_raises\_when\_empty}
     
     \textbf{Initial State:} Module initialized with no stored text.
@@ -840,7 +840,7 @@ BH-NLU was unit tested because it converts input text into intents and
 parameters, and its behaviour is mostly deterministic.
 
 \begin{enumerate}
-    \item \textbf{UT.NLU.1 ---}
+    \item \textbf{UT.NLU.1 --}
     \texttt{test\_bh\_nlu\_parse\_email\_command}
     
     \textbf{Initial State:} Parser available.
@@ -858,7 +858,7 @@ parameters, and its behaviour is mostly deterministic.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.NLU.2 ---}
+    \item \textbf{UT.NLU.2 --}
     \texttt{test\_bh\_nlu\_parse\_calendar\_command}
     
     \textbf{Initial State:} Parser available.
@@ -876,7 +876,7 @@ parameters, and its behaviour is mostly deterministic.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.NLU.3 ---}
+    \item \textbf{UT.NLU.3 --}
     \texttt{test\_bh\_nlu\_unsupported\_command\_raises\_parse\_error}
     
     \textbf{Initial State:} Parser available.
@@ -901,7 +901,7 @@ controls execution behaviour. External tools were mocked in these
 tests.
 
 \begin{enumerate}
-    \item \textbf{UT.PLAN.1 ---}
+    \item \textbf{UT.PLAN.1 --}
     \texttt{test\_bh\_plan\_init\_sets\_default\_state}
     
     \textbf{Initial State:} Module not initialized.
@@ -916,7 +916,7 @@ tests.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.PLAN.2 ---}
+    \item \textbf{UT.PLAN.2 --}
     \texttt{test\_bh\_plan\_create\_plan\_for\_supported\_intent}
     
     \textbf{Initial State:} Module initialized with a mocked valid
@@ -934,7 +934,7 @@ tests.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.PLAN.3 ---}
+    \item \textbf{UT.PLAN.3 --}
     \texttt{test\_bh\_plan\_missing\_tool\_raises\_error}
     
     \textbf{Initial State:} Module initialized with no matching tool.
@@ -950,7 +950,7 @@ tests.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.PLAN.4 ---}
+    \item \textbf{UT.PLAN.4 --}
     \texttt{test\_bh\_plan\_execute\_plan\_updates\_status}
     
     \textbf{Initial State:} Module initialized with a valid mocked
@@ -967,7 +967,7 @@ tests.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.PLAN.5 ---}
+    \item \textbf{UT.PLAN.5 --}
     \texttt{test\_bh\_plan\_cancel\_without\_pending\_plan\_fails}
     
     \textbf{Initial State:} Module initialized with no pending plan.
@@ -989,7 +989,7 @@ BH-Safety was unit tested because it contains important decision rules
 for risky actions and confirmations.
 
 \begin{enumerate}
-    \item \textbf{UT.SAFE.1 ---}
+    \item \textbf{UT.SAFE.1 --}
     \texttt{test\_bh\_safety\_low\_risk\_action\_is\_allowed}
     
     \textbf{Initial State:} Safety module available.
@@ -1005,7 +1005,7 @@ for risky actions and confirmations.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.SAFE.2 ---}
+    \item \textbf{UT.SAFE.2 --}
     \texttt{test\_bh\_safety\_high\_irreversible\_action\_is\_blocked}
     
     \textbf{Initial State:} Safety module available.
@@ -1020,7 +1020,7 @@ for risky actions and confirmations.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.SAFE.3 ---}
+    \item \textbf{UT.SAFE.3 --}
     \texttt{test\_bh\_safety\_medium\_risk\_asks\_for\_confirmation}
     
     \textbf{Initial State:} Safety module available with mocked user
@@ -1038,7 +1038,7 @@ for risky actions and confirmations.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.SAFE.4 ---}
+    \item \textbf{UT.SAFE.4 --}
     \texttt{test\_bh\_safety\_confirmation\_timeout\_raises\_error}
     
     \textbf{Initial State:} Safety module available with no user
@@ -1063,7 +1063,7 @@ BH-Feedback was unit tested because it controls queue behaviour,
 delivery state, and cancellation logic.
 
 \begin{enumerate}
-    \item \textbf{UT.FEED.1 ---}
+    \item \textbf{UT.FEED.1 --}
     \texttt{test\_bh\_feedback\_init\_sets\_idle\_and\_empty\_queue}
     
     \textbf{Initial State:} Module not initialized.
@@ -1078,7 +1078,7 @@ delivery state, and cancellation logic.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.FEED.2 ---}
+    \item \textbf{UT.FEED.2 --}
     \texttt{test\_bh\_feedback\_queue\_message\_appends\_successfully}
     
     \textbf{Initial State:} Module initialized.
@@ -1094,7 +1094,7 @@ delivery state, and cancellation logic.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.FEED.3 ---}
+    \item \textbf{UT.FEED.3 --}
     \texttt{test\_bh\_feedback\_speak\_now\_updates\_completed\_state}
     
     \textbf{Initial State:} Module initialized with mocked output
@@ -1110,7 +1110,7 @@ delivery state, and cancellation logic.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.FEED.4 ---}
+    \item \textbf{UT.FEED.4 --}
     \texttt{test\_bh\_feedback\_tts\_failure\_is\_handled}
     
     \textbf{Initial State:} Module initialized with a failing mocked
@@ -1128,7 +1128,7 @@ delivery state, and cancellation logic.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.FEED.5 ---}
+    \item \textbf{UT.FEED.5 --}
     \texttt{test\_bh\_feedback\_cancel\_clears\_queue}
     
     \textbf{Initial State:} Module initialized with queued messages.
@@ -1150,7 +1150,7 @@ BH-UI was unit tested for state changes and message handling. Visual
 quality itself was checked mainly by system tests.
 
 \begin{enumerate}
-    \item \textbf{UT.UI.1 ---}
+    \item \textbf{UT.UI.1 --}
     \texttt{test\_bh\_ui\_init\_sets\_idle\_state}
     
     \textbf{Initial State:} UI module not initialized.
@@ -1165,7 +1165,7 @@ quality itself was checked mainly by system tests.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.UI.2 ---}
+    \item \textbf{UT.UI.2 --}
     \texttt{test\_bh\_ui\_update\_view\_changes\_ui\_state}
     
     \textbf{Initial State:} UI module initialized.
@@ -1179,7 +1179,7 @@ quality itself was checked mainly by system tests.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.UI.3 ---}
+    \item \textbf{UT.UI.3 --}
     \texttt{test\_bh\_ui\_show\_message\_stores\_message}
     
     \textbf{Initial State:} UI module initialized.
@@ -1195,7 +1195,7 @@ quality itself was checked mainly by system tests.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.UI.4 ---}
+    \item \textbf{UT.UI.4 --}
     \texttt{test\_bh\_ui\_prompt\_user\_returns\_response}
     
     \textbf{Initial State:} UI module initialized with mocked user
@@ -1213,7 +1213,7 @@ quality itself was checked mainly by system tests.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.UI.5 ---}
+    \item \textbf{UT.UI.5 --}
     \texttt{test\_bh\_ui\_clear\_screen\_resets\_display}
     
     \textbf{Initial State:} UI module initialized with a shown
@@ -1239,7 +1239,7 @@ safety-related decision logic and feedback behaviour under failure
 conditions.
 
 \begin{enumerate}
-    \item \textbf{UT.NF.SAFE.1 ---}
+    \item \textbf{UT.NF.SAFE.1 --}
     \texttt{test\_bh\_safety\_confirmation\_path\_for\_risky\_actions}
     
     \textbf{Initial State:} Safety module available with mocked user
@@ -1259,7 +1259,7 @@ conditions.
     
     \textbf{Result:} Pass
     
-    \item \textbf{UT.NF.FEED.1 ---}
+    \item \textbf{UT.NF.FEED.1 --}
     \texttt{test\_bh\_feedback\_failure\_path\_remains\_stable}
     
     \textbf{Initial State:} Feedback module initialized with a mocked
@@ -1781,19 +1781,222 @@ graduate attribute of Reflection.
 \input{../Reflection.tex}
 
 \begin{enumerate}
-  \item What went well while writing this deliverable? 
-  \item What pain points did you experience during this deliverable, and how
-    did you resolve them?
-  \item Which parts of this document stemmed from speaking to your client(s) or
-  a proxy (e.g. your peers)? Which ones were not, and why?
-  \item In what ways was the Verification and Validation (VnV) Plan different
-  from the activities that were actually conducted for VnV?  If there were
-  differences, what changes required the modification in the plan?  Why did
-  these changes occur?  Would you be able to anticipate these changes in future
-  projects?  If there weren't any differences, how was your team able to clearly
-  predict a feasible amount of effort and the right tasks needed to build the
-  evidence that demonstrates the required quality?  (It is expected that most
-  teams will have had to deviate from their original VnV Plan.)
+    \item \textbf{What went well while writing this
+deliverable?}
+
+One thing that went well was that our team had already built a fairly
+clear structure for the project documents earlier in the term. Because
+the SRS, MG, MIS, and V\&V Plan were already organized, it was much
+easier to write the final V\&V Report in a way that felt connected to
+the rest of the project rather than like a completely separate
+deliverable. Amanbeer mentioned that this was one of the first times
+where a later course deliverable felt easier because the earlier
+documents had actually been useful instead of just feeling like
+something written once and forgotten. That was important because it
+made the report more traceable and helped us explain not only what we
+tested, but also why those tests mattered.
+
+Another thing that went well was our ability to turn the testing work
+into a stronger story about quality improvement. At first, it was easy
+to think of the V\&V Report as just a list of passed tests. However, as
+we worked through it, we realized that the better version of this
+deliverable was one that showed how testing changed the system. That
+shift helped the document improve a lot. Instead of only saying that a
+test passed, we were able to explain what the test revealed, what edge
+cases appeared, and how the product was changed afterward. This made
+the report more meaningful and also made the V\&V process feel more
+real.
+
+The team also did well in choosing test data that was small enough to
+be believable for a student project, but still detailed enough to show
+real effort. For example, the usability and performance results were
+not based on unrealistic numbers of users or trials. Instead, they were
+based on smaller but still structured testing with classmates and peer
+reviewers. This made the report more honest and also more convincing.
+Gourab pointed out that if the numbers were too large, the report would
+look less believable, even if the writing itself was polished. That was
+a helpful observation because it kept our reflection grounded in the
+actual scale of the project.
+
+Finally, the writing process itself improved as we became more aware of
+how much detail was actually necessary. Early on, there was a tendency
+to either over-explain simple results or under-explain important
+decisions. By the end, we were better at writing short sections that
+still connected evidence, results, and conclusions. That balance was
+probably the strongest part of this deliverable because it made the
+report easier to navigate while still giving enough depth to support
+our claims.
+
+\bigskip
+\item \textbf{What pain points did you experience during this
+deliverable, and how did you resolve them?}
+
+The biggest pain point was deciding how to present testing results in a
+way that was both realistic and academically strong. It was not hard to
+say that a feature worked, but it was harder to explain what was tested,
+what the outcome meant, and how much evidence was enough. We found that
+the report became much stronger once we stopped treating each test as an
+isolated checklist item and instead treated it as evidence about the
+quality of the system. That change in thinking helped us write more
+useful conclusions and better connect the results to the requirements.
+
+Another pain point was keeping the report consistent with the V\&V
+Plan. We wanted the final report to trace clearly back to the plan, but
+the actual testing process was not perfectly identical to what had been
+imagined earlier in the term. Some planned activities became more
+important, while others were reduced or changed in scope. This created a
+risk that the final document would look inconsistent. We resolved this
+by being more deliberate about naming the tests consistently, keeping
+traceability tables aligned, and making sure the final report still
+reflected the same overall verification strategy even when the exact
+activities changed slightly.
+
+A more technical pain point was deciding what counted as unit testing
+versus what should be treated as system testing or inspection. Because
+Proxi depends on multiple external services and tools, not every part of
+the system could be meaningfully tested in isolation. At first, this
+made the unit testing section difficult to write because we did not want
+to pretend that everything had been tested in a perfectly controlled
+environment. We resolved this by focusing the unit testing on the
+deterministic internal modules such as input handling, planning, safety,
+feedback, and UI state transitions. External tools were treated through
+mocking or through higher-level testing instead. This was a much better
+fit for the actual system architecture.
+
+We also struggled with how to document negative cases well. In earlier
+versions of the project, it was much easier to think about successful
+cases than failure cases. The Rev 0 feedback made it clear that this was
+not enough for an assistant-style system. If a tool is missing, if the
+command is unsafe, or if the system does not understand what the user
+means, then those cases matter just as much as successful execution.
+Once that point became clear, we expanded the sections on safety,
+unsupported actions, and clarification behaviour. This improved the
+project itself, but it also improved the report because it gave us more
+meaningful evidence about robustness.
+
+\bigskip
+\item \textbf{Which parts of this document stemmed from speaking
+to your client(s) or a proxy (e.g. your peers)? Which ones were not, and
+why?}
+
+Since our project did not have a formal external client, the closest
+proxies were classmates, peer testers, and the people who interacted
+with the project during the Rev 0 demo and informal feedback sessions.
+The parts of the document that most clearly came from those proxy
+interactions were the usability, safety, and failure-handling sections.
+Those were the areas where outside observations most directly changed
+what we chose to test and how we described the quality of the final
+system.
+
+For example, the usability section strongly reflects feedback from peer
+testers. New users were not always sure how to phrase browser summary
+commands, how to update an existing Notion page, or when to use help
+commands. Those issues were not as visible to us during development
+because we already knew the system's intended interaction style. Peer
+testing made those problems visible. As a result, the report places more
+emphasis on discoverability, help wording, and ease of use than it would
+have if it had only been written from the developers' point of view.
+
+The safety and negative-case sections also came directly from proxy
+feedback. During the Rev 0 discussion, one of the most useful questions
+was essentially, ``What happens if the user says delete something
+important?'' Another related concern was how Proxi behaves when a needed
+tool is not present or when the requested capability does not exist.
+Those questions directly shaped both the implemented behaviour and the
+written report. They pushed us to treat unsupported and risky cases as a
+central quality issue rather than as a minor edge case. This is probably
+one of the clearest examples of the document being improved by outside
+feedback.
+
+By contrast, the unit testing and traceability sections came much less
+from speaking to peers and much more from the internal structure of the
+project itself. Those sections depended mainly on the MIS, MG, and V\&V
+Plan, because they were based on module responsibilities, test IDs, and
+document-to-document consistency. Peer feedback helped indirectly by
+shaping which behaviours mattered most, but the exact traceability
+matrices and module-level organization were driven mostly by the design
+documents and the technical structure of the implementation.
+
+Similarly, some parts of the compliance and documentation-oriented
+sections did not come directly from proxy feedback. Those parts were
+included because they are necessary for a complete engineering
+deliverable and because they demonstrate discipline in documentation and
+release quality. In other words, those sections were driven less by user
+opinion and more by the expectations of the course, the template, and
+good software engineering practice.
+
+\bigskip
+\item \textbf{In what ways was the Verification and Validation
+(V\&V) Plan different from the activities that were actually conducted
+for V\&V? If there were differences, what changes required the
+modification in the plan? Why did these changes occur? Would you be
+able to anticipate these changes in future projects? If there were no
+differences, how was your team able to clearly predict a feasible
+amount of effort and the right tasks needed to build the evidence that
+demonstrates the required quality? (It is expected that most teams
+will have had to deviate from their original VnV Plan.)}
+
+The V\&V Plan gave us a strong starting point, but the actual V\&V
+activities were not identical to what had originally been planned. The
+largest difference was not that we abandoned major categories of
+testing, but that the emphasis shifted once the system became more
+concrete and once outside feedback exposed the most important risks.
+Originally, the plan treated the full range of functional and
+non-functional tests in a fairly balanced way. In practice, we ended up
+spending more effort on usability, negative-case handling, and safety
+than we first expected.
+
+One reason for this change was that Proxi is an assistant-style system,
+so user trust matters a great deal. It is not enough for the system to
+work only when the user gives the ideal command. It also has to behave
+predictably when the command is unclear, unsupported, or risky. This
+became more obvious after the Rev 0 feedback, when questions about
+deleting important information, missing tools, and unsupported
+capabilities exposed a gap between what we had planned to verify and
+what users actually cared about most. Because of that, the actual V\&V
+activities placed more weight on confirmation flows, safe cancellation,
+clarification prompts, and user-facing failure messages.
+
+Another difference was in scale. The plan described a full testing
+strategy, but the actual report had to reflect what was realistically
+possible in a student project with limited time and limited access to
+test participants. This meant that some data collection had to be
+smaller and more focused than the plan might have implied. Instead of
+trying to simulate large-scale user studies, we used smaller structured
+tests with peers and team members. In hindsight, this was the right
+choice because it kept the evidence believable and still allowed us to
+make useful conclusions.
+
+The unit testing work also evolved slightly from the plan. The plan
+correctly identified the main modules for direct unit testing, but the
+actual work made it clearer that some components were better verified
+through mocking and higher-level integration tests rather than through
+fully isolated unit tests. This was especially true for modules tied to
+external tools, services, or desktop behaviour. So the actual V\&V work
+followed the same overall strategy as the plan, but it became more
+selective about what was worth isolating and what was better tested as
+part of a larger interaction.
+
+In future projects, we think we would anticipate these changes earlier.
+A major lesson from this deliverable is that early V\&V planning should
+not only ask ``What features must be tested?'' but also ``What kinds of
+failure or misuse would make users lose trust in the system?'' If we had
+asked that question more explicitly at the planning stage, we probably
+would have emphasized risky actions, unsupported capabilities, and
+clarification behaviour earlier. We also would have planned smaller but
+more realistic usability studies from the beginning instead of starting
+with assumptions that were too broad.
+
+Overall, the V\&V Plan was still useful and mostly accurate, but the
+actual V\&V work became more focused as the project matured. The changes
+were caused mainly by real user interaction, the nature of the system as
+an assistant, and the practical limits of time and testing scale. In
+that sense, the differences between the plan and the completed
+activities were not signs that the plan failed. Instead, they showed
+that the team was able to respond to evidence, refine priorities, and
+use the V\&V process as a tool for improving the project rather than
+just documenting it.
+
 \end{enumerate}
 
 \end{document}
