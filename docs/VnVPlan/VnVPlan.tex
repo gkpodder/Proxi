@@ -4,6 +4,7 @@
 \usepackage{tabularx}
 \usepackage{hyperref}
 \usepackage{float}
+\usepackage{placeins}
 \usepackage{longtable}
 \usepackage{caption}
 
@@ -34,7 +35,20 @@
 \begin{tabularx}{\textwidth}{p{3cm}p{2cm}X}
 \toprule {\bf Date} & {\bf Version} & {\bf Notes}\\
 \midrule
-30 October 2025  & 1.0 & Added VnV plan\\
+30 October 2025 & 1.0 & Added V\&V plan.\\
+8 March 2026 & 1.1 & Revised the V\&V plan to address TA feedback:
+added introductory text for Section 1; corrected spelling, grammar, and
+document flow issues; replaced magic numbers with symbolic constants where
+appropriate; standardized terminology and stylization such as macOS; moved
+table titles above tables and added in-text references to tables; added a
+role reassignment plan for V\&V team members; refined review checklists so
+items are atomic and directly checkable; clarified specific WCAG checks to
+be used for accessibility verification; added tests for unintended and
+unauthorized actions, including destructive and replay-style scenarios;
+included draft checklists referenced by the plan; clarified traceability by
+adding requirement-to-test matrix coverage; and made walkthroughs,
+inspections, stakeholder reviews, and project-specific extras more explicit
+and justified.\\
 \bottomrule
 \end{tabularx}
 
@@ -46,92 +60,113 @@
 
 \pagenumbering{arabic}
 
-This document outlines the Verification and Validation plan for Project Proxi. 
-It explains how our team plans to check the system we're building against our 
-requirements. The plan goes over what tests will be run, how documents and designs
-will be validated and how everything connects back to the original SRS document.
-The main goal is to make sure Project Proxi is reliable, easy to use, and truly 
-helps people who will use it for accessibility.
+\noindent This document outlines the Verification and Validation plan for Project
+Proxi. It explains how our team plans to evaluate the system we are
+building against its requirements. The plan describes what tests will be
+run, how documents and designs will be reviewed and validated, and how
+the evidence collected traces back to the original SRS document. The main
+goal is to make sure Project Proxi is reliable, easy to use, and
+genuinely helpful for the people who rely on it for accessibility and
+productivity.
 
 \section{General Information}
 
 \subsection{Summary}
-The aim of this document is to layout the verification and validation plan for
-Project Proxi. Project Proxi is an AI powered voice assistant which allows it's 
-users to use their voice to interface with their computer. The general target 
-demographic for Project Proxi is seniors and individuals with disabilities who 
-wouldn't otherwise be able to use their computers for varying tasks. 
+The aim of this document is to present the verification and validation
+plan for Project Proxi. Project Proxi is an AI-powered desktop assistant
+that allows its users to interact with their computer using voice and
+text. The target users for Project Proxi include seniors, individuals
+with disabilities, and power users who want a more accessible,
+efficient, and convenient way to perform computer tasks.
 
 \subsection{Objectives}
-The main objective of the Verification and Validation (V\&V) plan is to confirm
-that Project Proxi satisfies it's stated functional and non functional 
-requirements; and fulfuills its primary purpose of enhancing computer 
-accessibility for seniors and individuals with disabilities.
+The main objective of the Verification and Validation (V\&V) plan is to
+confirm that Project Proxi satisfies its stated functional and
+non-functional requirements and fulfills its primary purpose of improving
+computer accessibility and efficiency for seniors, individuals with
+disabilities, and power users.
 
-The principal objectives that this VnV plan aims to meet are:
+\noindent The principal objectives that this V\&V plan aims to meet are:
 \begin{itemize}
-  \item \textbf{Verify Functional Correctness:} Ensure that the features 
-  described in the SRS are implemented and behave as expected through Unit, 
-  Integration and System Level testing.
-  \item \textbf{Validate Usability and Accessibility:} demonstrate that users 
-  within the target demographic can effectively operate the system using natural
-  language commands while meeting the relevant accessibility standards like 
-  WCAG 2.
-  \item \textbf{Assess Performance and reliability:} Confirm the application 
-  meets performance, stability and error goals as defined in the SRS document.
-  \item \textbf{Hardware Compatibility Testing:} Meet verficiation goals on a 
-  variety of consumer hardware devices. Speacialized or adaptive devices will
-  not be included; only commercially available Windows/MacOS Computers.
+  \item \textbf{Verify Functional Correctness:} Ensure that the features
+  described in the SRS are implemented and behave as expected through
+  unit, integration, and system-level testing.
+  \item \textbf{Validate Usability and Accessibility:} Demonstrate that
+  users within the target demographic can effectively operate the system
+  using voice and text while meeting the relevant accessibility
+  requirements, including WCAG 2.2 guidance for accessible user
+  interfaces.
+  \item \textbf{Assess Performance and Reliability:} Confirm that the
+  application meets performance, stability, and error-handling goals as
+  defined in the SRS document.
+  \item \textbf{Hardware Compatibility Testing:} Meet verification goals
+  on a variety of consumer hardware devices. Specialized or adaptive
+  devices will not be included; only commercially available Windows and
+  macOS computers.
 \end{itemize}
 
-Out of scope objectives include Extensive long-term field usability studies, 
-comprehensive privacy compliance, and Speacialized Hardware Testing. The project
-will assume that any external libraries have already been verfied by their 
-respective development team. These exclusions are justified given the project's 
-limited time, budget and academic context. Verification efforts are therefore 
-directed towards objectives that help meet core software requirements.
-
+Out-of-scope objectives include extensive long-term field usability
+studies, comprehensive privacy compliance, and specialized hardware
+testing. The project will assume that any external libraries have
+already been verified by their respective development teams. These
+exclusions are justified given the project's limited time, budget, and
+academic context. Verification efforts are therefore directed toward
+objectives that help meet core software requirements.
 
 \subsection{Challenge Level and Extras}
 
-This project does not include a designated challenge level, as its primary focus
- is on the development and validation of a functional, accessible, and 
- user-friendly AI-powered desktop assistant. The project scope aligns with the 
- general expectations of the capstone course and emphasizes reliability, 
- usability, and compliance with accessibility standards rather than advanced 
- AI research or complex algorithmic innovation.
+This project does not include a designated challenge level, as its
+primary focus is on the development and validation of a functional,
+accessible, and user-friendly AI-powered desktop assistant. The project
+scope aligns with the general expectations of the capstone course and
+emphasizes reliability, usability, and compliance with accessibility
+standards rather than advanced AI research or complex algorithmic
+innovation.
 
-
-This project includes the following approved extras:
+\noindent This project includes the following approved extras:
 \begin{itemize}
-  \item \textbf{User Manual:} A user manual that explains how to install, setup,
-  and use the software on a day-to-day basis.
-  \item \textbf{Usability Report:} A usability report will be developed that 
-  will assess the systems core objectives and requirements. It will summarize 
-  the results of testing as specfied in the SRS doc.
+  \item \textbf{Demo Video:} A demo video will show how to install, set
+  up, and use the software in realistic scenarios. This extra is
+  important because Project Proxi is intended for seniors, individuals
+  with disabilities, and power users with varying levels of technical
+  proficiency. The video supports onboarding by showing the expected
+  workflow, common commands, and important interactions in a format that
+  is easier to follow than text alone.
+  \item \textbf{Usability Report:} A usability report will be developed
+  to assess the system's core objectives and requirements. It will
+  summarize the results of testing as specified in the SRS document.
+  This extra is important because usability and accessibility are
+  central goals of Project Proxi, and the report will help identify
+  issues that can be used to improve the system before final delivery.
 \end{itemize}
 
 \subsection{Relevant Documentation}
 
-The following documentation is directly relevant to the Verification and 
-Validation activities for Project Proxi:
+The following documentation is directly relevant to the verification and
+validation activities for Project Proxi:
 \begin{itemize}
-  \item \textbf{Development Plan [\citet{DevPlan}]:} This document defines the overall project 
-  workflow, timelines and milestones for the different phases of the project.
-  \item \textbf{Problem Statement and Goals [\citet{ProbStatement}]:}: This document defines the problems,
-   goals and stakeholders of the project.
-  \item \textbf{Software Requirements Specification [\citet{SRS}]:}  Describes the 
-  functional and non functional requirements of the project.
-  \item \textbf{Hazard Analysis [\citet{HazardAnalysis}]:} This document identifies any potenital sources
-  of harm or risk that may be associated with the project. Potential risks like
-  unauthorized access, misuse or data breaches and their mitigation strategies 
-  are documented here.
-  \item \textbf{Usability Report[\citet{UsabilityReport}]:} Includes results of user evaluation and beta 
-  testing during validation stage. It summarizes key findings related to the 
-  system meeting it's design and usability goals.
-  \item \textbf{User Manual [\citet{UserManual}]:} Provides documentation that explains how to 
-  install, setup and use the software. Includes helpful instruction along with 
-  walkthroughs and examples to help users with varying techincal proficiency.
+  \item \textbf{Development Plan [\citet{DevPlan}]:} This document
+  defines the overall project workflow, timelines, and milestones for
+  the different phases of the project.
+  \item \textbf{Problem Statement and Goals [\citet{ProbStatement}]:}
+  This document defines the problems, goals, and stakeholders of the
+  project.
+  \item \textbf{Software Requirements Specification [\citet{SRS}]:}
+  Describes the functional and non-functional requirements of the
+  project.
+  \item \textbf{Hazard Analysis [\citet{HazardAnalysis}]:} This
+  document identifies any potential sources of harm or risk that may be
+  associated with the project. Potential risks such as unauthorized
+  access, misuse, or data breaches and their mitigation strategies are
+  documented here.
+  \item \textbf{Usability Report [\citet{UsabilityReport}]:} Includes
+  results of user evaluation and beta testing during the validation
+  stage. It summarizes key findings related to the system meeting its
+  design and usability goals.
+  \item \textbf{Demo Video [\citet{UserInstructionalVideo}]:} Demonstrates how to
+  install, set up, and use the software. It provides a guided
+  walkthrough of major workflows and examples to support users with
+  varying technical proficiency.
 \end{itemize}
 
 \section{Plan}
@@ -152,111 +187,166 @@ traceability between requirements, test cases, and evidence.
 
 \subsection{Verification and Validation Team}
 
-The V\&V activities are shared among all members of the Proxi team. Each
-member’s role leverages their technical strengths while maintaining overlap
-to ensure redundancy and consistent quality assurance. All verification tasks
-and results are peer-reviewed, documented, and tracked in GitHub.
+The Verification and Validation team for Project Proxi is the Proxi project
+team itself. Since the team is small, all members contribute to V\&V
+activities in addition to their development responsibilities. Table~
+\ref{tab:vnv-team} summarizes the primary V\&V responsibilities assigned to
+each team member.
+
+All verification tasks and results are peer reviewed, documented, and
+tracked in GitHub to maintain accountability and consistent quality
+assurance.
 
 \begin{table}[H]
+\caption{Verification and Validation Team Roles}
+\label{tab:vnv-team}
 \centering
 \begin{tabular}{|p{3cm}|p{3.5cm}|p{7.5cm}|}
 \hline
-\textbf{Name} & \textbf{Role} & \textbf{V\&V Responsibilities} \\ \hline
-Savinay Chhabra & Team-Lead/ Project-Manager &
+\textbf{Name} & \textbf{Role} & \textbf{V\&V Responsibilities} \\
+\hline
+Savinay Chhabra & Team Lead / Project Manager &
 Coordinates all V\&V activities, schedules document and design reviews,
-ensures traceability matrices are complete, and validates plan feasibility. \\
+ensures traceability matrices are complete, and validates plan
+feasibility. \\
 \hline
 Amanbeer Singh Minhas & Verification Engineer / Documentation Lead &
-Authors test specifications, manages accessibility validation (WCAG 2.1 AA),
-executes FR and NFR tests, and maintains V\&V evidence and metrics. \\
+Authors test specifications, manages accessibility validation
+(WCAG~2.2), executes functional and non-functional tests, and maintains
+V\&V evidence and metrics. \\
 \hline
-Gourob Podder & AI/Backend Developer &
-Verifies accuracy and latency of voice-recognition and NLP modules,
-conducts integration and performance tests, and performs code inspections. \\
+Gourob Podder & AI / Backend Developer &
+Verifies the accuracy and latency of voice, text, and natural language
+processing modules, conducts integration and performance tests, and
+performs code inspections. \\
 \hline
 Ajay Singh Grewal & Front-End / Integration Engineer &
-Implements automated UI tests, validates responsiveness and error handling,
-and ensures cross-platform consistency and workflow reliability. \\
-\hline
-Team Proxi & Quality-Assurance and Review Team &
-Participate in peer reviews of all documents (SRS, MIS, V\&V, and Hazard
-Analysis). Execute assigned system and unit tests, record results, file issues
-on GitHub, and contribute to final validation reports \\
+Implements automated UI tests, validates responsiveness and error
+handling, and ensures cross-platform consistency and workflow
+reliability. \\
 \hline
 \end{tabular}
-\caption{Verification and Validation Team Roles}
-\label{tab:1}
 \end{table}
+
+\subsection{Role Reassignment and Contingency Plan}
+
+If timelines, availability, or project risks change, V\&V
+responsibilities will be rebalanced using the following procedure:
+\begin{itemize}
+  \item The Team Lead identifies blocked work items and proposes
+  reassignment within one business day.
+  \item At least one backup reviewer is maintained for each critical
+  activity, including SRS review, design review, test execution, and
+  evidence tracking.
+  \item Reassignments are recorded in a GitHub issue labeled
+  \texttt{vnv-role-change}, including the new owner, due date, and
+  rationale.
+  \item The traceability matrix and meeting notes are updated in the
+  same sprint to reflect responsibility changes.
+\end{itemize}
 
 \subsection{SRS Verification}
 
 The Software Requirements Specification (SRS) will be verified using a
 structured review process involving internal checks, peer feedback, and
-automated validation. The goal is to confirm that all requirements are clear,
-consistent, and ready for design and testing.
+consistency checks. The goal is to confirm that all requirements are clear,
+consistent, complete, and ready for design and testing.
 
 \vspace{0.5em}
 \noindent\textbf{Planned Verification Stages:}
 \begin{itemize}
-\item \textbf{Internal Team Review:}  
+\item \textbf{Internal Team Review:}
   Each team member reviews assigned SRS sections to ensure requirements are
-  clearly written, uniquely numbered, and testable. Feedback and questions are
-  added as GitHub issues under the ``SRS-review'' tag for tracking.
-\item \textbf{Peer Team Feedback:}  
-  Another project team will review our SRS to identify unclear or missing
-  requirements. Their comments will be discussed in a short review meeting,
-  and agreed changes will be included in the next SRS revision.
-\item \textbf{Automated Consistency and Traceability Check:}  
-  Scripts and manual scans confirm that every requirement label (FR, NFR, etc.)
-  appears in the traceability table and links to a planned test in the V\&V
-  Plan. Any missing or duplicate IDs will be flagged for correction.
-\item \textbf{Team Validation Meeting:}  
-  After all updates, the team meets to confirm that project goals such as
-  accessibility, reliability, and usability are fully captured in the SRS.
-  The final version is approved as the baseline for design and testing.
+  clearly written, uniquely numbered, feasible, and testable. Feedback and
+  questions are added as GitHub issues under the \texttt{SRS-review} tag for
+  tracking.
+
+\item \textbf{Peer Team Feedback:}
+  Another project team will review the SRS to identify unclear, ambiguous,
+  inconsistent, or missing requirements. Their comments will be discussed in
+  a short review meeting, and agreed changes will be included in the next SRS
+  revision.
+
+\item \textbf{Consistency and Traceability Check:}
+  Manual and automated checks will confirm that every requirement label
+  (functional, non-functional, and constraint-related) appears in the
+  traceability matrix and links to one or more planned verification
+  activities in the V\&V Plan. Any missing, duplicate, or inconsistent
+  identifiers will be flagged for correction.
+
+\item \textbf{Team Validation Meeting:}
+  After all updates, the team will meet to confirm that project goals such as
+  accessibility, reliability, safety, and usability are fully captured in the
+  SRS. The final version will then be approved as the baseline for design and
+  testing.
+\end{itemize}
+
+\vspace{0.5em}
+\noindent\textbf{SRS Review Checklist:}
+\begin{itemize}
+\item Each requirement has a unique identifier.
+\item Each requirement uses clear and unambiguous language.
+\item Each requirement states one verifiable idea.
+\item Each requirement is feasible within project scope.
+\item Each requirement is testable by inspection, analysis, or execution.
+\item Each requirement is consistent with the problem statement and goals.
+\item Each requirement is consistent with the hazard analysis.
+\item Accessibility requirements refer to WCAG 2.2 where applicable.
+\item Requirements for voice and text interaction are both represented.
+\item Safety-related requirements include confirmation or mitigation steps.
+\item Every requirement appears in the traceability matrix.
 \end{itemize}
 
 \subsection{Design Verification}
 
-The design of Project Proxi will be verified through focused peer reviews and
-checklists to confirm that the architecture, interfaces, and data flows align
-with the approved SRS. Each review will help identify inconsistencies or
-missing details before implementation begins.
+The design of Project Proxi will be verified through focused peer reviews,
+walkthroughs, and checklists to confirm that the architecture, interfaces,
+and data flows align with the approved SRS. Each review will help identify
+inconsistencies or missing details before implementation begins.
 
 \vspace{0.5em}
 \noindent\textbf{Planned Verification Activities:}
 \begin{itemize}
-\item \textbf{Internal Design Review:}  
-  Team members will examine their assigned modules to ensure the design is
-  modular, consistent with SRS requirements, and feasible for implementation.
-  Each reviewer will complete a checklist covering naming conventions,
-  interface clarity, and data flow accuracy.
+\item \textbf{Internal Design Review:}
+  Team members will examine assigned modules to ensure the design is modular,
+  consistent with SRS requirements, and feasible for implementation. Each
+  reviewer will complete a checklist covering module responsibilities,
+  interface definitions, traceability, and error handling.
 
-\item \textbf{Cross-Team Design Review:}  
-  Another project team will review our design document and provide feedback on
-  readability, logic, and completeness. Their comments will be logged as
-  GitHub issues tagged ``Design-review'' and resolved in the next revision.
+\item \textbf{Cross-Team Design Review:}
+  Another project team will review the design documents and provide feedback
+  on readability, logic, completeness, and consistency. Their comments will
+  be logged as GitHub issues tagged \texttt{Design-review} and resolved in
+  the next revision.
 
-\item \textbf{Walkthrough Meeting:}  
-  The team will conduct a collaborative walkthrough where each member explains
-  their subsystem’s role and connections. This helps verify that all modules
-  integrate correctly and that there are no overlapping or missing elements.
+\item \textbf{Walkthrough Meeting:}
+  The team will conduct a collaborative walkthrough in which each member
+  explains the purpose, inputs, outputs, and dependencies of their assigned
+  subsystem. Meeting notes will record identified issues, action items, and
+  owners.
 
-\item \textbf{Traceability Check:}  
-  A simple matrix will confirm that every major design component maps to at
-  least one SRS requirement. Any unmatched modules or requirements will be
+\item \textbf{Traceability Check:}
+  A traceability matrix will confirm that every major design component maps to
+  at least one SRS requirement and that every SRS requirement is supported by
+  one or more design elements. Any unmatched modules or requirements will be
   flagged for revision before coding starts.
 \end{itemize}
 
 \vspace{0.5em}
 \noindent\textbf{Design Review Checklist Items:}
 \begin{itemize}
-\item Module responsibilities are clear and non-overlapping.
-\item Inputs, outputs, and interfaces are well defined and consistent.
-\item Data flow diagrams reflect correct information movement.
-\item Error handling and edge cases are addressed.
-\item Design supports accessibility and responsiveness goals.
-\item Traceability to the SRS is complete for all components.
+\item Each module has a unique name and purpose.
+\item Each module states its responsibilities.
+\item Each module states its inputs.
+\item Each module states its outputs.
+\item Each interface identifies exchanged data clearly.
+\item Each interface is consistent across connected modules.
+\item Each data flow matches the described system behavior.
+\item Each module includes error handling where needed.
+\item Each module avoids overlapping responsibilities.
+\item Accessibility-related design elements are identified explicitly.
+\item Support for voice and text interaction is represented in the design.
+\item Each major component traces to at least one SRS requirement.
 \end{itemize}
 
 \subsection{Verification and Validation Plan Verification}
@@ -269,36 +359,42 @@ evidence of software quality.
 \vspace{0.5em}
 \noindent\textbf{Planned Verification Activities:}
 \begin{itemize}
-\item \textbf{Internal Review:}  
+\item \textbf{Internal Review:}
   Team members will inspect the V\&V Plan for completeness, logical flow, and
-  consistency with other project documents such as the SRS, MIS, and Hazard
-  Analysis. Issues will be logged on GitHub under the tag ``VnV-review''.
+  consistency with other project documents such as the SRS, MIS, MG, and
+  Hazard Analysis. Issues will be logged on GitHub under the tag
+  \texttt{VnV-review}.
 
-\item \textbf{Peer Team Review:}  
+\item \textbf{Peer Team Review:}
   A partner project team will review the plan to provide external feedback on
-  clarity, organization, and feasibility. Comments will be discussed in a team
-  meeting, and accepted suggestions will be incorporated into the next version.
+  clarity, organization, feasibility, and coverage. Comments will be
+  discussed in a team meeting, and accepted suggestions will be incorporated
+  into the next version.
 
-\item \textbf{Cross-Document Consistency Check:}  
-  The team will confirm that all V\&V activities listed here appear in other
-  relevant documents and that requirement identifiers match across artifacts.
+\item \textbf{Cross-Document Consistency Check:}
+  The team will confirm that all V\&V activities listed here are consistent
+  with the SRS, MIS, MG, and Hazard Analysis and that requirement identifiers
+  match across artifacts.
 
-\item \textbf{Review Process Validation:}  
-  Small, intentional edits (such as removing a trace link or changing a test
-  description) will be introduced to confirm that the team’s review process
-  can detect inconsistencies. This validates the effectiveness of our review
-  workflow.
+\item \textbf{Review Process Validation:}
+  Small intentional edits, such as removing a trace link or altering a test
+  identifier, will be introduced to confirm that the team's review process
+  can detect inconsistencies. This activity validates the effectiveness of
+  the review workflow.
 \end{itemize}
 
 \vspace{0.5em}
 \noindent\textbf{V\&V Plan Review Checklist:}
 \begin{itemize}
-\item All documents are correctly referenced and consistent.
-\item Roles and responsibilities match Table~\ref{tab:1}.
-\item Each section clearly states its purpose and expected outcomes.
-\item Traceability between requirements and tests is complete.
-\item Internal and peer review processes are clearly defined.
-\item Plan is feasible and aligned with the project timeline and tools.
+\item All cited documents are correct and consistent.
+\item Roles and responsibilities match Table~\ref{tab:vnv-team}.
+\item Each section states its purpose clearly.
+\item Each planned activity identifies expected evidence.
+\item Each requirement is traced to one or more verification activities.
+\item Each test identifier is unique and used consistently.
+\item Internal review steps are defined clearly.
+\item Peer review steps are defined clearly.
+\item The plan is feasible within the project timeline and tools.
 \end{itemize}
 
 \subsection{Implementation Verification}
@@ -312,43 +408,48 @@ automated tools and structured reviews.
 \vspace{0.5em}
 \noindent\textbf{Dynamic Verification:}
 \begin{itemize}
-\item \textbf{Unit Testing:}  
-  Each software module will have dedicated unit tests as outlined in the Unit
-  Testing Plan. Tests will confirm correct outputs, data flow, and error
-  handling for voice-processing, NLP, and UI modules. Coverage results will be
-  monitored through automated reports to ensure that all major functions are
-  exercised.
+\item \textbf{Unit Testing:}
+  Each software module will have dedicated unit tests as outlined in the unit
+  testing plan. Tests will confirm correct outputs, data flow, state changes,
+  and error handling for input processing, planning, execution, and UI
+  modules. Coverage results will be monitored through automated reports to
+  ensure that major functions are exercised.
 
-\item \textbf{Integration and System Testing:}  
-  Combined module testing will validate interactions between the speech engine,
-  user interface, and backend components. These tests correspond directly to
-  the functional and non-functional test cases listed in this document.
+\item \textbf{Integration and System Testing:}
+  Combined module testing will validate interactions between the input
+  pipeline, user interface, planning components, execution components, and
+  backend services. These tests correspond directly to the functional and
+  non-functional test cases listed in this document.
 
-\item \textbf{Mutation Testing:}  
-  To evaluate the quality of our test suite, small artificial faults (mutants)
-  will be introduced into the codebase. Existing unit and system tests will be
-  rerun to confirm that they detect the injected faults. A high mutation score
-  will increase confidence in the strength and completeness of our test suite.
+\item \textbf{Mutation Testing:}
+  To evaluate the quality of the test suite, small artificial faults
+  (mutants) will be introduced into the codebase. Existing unit and system
+  tests will be rerun to confirm that they detect the injected faults. A high
+  mutation score will increase confidence in the strength and completeness of
+  the test suite.
 \end{itemize}
 
 \vspace{0.5em}
 \noindent\textbf{Static Verification:}
 \begin{itemize}
-\item \textbf{Code Walkthroughs and Inspections:}  
+\item \textbf{Code Walkthroughs and Inspections:}
   Scheduled walkthrough meetings will allow each developer to explain their
-  code and receive peer feedback on structure, readability, and consistency.
-  The final class presentation will also serve as a partial code walkthrough
-  and an opportunity to discuss implementation decisions.
+  code and receive peer feedback on structure, readability, traceability,
+  error handling, and consistency with the design. Review notes will be
+  recorded, and any required fixes will be tracked through GitHub issues or
+  pull request comments.
 
-\item \textbf{Static Analysis Tools:}  
-  Linters and analyzers (such as ESLint, Pylint, or similar) will be used to
-  detect common issues, unused variables, and potential logic errors. Results
-  will be documented as part of the verification evidence.
+\item \textbf{Static Analysis Tools:}
+  Linters and analyzers, such as ESLint, Pylint, or similar tools, will be
+  used to detect common issues, unused variables, inconsistent style, and
+  potential logic errors. Results will be documented as part of the
+  verification evidence.
 
-\item \textbf{Code Review via Pull Requests:}  
+\item \textbf{Code Review via Pull Requests:}
   All implementation changes will go through GitHub pull requests with at
-  least one reviewer. Reviewers will verify coding standards, style, and
-  alignment with design diagrams.
+  least one reviewer. Reviewers will verify coding standards, style,
+  alignment with design diagrams, and whether the change preserves intended
+  behavior without introducing unintended actions.
 \end{itemize}
 
 \subsection{Automated Testing and Verification Tools}
@@ -356,435 +457,723 @@ automated tools and structured reviews.
 Automated tools will be used throughout the implementation phase to support
 testing, continuous integration, and quality assurance. These tools help
 reduce manual effort, detect regressions early, and provide measurable
-evidence of code reliability and maintainability.
+evidence of software reliability and maintainability.
 
 \vspace{0.5em}
-\noindent\textbf{Unit Testing Framework:}
+\noindent\textbf{Automated Testing Framework:}
 \begin{itemize}
-\item The project will use the built-in \texttt{pytest} framework for Python to
-  create and execute unit tests. Each module will have its own test file and
-  fixtures to verify inputs, outputs, and edge cases. Test results will be
-  automatically generated after every commit.
+\item The project will use \texttt{pytest} for automated unit,
+  integration, and scripted scenario tests. Each major module will have
+  dedicated test files and fixtures to verify inputs, outputs, state
+  changes, and edge cases.
+\item Scripted scenario tests will simulate realistic user interactions by
+  submitting selected voice and text commands, capturing system responses,
+  and comparing them against expected results.
+\item For repeatable testing, scenario tests will use a predefined command
+  set maintained by the team. The full set of commands used for automated
+  testing will be listed explicitly in the corresponding test cases or in an
+  appendix, rather than described only as a sample count.
 \end{itemize}
 
 \vspace{0.5em}
-\noindent\textbf{Continuous Integration (CI):}
+\noindent\textbf{Continuous Integration and Delivery (CI/CD):}
 \begin{itemize}
-\item GitHub Actions will be configured to automatically run unit, integration,
-  and system tests whenever new code is pushed. The CI workflow will include
-  static analysis, linting, and coverage checks. Test outcomes and code
-  coverage metrics will be displayed in each pull request.
-\end{itemize}
-
-\vspace{0.5em}
-\noindent\textbf{Code Coverage and Reporting:}
-\begin{itemize}
-\item Tools like \texttt{coverage.py} will be used to measure how much of the source code is
-  executed during tests. Reports will include statement, branch, and function
-  coverage. The goal is to maintain at least 85\% overall coverage. Coverage
-  summaries will be included in milestone reports.
+\item GitHub Actions will be configured to automatically run linting and
+  automated tests whenever code is pushed or a pull request is opened.
+  The pipeline will help detect regressions early and ensure that changes
+  are reviewed against a consistent verification process before merge.
 \end{itemize}
 
 \vspace{0.5em}
 \noindent\textbf{Static Analysis and Linters:}
 \begin{itemize}
-\item Static analyzers such as \texttt{pylint} and \texttt{flake8} will check for
-  syntax errors, unused variables, and potential logic flaws. These tools also
-  verify that code follows project style guidelines and maintainability rules.
-  Results will be logged and tracked as part of the verification evidence.
+\item Static analysis tools such as \texttt{pylint} and \texttt{flake8}
+  will be used to detect syntax errors, unused variables, inconsistent
+  style, and maintainability issues. Results will be logged and tracked
+  as part of the verification evidence.
 \end{itemize}
 
 \vspace{0.5em}
 \noindent\textbf{Build and Automation Utilities:}
 \begin{itemize}
-\item The project will use \texttt{make} commands and scripts to automate
-  environment setup, dependency installation, and test execution. This ensures
-  consistent testing results across all development machines.
+\item The project will use \texttt{make} commands and supporting scripts
+  to automate environment setup, dependency installation, linting, and
+  test execution. This helps ensure consistent verification results
+  across development machines and the CI/CD pipeline.
 \end{itemize}
 
 \subsection{Software Validation}
 
 Software validation confirms that Project Proxi satisfies user needs and
-performs as intended in realistic scenarios. The focus is on demonstrating
-that the system achieves its goals of accessibility, responsiveness, and ease
-of use for all users, including those with limited mobility or vision.
+performs as intended in realistic scenarios. The focus is on showing that
+the system achieves its goals of accessibility, responsiveness, safety,
+and ease of use for seniors, individuals with disabilities, and power
+users.
 
 \vspace{0.5em}
 \noindent\textbf{Planned Validation Activities:}
 \begin{itemize}
-\item \textbf{User Testing Sessions:}  
-  A small group of peers and volunteers will perform task-based evaluations,
-  such as launching applications, dictating text, and managing files through
-  voice commands. Their feedback will measure ease of learning, efficiency,
-  and satisfaction.
+\item \textbf{User Testing Sessions:}
+  A small group of peers and volunteers will perform task-based
+  evaluations, such as launching applications, entering text, and
+  managing files through voice and text interaction. Their feedback will
+  be used to assess ease of learning, efficiency, accessibility, and
+  overall satisfaction.
 
-\item \textbf{Accessibility Validation:}  
-  Validation will focus on confirming compliance with WCAG 2.1 AA
-  accessibility principles. Voice feedback clarity, contrast, and response
-  times will be recorded and compared with expected usability metrics defined
-  in the SRS.
+\item \textbf{Accessibility Validation:}
+  Validation will confirm that the interface supports the accessibility
+  goals defined in the SRS and aligns with relevant WCAG~2.2 guidance.
+  The evaluation will consider items such as readable contrast, text
+  scaling, visible feedback, caption or transcript support where
+  applicable, and whether key tasks can be completed clearly through the
+  supported interaction modes.
 
-\item \textbf{Stakeholder Review Session:}  
-  The team will present the system in a demonstration that acts as a Rev 0
-  validation milestone. Feedback from course staff and classmates will be
-  collected through short surveys and used to improve the user experience.
+\item \textbf{Stakeholder Review Session:}
+  The team will present the system in a demonstration that acts as a
+  validation milestone. Feedback from course staff and classmates will
+  be collected through short surveys and review notes and then used to
+  improve the user experience.
 
-\item \textbf{External Data and Comparison:}  
-  Where available, open-source voice datasets will be used to validate recognition
-  accuracy against baseline results. This ensures that the system behaves consistently
-  with established standards.
+\item \textbf{Automated Scenario Validation:}
+  Scripted scenario tests will submit a predefined and fully enumerated
+  set of commands to the system, record the observed outputs, and compare
+  them with expected behavior. These tests will help validate recurring
+  tasks, command interpretation accuracy, response consistency, and
+  protection against unintended actions.
+
+\item \textbf{External Data and Comparison:}
+  Where appropriate, publicly available speech or language datasets may
+  be used to compare command interpretation behavior against baseline
+  expectations. This provides an additional reference point for judging
+  consistency and robustness.
 \end{itemize}
 
 
 \section{System Tests}
 
-Each test is specific and measurable, providing sufficient detail for replication 
-once the system is built. The tests are grouped into logical areas covering input 
-handling, natural language understanding, task execution, feedback mechanisms, 
-memory management, logging, and system safety.
+Each test is specific and measurable, providing sufficient detail for
+replication once the system is built. The tests are grouped into logical
+areas covering input handling, natural language understanding, task
+execution, feedback mechanisms, memory management, logging, and system
+safety.
 
 \subsection{Tests for Functional Requirements}
 
-The following tests verify that each functional requirement defined in the SRS
-has been properly implemented and behaves as intended. Each test specifies the
-type of testing, initial system state, inputs and expected results, and how the
-test will be performed.
+The following tests verify that each functional requirement defined in the
+SRS has been properly implemented and behaves as intended. Each test
+specifies the type of testing, initial system state, inputs, expected
+results, and how the test will be performed.
 
 \subsubsection{Input and Recognition Requirements}
 
 \begin{enumerate}
 
-\item{Test FUNC.IR.1 - Speech and Text Input Acceptance\\}
+\item \textbf{Test FUNC.R.1 -- Speech and Text Input Acceptance}
+
 \textbf{Type:} Functional / Manual Testing
 
-\textbf{Initial State:} System initialized and idle at the main interface.
+\textbf{Initial State:} System initialized and idle at the main
+interface.
 
-\textbf{Input/Condition:} Users provide 20 valid commands, 10 by text input (keyboard)
-and 10 by speech through the microphone interface. Commands include examples like
-“Open the calendar,” “What’s the weather today?”, and “Send an email to John.”
+\textbf{Input/Condition:} Users provide the following 20 valid commands.
+Commands 1--10 are entered by text, and commands 11--20 are spoken
+through the microphone interface.
 
-\textbf{Output/Result:} System correctly recognizes and processes at least 95\% of both
-speech and text inputs, generating the corresponding interpreted command in the console
-or display window.
+{\renewcommand{\labelenumii}{\arabic{enumii}.}
+\begin{enumerate}
+  \item Summarize my latest unread email.
+  \item Draft an email to John about tomorrow's team meeting.
+  \item Show my calendar events for tomorrow.
+  \item Create a calendar event for Friday at 2 PM called Team Sync.
+  \item Search the web for Hamilton weather and summarize the result.
+  \item Search the web for nearby walk-in clinics.
+  \item Make a Notion page called Drinking Water Tracker.
+  \item Add ``Drink 8 glasses today'' to my Drinking Water Tracker page.
+  \item Summarize the file named Capstone Notes.
+  \item What can I say?
+  \item Summarize my latest unread email.
+  \item Draft an email to John about tomorrow's team meeting.
+  \item Show my calendar events for tomorrow.
+  \item Create a calendar event for Friday at 2 PM called Team Sync.
+  \item Search the web for Hamilton weather and summarize the result.
+  \item Search the web for nearby walk-in clinics.
+  \item Make a Notion page called Drinking Water Tracker.
+  \item Add ``Drink 8 glasses today'' to my Drinking Water Tracker page.
+  \item Summarize the file named Capstone Notes.
+  \item What can I say?
+\end{enumerate}
+}
 
-\textbf{How test will be performed:} Each input is logged automatically. The test supervisor
-will compare recognized commands to expected ones and calculate the success rate. Failures
-and misinterpretations will be noted for analysis.
+\textbf{Output/Result:} The system correctly accepts and interprets at
+least 19 of the 20 inputs, and each accepted input is converted into the
+expected internal command representation and displayed result.
 
-\item{Test FUNC.IR.2 - Speech-to-Text Accuracy (ASR Module)\\}
+\textbf{How test will be performed:} Each input and resulting interpreted
+command will be logged automatically. The test supervisor will compare
+the interpreted result against the expected result for all 20 commands
+and calculate the success rate. Any rejected, misinterpreted, or
+malformed results will be recorded for analysis.
+
+\textbf{Functional Requirements Covered:} FUNC.R.1
+
+\item \textbf{Test FUNC.R.2 -- Speech-to-Text Accuracy}
+
 \textbf{Type:} Functional / Automated Evaluation
 
-\textbf{Initial State:} System with ASR module enabled and configured in a controlled
-acoustic environment.
+\textbf{Initial State:} System with speech-to-text enabled and
+configured in a controlled acoustic environment.
 
-\textbf{Input/Condition:} 50 pre-recorded audio samples containing common computer commands
-spoken by 3 different speakers with varied accents.
+\textbf{Input/Condition:} The following 10 spoken commands are each
+recorded from 5 speakers, for a total of 50 audio samples:
 
-\textbf{Output/Result:} Transcribed text matches the ground-truth transcript with at least
-90\% word accuracy.
-
-\textbf{How test will be performed:} Audio samples will be batch-fed into the ASR module.
-Output transcripts will be compared to reference text using a word-error-rate (WER)
-metric to compute accuracy.
+{\renewcommand{\labelenumii}{\arabic{enumii}.}
+\begin{enumerate}
+  \item Summarize my latest unread email.
+  \item Draft an email to John about tomorrow's team meeting.
+  \item Show my calendar events for tomorrow.
+  \item Create a calendar event for Friday at 2 PM called Team Sync.
+  \item Search the web for Hamilton weather and summarize the result.
+  \item Search the web for nearby walk-in clinics.
+  \item Make a Notion page called Drinking Water Tracker.
+  \item Add ``Drink 8 glasses today'' to my Drinking Water Tracker page.
+  \item Summarize the file named Capstone Notes.
+  \item What can I say?
 \end{enumerate}
-\textbf{Functional Requirements Covered:} FUNC.R.1 - FUNC.R.2
+}
+
+\textbf{Output/Result:} The resulting transcriptions achieve at least
+90\% word accuracy across the full sample set.
+
+\textbf{How test will be performed:} The 50 audio samples will be batch
+fed into the speech-to-text component. Output transcripts will be
+compared against reference transcripts using a word error rate metric,
+and the overall accuracy will be computed from the full set.
+
+\textbf{Functional Requirements Covered:} FUNC.R.2
+
+\end{enumerate}
 
 \subsubsection{Intent Understanding and Task Execution}
 
 \begin{enumerate}
 
-\item{Test FUNC.IT.1 - Intent Recognition Accuracy\\}
-\textbf{Type:} Functional / Automated
+\item \textbf{Test FUNC.R.3 -- Intent Recognition Accuracy}
 
-\textbf{Initial State:} Natural language understanding (NLU) component initialized
-with trained intent classification model.
+\textbf{Type:} Functional / Automated Testing
 
-\textbf{Input/Condition:} 100 labeled user commands in natural language, each mapped
-to a known ground-truth intent (e.g., send email, open browser, play music).
+\textbf{Initial State:} Natural language understanding component
+initialized with the current intent parsing configuration.
 
-\textbf{Output/Result:} In at least 90\% of cases, the intent predicted by the system
-matches the labeled ground truth.
+\textbf{Input/Condition:} The system is given the following 10 command
+variants for each of 10 supported intents, for a total of 100 labeled
+inputs. The supported intents are: summarize email, draft email, show
+calendar, create calendar event, browser search, summarize browser
+result, create Notion page, update Notion page, summarize file, and show
+help or examples.
 
-\textbf{How test will be performed:} A test script feeds the commands into the NLU module.
-Predicted intents are logged and compared to human-labeled references for accuracy scoring.
+\textbf{Output/Result:} At least 90 of the 100 inputs are assigned the
+correct ground-truth intent.
 
-\item{Test FUNC.IT.2 - Task Planning and Execution Success Rate\\}
-\textbf{Type:} Functional / Integration
+\textbf{How test will be performed:} A test script will feed the labeled
+inputs into the intent parser. Predicted intents will be logged and
+compared against human-labeled references to compute intent-level
+accuracy.
 
-\textbf{Initial State:} System active with available software agents and network
-connectivity.
+\textbf{Functional Requirements Covered:} FUNC.R.3
 
-\textbf{Input/Condition:} 20 representative high-level commands (e.g., “Schedule a
-meeting,” “Search the web for news,” “Summarize this document”).
+\item \textbf{Test FUNC.R.4 -- Task Planning and Execution Success Rate}
 
-\textbf{Output/Result:} Agents execute actions successfully and complete tasks in at
-least 85\% of test cases.
+\textbf{Type:} Functional / Integration Testing
 
-\textbf{How test will be performed:} Commands are executed sequentially. Testers verify
-that each resulting task outcome matches the intended user goal. Failures are logged
-with error cause (planning vs. execution failure).
+\textbf{Initial State:} System active with required tools, permissions,
+and network connectivity available.
+
+\textbf{Input/Condition:} The following 20 representative high-level
+commands are executed sequentially:
+
+{\renewcommand{\labelenumii}{\arabic{enumii}.}
+\begin{enumerate}
+  \item Summarize my latest unread email.
+  \item Draft an email to Sarah about the capstone update.
+  \item Draft an email to John saying I will join in 10 minutes.
+  \item Show my calendar events for tomorrow.
+  \item Create a calendar event for Friday at 2 PM called Team Sync.
+  \item Move my Team Sync event to 3 PM.
+  \item Search the web for Hamilton weather.
+  \item Summarize the current browser result.
+  \item Search the web for nearby pharmacies.
+  \item Summarize the top result in two sentences.
+  \item Make a Notion page called Drinking Water Tracker.
+  \item Add ``Drink 8 glasses today'' to my Drinking Water Tracker page.
+  \item Make a Notion page called Capstone Tasks.
+  \item Add ``Finish V\&V plan'' to my Capstone Tasks page.
+  \item Summarize the file named Capstone Notes.
+  \item Read the first paragraph of Capstone Notes aloud.
+  \item Show the summary again.
+  \item What can I say?
+  \item Undo the last action.
+  \item Cancel the current action.
 \end{enumerate}
-\textbf{Functional Requirements Covered:} FUNC.R.3 - FUNC.R.4
+}
+
+\textbf{Output/Result:} At least 17 of the 20 commands are completed
+successfully and produce the intended task outcome in the interface.
+
+\textbf{How test will be performed:} Commands will be executed one at a
+time. Testers will verify whether each displayed result, draft, summary,
+or state change matches the intended user goal. Failures will be logged
+along with their cause, such as planning failure, permission failure, or
+execution failure.
+
+\textbf{Functional Requirements Covered:} FUNC.R.4
+
+\end{enumerate}
 
 \subsubsection{Feedback and Responsiveness}
 
 \begin{enumerate}
 
-\item{Test FUNC.FR.1 - Response Feedback Timing\\}
-\textbf{Type:} Performance / Manual Timing
+\item \textbf{Test FUNC.R.5 -- Response Feedback Timing}
+
+\textbf{Type:} Functional / Manual Timing
 
 \textbf{Initial State:} System ready to execute user commands.
 
-\textbf{Input/Condition:} 10 varied user tasks executed (e.g., “Create a note,” “Check
-calendar,” “Send a message”).
+\textbf{Input/Condition:} The following 10 tasks are executed:
+summarize latest unread email, draft an email, show tomorrow's calendar,
+create a calendar event, search the web for Hamilton weather, summarize
+the current result, search for nearby pharmacies, make a Notion page,
+summarize a file, and show help commands.
 
-\textbf{Output/Result:} Each command generates a feedback or confirmation message within
-2 seconds of task completion.
+\textbf{Output/Result:} Each command generates visible or spoken
+feedback within 2 seconds after task completion or after the system
+determines that the task cannot be completed.
 
-\textbf{How test will be performed:} A timer will start at the moment of task completion.
-Feedback appearance time is recorded for each trial. Average and max response times will
-be compared to the 2-second threshold.
-\end{enumerate}
+\textbf{How test will be performed:} A timer will start at the moment the
+task finishes or the failure state is known. Feedback appearance time
+will be recorded for each trial, and all observed times will be compared
+against the 2-second threshold.
+
 \textbf{Functional Requirements Covered:} FUNC.R.5
 
-\subsubsection{Contextual Memory and Logging }
+\end{enumerate}
+
+\subsubsection{Contextual Memory and Logging}
 
 \begin{enumerate}
 
-\item{Test FUNC.ML.1 - Contextual Follow-Up Command Interpretation\\}
-\textbf{Type:} Functional / Manual Sequence Test
+\item \textbf{Test FUNC.R.6 -- Contextual Follow-Up Interpretation}
 
-\textbf{Initial State:} System with active short-term conversational memory.
+\textbf{Type:} Functional / Manual Sequence Testing
 
-\textbf{Input/Condition:} 20 conversational command sequences (e.g., “Open my calendar” then
-“Add meeting at 2 PM” then “Move it to tomorrow”).
+\textbf{Initial State:} System with active short-term conversational
+memory.
 
-\textbf{Output/Result:} Follow-up commands correctly interpreted in at least 90\% of
-cases based on prior context.
+\textbf{Input/Condition:} Testers execute the following 10 conversational
+sequences:
 
-\textbf{How test will be performed:} Each conversation sequence is entered by testers.
-The interpreted action and memory context will be reviewed to ensure proper resolution
-of pronouns and implicit references.
+{\renewcommand{\labelenumii}{\arabic{enumii}.}
+\begin{enumerate}
+  \item Summarize my latest unread email. Reply to it with thanks.
+  \item Draft an email to John. Change the subject to Project Update.
+  \item Show my calendar for tomorrow. Add office hours at 4 PM.
+  \item Create a calendar event for Friday at 2 PM. Move it to 3 PM.
+  \item Search the web for Hamilton weather. Summarize it.
+  \item Search the web for nearby walk-in clinics. Open the first result
+  and summarize it.
+  \item Make a Notion page called Drinking Water Tracker. Add today's
+  intake to it.
+  \item Make a Notion page called Capstone Tasks. Add testing checklist
+  to it.
+  \item Summarize the file named Capstone Notes. Read it aloud.
+  \item Show my latest drafted email. Send it.
+\end{enumerate}
+}
 
-\item{Test FUNC.ML.2 - Interaction and Task Logging Verification\\}
+\textbf{Output/Result:} At least 9 of the 10 sequences are completed with
+correct interpretation of follow-up references such as ``it'', ``that'',
+or omitted repeated context.
+
+\textbf{How test will be performed:} Each sequence will be entered by a
+tester. The interpreted actions and resulting displayed outputs will be
+reviewed to confirm that contextual references are resolved correctly.
+
+\textbf{Functional Requirements Covered:} FUNC.R.6
+
+\item \textbf{Test FUNC.R.7 -- Interaction and Task Logging Verification}
+
 \textbf{Type:} Functional / Inspection
 
-\textbf{Initial State:} Logging module enabled with write access to local or cloud storage.
+\textbf{Initial State:} Logging module enabled with write access to the
+configured storage location.
 
-\textbf{Input/Condition:} 10 user sessions including a mix of successful and failed
-tasks performed via speech and text.
+\textbf{Input/Condition:} The following 10 sessions are performed, with a
+mix of successful and failed tasks using both voice and text:
+summarize email, draft email, create calendar event, make Notion page,
+browser search, file summary, invalid command, send draft then cancel,
+browser request with network disabled, and undo last action.
 
-\textbf{Output/Result:} Each session generates a timestamped log containing input,
-interpreted intent, actions performed, and results.
+\textbf{Output/Result:} Each session generates a timestamped log entry
+containing the received input, interpreted intent, resulting action, and
+final outcome.
 
-\textbf{How test will be performed:} After each session, reviewers inspect the log file
-for completeness and proper formatting (timestamp, session ID, action outcome).
+\textbf{How test will be performed:} After each session, reviewers will
+inspect the recorded logs for completeness, correct timestamps, session
+identifiers, action summaries, and outcome fields.
+
+\textbf{Functional Requirements Covered:} FUNC.R.7
+
 \end{enumerate}
-\textbf{Functional Requirements Covered:} FUNC.R.6 - FUNC.R.7
 
 \subsubsection{Usability and Safety}
 
 \begin{enumerate}
 
-\item{Test FUNC.US.1 - High-Level Command Usability\\}
-\textbf{Type:} Usability / Observational
+\item \textbf{Test FUNC.R.8 -- High-Level Command Usability}
 
-\textbf{Initial State:} Deployed system interface with speech and text enabled.
+\textbf{Type:} Usability / Observational Testing
 
-\textbf{Input/Condition:} 10 participants attempt to complete 10 standard tasks (e.g.,
-opening documents, browsing the web, checking system info) using only natural language.
+\textbf{Initial State:} Deployed system interface with voice and text
+interaction enabled.
 
-\textbf{Output/Result:} 100\% of users complete tasks without needing to use low-level
-system interfaces (e.g., file paths, terminal commands).
+\textbf{Input/Condition:} 10 participants attempt the following 10 core
+tasks using Proxi's high-level interface: summarize an unread email,
+draft an email, show tomorrow's calendar, create a calendar event,
+search the web, summarize a browser result, make a Notion page, update a
+Notion page, summarize a file, and use the help command.
 
-\textbf{How test will be performed:} Observers record each participant’s interactions.
-Any instance where a user needs to access a system-level interface is noted as a failure.
+\textbf{Output/Result:} At least 80\% of attempted tasks are completed
+successfully without requiring users to interact with low-level system
+details such as raw file paths, terminal commands, or manual system
+configuration steps.
 
-\item{Test FUNC.US.2 - Privileged Action Confirmation\\}
-\textbf{Type:} Functional / Security Validation
+\textbf{How test will be performed:} Observers will record whether each
+task is completed successfully, whether low-level system details were
+needed, and where users hesitated or failed. Completion rate will be
+computed over the full task set across all participants.
 
-\textbf{Initial State:} System running with permission-sensitive agents enabled.
+\textbf{Functional Requirements Covered:} FUNC.R.8
 
-\textbf{Input/Condition:} Privileged commands such as “Delete file,” “Shut down
-computer,” or “Access settings.”
+\item \textbf{Test FUNC.R.9 -- Privileged Action Confirmation}
 
-\textbf{Output/Result:} Each privileged command triggers a confirmation prompt and
-executes only after explicit user approval.
+\textbf{Type:} Functional / Safety Validation
 
-\textbf{How test will be performed:} Testers issue privileged commands via both text
-and speech. Observers confirm that the system requests confirmation before any
-irreversible or high-privilege action.
+\textbf{Initial State:} System running with permission-sensitive actions
+enabled.
+
+\textbf{Input/Condition:} The following privileged commands are issued by
+both voice and text: send the drafted email, delete an email draft,
+delete a calendar event, remove a Notion page, and clear saved session
+history. For each command, one trial confirms the action and one trial
+cancels the action.
+
+\textbf{Output/Result:} Every privileged command triggers a confirmation
+prompt before execution. Confirmed actions execute only after explicit
+approval, and cancelled actions do not execute.
+
+\textbf{How test will be performed:} Testers will issue each privileged
+command twice, once followed by confirmation and once followed by
+cancel. Observers will verify that the prompt appears before execution
+and that the final result matches the approval or cancellation path.
+
+\textbf{Functional Requirements Covered:} FUNC.R.9
+
 \end{enumerate}
-\textbf{Functional Requirements Covered:} FUNC.R.8 - FUNC.R.9
 
 
+\subsection{Tests for Non-Functional Requirements}
 
-\subsection{Tests for Nonfunctional Requirements}
+This section defines specific tests used to determine whether Proxi meets
+its non-functional requirements. Each test is derived from the SRS and
+states how the result will be verified.
 
-In here specific tests are defined to help determine if Proxi's nonfunctional
-requirements have been met.  Every test in this will look at the requirements
-from the SRS and determine how every result will be verified.
-
-\subsubsection{Look and Feels Requirements}
+\subsubsection{Look and Feel Requirements}
 
 \begin{enumerate}
-					
-\item{Test NF.LF.1 - UI Conformance and Readability\\}
-\textbf{Type:} Static inspection and Manual
-          
-\textbf{Initial State:} The latest UI build
-          
-\textbf{Input/Condition:} Walkthrough the man screens and all of the status
-indicators (listening, thinking, and ready) all with a checklist.
-          
-\textbf{Output/Result:} Presence and visibility of main controls such as listen,
-stop, and undo; minimal clutter and advanced options hidden; large targets and
-a theme toggle being present. 
-          
-\textbf{How test will be performed:} In this two reviewers will go through the
-UI and check off the items on the checklist.
 
-\textbf{Nonfunctional Requirements Covered:} APP.1 - APP.5
+\item \textbf{Test NF.LF.1 -- UI Conformance and Readability}
 
-\item{Test NF.LF.2 - Test Style and Iconography Check\\}
-\textbf{Type:} Static inspection and Manual
-          
-\textbf{Initial State:} Build with speech output enabled and the UI icon set 
-implemented.
-          
-\textbf{Input/Condition:} It will be a trigger system speech, with review 
-labels, captions, and icons.
-          
-\textbf{Output/Result:} Plain, short labels; synchronized on screen captions for 
-spoken output; consistent iconography with textual labelling.
-          
-\textbf{How test will be performed:} Inspecting the strings and visual elements
-and flows; record any inconsistencies found with videos and screenshots for
-evidence.
+\textbf{Type:} Static Inspection / Manual Testing
 
-\textbf{Nonfunctional Requirements Covered:} STY.1 - STY.3
+\textbf{Initial State:} Latest UI build available in the chat-style
+frontend.
+
+\textbf{Input/Condition:} Review the main screens, transcript area,
+status indicators, and primary controls using the following checklist:
+listen control visible, stop or cancel control visible, undo control
+visible, status indicators readable, transcript area readable, minimal
+visual clutter, advanced options hidden from the default flow, large
+click targets, and theme toggle present.
+
+\textbf{Output/Result:} All checklist items are present and usable in the
+main workflow.
+
+\textbf{How test will be performed:} Two reviewers will inspect the UI
+independently, complete the checklist, compare results, and record any
+issues with screenshots.
+
+\textbf{Non-Functional Requirements Covered:} APP.1, APP.2, APP.3,
+APP.4, APP.5
+
+\item \textbf{Test NF.LF.2 -- Style and Iconography Check}
+
+\textbf{Type:} Static Inspection / Manual Testing
+
+\textbf{Initial State:} Build with spoken output, on-screen text, and
+the final icon set enabled.
+
+\textbf{Input/Condition:} Trigger the following outputs and review the
+resulting labels, captions, and icons:
+welcome message, task success message, task failure message,
+confirmation prompt, cancel action, undo action, help response, and one
+browser summary response.
+
+\textbf{Output/Result:} Labels are short and plain, spoken output also
+appears on screen, and icons are consistent and paired with short text
+labels.
+
+\textbf{How test will be performed:} Reviewers will inspect the
+displayed strings and visual elements, then record any inconsistencies
+with screenshots or screen recordings.
+
+\textbf{Non-Functional Requirements Covered:} STY.1, STY.2, STY.3
 
 \end{enumerate}
 
 \subsubsection{Usability and Humanity Requirements}
 
 \begin{enumerate}
-					
-\item{NF.US.1 - Task Based Usability and Learnability Study\\}
-\textbf{Type:} Dynamic with manual usability test that will have timed tasks and
-a survey.
-          
-\textbf{Initial State:} New users will get a 5 minute orientation to Proxi.
-          
-\textbf{Input/Condition:} Doing the core tasks such as opening the app, reading
-files, browsing, and saving files/actions.
-          
-\textbf{Output/Result:} A simple command button works for simple tasks; main
-actions are obvious; the participants do every task without assistance; time to
-do a repeat task decreases; examples on what to say are easily found; messages
-are simple, risky actions are confirmed, and error messages suggest next steps.
 
-\textbf{How test will be performed:} Observing timed tasks, collecting
-completion rates and any errors.
+\item \textbf{Test NF.US.1 -- Task-Based Usability and Learnability}
+\textbf{Study}
 
-\textbf{Nonfunctional Requirements Covered:} EOU.R.1 - EOU.R.3, LEA.R.1 - 
-LEA.R.2, UAP.R.1 - UAP.R.3
+\textbf{Type:} Dynamic / Manual Usability Testing
 
-\item{NF.US.2 - Accessibility, personalization, and AODA/WCAG conformance\\}
-\textbf{Type:} Dynamic test and accessibility inspection
-          
-\textbf{Initial State:} Build with voice only pathway enabled; captions, text
-scaling, and color contrast tools implemented.
-          
-\textbf{Input/Condition:} There is voice only interactive execution of setup
-and exit; repeated dictation sessions with captions enabled and locale set to
-English.
-          
-\textbf{Output/Result:} All actions are possible with voice only; captions,
-scaling, and contrast verified; speech model adaption over user session are 
-noticeable; Canadian english formats are used.
+\textbf{Initial State:} New users receive a 5-minute orientation to
+Proxi.
 
-\textbf{How test will be performed:} Run some WCAG checks, verify locale outputs,
-and have users test the voice only pathway.
+\textbf{Input/Condition:} Each participant performs the following 10
+core tasks:
+summarize an unread email, draft an email, show tomorrow's calendar,
+create a calendar event, search the web, summarize a browser result,
+make a Notion page, update a Notion page, summarize a file, and use the
+``What can I say?'' help feature.
 
-\textbf{Nonfunctional Requirements Covered:} ACC.R.1 - ACC.R.2, PER.R.1 - 
-PER.R.2
+\textbf{Output/Result:} Main actions are discoverable, most everyday
+tasks are completed without assistance after the orientation, repeated
+tasks become faster, example commands are easy to find, messages are
+clear, risky actions are confirmed, and error messages suggest a next
+step.
 
-\end{enumerate}
+\textbf{How test will be performed:} Observers will measure task
+completion, task time, repeated-task improvement, and requests for help.
+Participants will also complete a short survey on clarity and ease of
+use.
 
-\subsubsection{Performance Requirements}
+\textbf{Non-Functional Requirements Covered:} EOU.R.1, EOU.R.2,
+EOU.R.3, LEA.R.1, LEA.R.2, UAP.R.1, UAP.R.2, UAP.R.3
 
-\begin{enumerate}
+\item \textbf{Test NF.US.2 -- Accessibility, Personalization, and}
+\textbf{Locale}
 
-\item{NF.PF.1 - Performance Study\\}
-\textbf{Type:} Dynamic, mostly automatic performance testing
-          
-\textbf{Initial State:} Standard hardware environment with typical system load
-          
-\textbf{Input/Condition:} Speak a small scripted set of normal commands and a few 
-malformed ones; keep one run in a quiet room and one with moderate indoor noise. 
-Let the app run for a few hours
-          
-\textbf{Output/Result:} Respond in less than 2 seconds; actions should be done
-with 80 to 90 percent accuracy; features load fast; settings are kept; rollbacks
-fast.
+\textbf{Type:} Dynamic Testing / Accessibility Inspection
 
-\textbf{How test will be performed:} Time commands, tally accuracy, log resources,
-and perform updates and rollbacks.
+\textbf{Initial State:} Build with voice and text enabled; captions,
+scalable text, and contrast-compliant themes implemented.
 
-\textbf{Nonfunctional Requirements Covered:} SAL.R.1-R.2, SAF.R.1-R.2, POA.R.1-R.2,
-CAP.R.1-R.2, SOE.R.1-R.2, LON.R.1-R.2.
+\textbf{Input/Condition:} Execute the following voice-only tasks:
+start setup, ask for help, summarize an unread email, show tomorrow's
+calendar, create a calendar event, cancel the current action, undo the
+last action, and exit the app. Then inspect the interface for the
+following accessibility checks: captions shown for spoken responses,
+text resizes to 200\% without loss of information, and color contrast
+meets WCAG~2.2 guidance for readable text. Also verify that date, time,
+and language outputs follow Canadian English formatting.
+
+\textbf{Output/Result:} All listed tasks can be completed through the
+voice-only path, captions are present for spoken responses, text scaling
+works without loss of function, contrast is sufficient, and Canadian
+English formats are used consistently.
+
+\textbf{How test will be performed:} Reviewers will run the voice-only
+task suite, inspect captions and scaled layouts, check contrast using an
+accessibility checker, and verify locale-formatted outputs in the
+interface.
+
+\textbf{Non-Functional Requirements Covered:} ACC.R.1, ACC.R.2,
+PER.R.1, PER.R.2
 
 \end{enumerate}
 
-\subsubsection{Operational and Enviromental Requirements}
+\subsubsection{Performance and Reliability Requirements}
 
 \begin{enumerate}
 
-\item{NF.OP.1 - Environment, ecosystem fit, interfaces, packaging, and release\\}
-\textbf{Type:} Dynamic and checklist based testing
-          
-\textbf{Initial State:} Fresh install on Windows/macOS with integrations turned
-on.
+\item \textbf{Test NF.PF.1 -- Latency and Recognition Accuracy Study}
 
-\textbf{Input/Condition:} Use the app indoors, with normal environment, 
-including noise, temperature, and distance; clean install; check release info
+\textbf{Type:} Dynamic / Automated Performance Testing
 
-\textbf{Output/Result:} Works within env bounds; does not disrupt other apps; 
-uses secure interfaces with logs; installs easily; versioned and documented
-releases.
+\textbf{Initial State:} Standard hardware environment with typical
+system load.
 
-\textbf{How test will be performed:} Spot checking tasks and env, glancing at 
-traffic + logs, running clean installs, and reviewing the releasing page. 
+\textbf{Input/Condition:} Run the following 10 commands in a quiet room
+and then repeat the same 10 commands in a moderately noisy indoor
+environment:
+summarize an unread email, draft an email, show tomorrow's calendar,
+create a calendar event, search the web for Hamilton weather, summarize
+the browser result, search for nearby pharmacies, make a Notion page,
+summarize a file, and use the help command.
 
-\textbf{Nonfunctional Requirements Covered:} EPE.R.1-R.4; WER.R.1-R.2; 
-IAS.R.1-R.4; PRD.R.1-R.3; REL.R.1-R.2
+\textbf{Output/Result:} Voice responses begin within the SAL.R.1 limit,
+common actions complete within the SAL.R.2 limit, quiet-environment
+recognition accuracy meets POA.R.1, and moderate-noise accuracy meets
+POA.R.2.
+
+\textbf{How test will be performed:} The team will time each command,
+compare recognized inputs against expected inputs, compute command
+accuracy for both environments, and record the results in a test log.
+
+\textbf{Non-Functional Requirements Covered:} SAL.R.1, SAL.R.2,
+POA.R.1, POA.R.2
+
+\item \textbf{Test NF.PF.2 -- Robustness and Capacity Study}
+
+\textbf{Type:} Dynamic / Automated and Manual Testing
+
+\textbf{Initial State:} System running on standard hardware.
+
+\textbf{Input/Condition:} Submit the following invalid or adverse
+inputs:
+empty command, incomplete command, unsupported command, malformed text
+input, interrupted speech input, network-dependent request with network
+disabled, and a cancelled action. Then run the system continuously for
+at least 4 hours under normal usage.
+
+\textbf{Output/Result:} Input errors are logged and reported without a
+crash, the system continues running after invalid or incomplete
+commands, continuous operation is maintained for at least 4 hours, and
+CPU usage stays within the CAP.R.2 limit during normal operation.
+
+\textbf{How test will be performed:} Reviewers will trigger each listed
+failure condition, inspect logs and on-screen errors, monitor whether
+the system remains usable, and record runtime and CPU usage during the
+continuous run.
+
+\textbf{Non-Functional Requirements Covered:} ROFT.R.1, ROFT.R.2,
+CAP.R.1, CAP.R.2
+
+\item \textbf{Test NF.PF.3 -- Safety, Extensibility, and Longevity}
+\textbf{Study}
+
+\textbf{Type:} Dynamic / Manual and Checklist-Based Testing
+
+\textbf{Initial State:} System running with undo support, update
+support, and MCP tool registry enabled.
+
+\textbf{Input/Condition:} Perform the following actions:
+delete a draft and cancel, delete a draft and confirm, remove a
+calendar event and undo it, add one new MCP tool through the registry,
+update the build, and simulate an update rollback.
+
+\textbf{Output/Result:} Destructive actions require confirmation,
+critical actions can be undone in one step, a new feature becomes
+available without major changes to existing functionality, user settings
+persist after update, and rollback completes within the LON.R.2 limit.
+
+\textbf{How test will be performed:} Reviewers will execute the listed
+actions, verify confirmation and undo behavior, register one new MCP
+tool, confirm that it loads correctly, update the system, and then
+measure the rollback process.
+
+\textbf{Non-Functional Requirements Covered:} SAF.R.1, SAF.R.2,
+SOE.R.1, SOE.R.2, LON.R.1, LON.R.2
 
 \end{enumerate}
 
-\subsubsection{Maintability and Support Requirements}
+\subsubsection{Operational and Environmental Requirements}
 
 \begin{enumerate}
 
-\item{NF.MS.1 - Onboarding, support, and adaptability\\}
-\textbf{Type:} Light task trial and checklist based testing
-          
-\textbf{Initial State:} Fresh clone; Report Problem presentable and the config 
-editable.
+\item \textbf{Test NF.OP.1 -- Environment and Ecosystem Fit}
 
-\textbf{Input/Condition:} A new person builds and runs using the README; they add
-one small tool through the registry; generate support bundle; and change default 
-apps via the config and retry.
+\textbf{Type:} Dynamic / Checklist-Based Testing
 
-\textbf{Output/Result:} The build run succeeds; the tool added without touching
-others; the support bundle has logs and info, it still works after the default 
-app change.
+\textbf{Initial State:} Fresh install on current Windows and macOS
+systems with required integrations enabled.
 
-\textbf{How test will be performed:} Time the setup, add and register the tool,
-click report to inspect the ZIP, and switch default apps and retest.
+\textbf{Input/Condition:} Run the system indoors under normal operating
+conditions, including moderate indoor noise, user distance within
+approximately one meter of the microphone, and room temperature between
+15$^\circ$C and 30$^\circ$C. Perform a browser search, email task, file
+summary task, and calendar task while other common desktop applications
+are also running.
 
-\textbf{Nonfunctional Requirements Covered:} 14.1-1, 14.1-2; 14.2-1, 14.2-2; 
-14.3-1, 14.3-2
+\textbf{Output/Result:} The system operates effectively within the
+expected physical environment, speech recognition remains usable within
+the specified distance and indoor noise conditions, and automation does
+not interfere with other running applications.
+
+\textbf{How test will be performed:} Reviewers will execute the listed
+tasks under the specified conditions, note any environmental failures,
+and check whether other applications continue to function normally.
+
+\textbf{Non-Functional Requirements Covered:} EPE.R.1, EPE.R.2,
+EPE.R.3, EPE.R.4, WER.R.1, WER.R.2
+
+\item \textbf{Test NF.OP.2 -- Interfaces, Packaging, and Release Check}
+
+\textbf{Type:} Dynamic / Inspection and Checklist Testing
+
+\textbf{Initial State:} Release candidate build, release notes, and
+deployment package available.
+
+\textbf{Input/Condition:} Perform a clean install, verify external
+integrations with email, browser, file, and speech services, inspect
+communication protocol use, inspect external interaction logs, and
+review the packaged release.
+
+\textbf{Output/Result:} Interfaces with adjacent systems use the
+expected protocols and logging, the product installs with minimal setup,
+the release follows the versioning scheme, and the release package is
+version controlled and archived.
+
+\textbf{How test will be performed:} Reviewers will perform a clean
+install, execute one task per integration, inspect logs for external
+interactions, and review release artifacts, tags, and packaged files.
+
+\textbf{Non-Functional Requirements Covered:} IAS.R.1, IAS.R.2,
+IAS.R.3, IAS.R.4, PRD.R.1, PRD.R.2, PRD.R.3, REL.R.1, REL.R.2
+
+\end{enumerate}
+
+\subsubsection{Maintainability and Support Requirements}
+
+\begin{enumerate}
+
+\item \textbf{Test NF.MS.1 -- Onboarding, Support, and Adaptability}
+
+\textbf{Type:} Dynamic / Checklist-Based Testing
+
+\textbf{Initial State:} Fresh clone of the repository, README present,
+Report Problem feature present, and configuration file editable.
+
+\textbf{Input/Condition:} A new contributor follows the README to build
+and run the project, adds one new MCP tool using a module and registry
+entry, generates a support bundle through Report Problem, and changes
+the default app configuration without changing code.
+
+\textbf{Output/Result:} The build and run process succeeds without help,
+a new MCP tool is added without modifying existing tools, the support
+bundle contains recent logs and basic system information with consent,
+and the system continues working after only a configuration change.
+
+\textbf{How test will be performed:} The team will time the setup,
+verify that the new contributor can complete the README steps, add and
+register one tool, inspect the generated ZIP bundle, modify the default
+app configuration, and rerun the affected task flow.
+
+\textbf{Non-Functional Requirements Covered:} 14.1-1, 14.1-2, 14.2-1,
+14.2-2, 14.3-1, 14.3-2
 
 \end{enumerate}
 
@@ -792,23 +1181,54 @@ click report to inspect the ZIP, and switch default apps and retest.
 
 \begin{enumerate}
 
-\item{NF.SEC.1 - Access, integrity, privacy, audit stance, immunity\\}
-\textbf{Type:} Permission checks and quick scans
+\item \textbf{Test NF.SEC.1 -- Access, Integrity, Privacy, and}
+\textbf{Immunity}
 
-\textbf{Initial State:} Fresh install; privacy policy; dependency scanner.
+\textbf{Type:} Dynamic / Inspection and Security Scanning
 
-\textbf{Input/Condition:} Trigger sensitive actions; look for stored and sent data;
-run dependency scans.
+\textbf{Initial State:} Fresh install, privacy policy available, and
+dependency scanner configured.
 
-\textbf{Output/Result:} No account needed; sensitive actions require explicit grants;
-data is protected; minimal third party data accessed with consent; no audit trails
-are left; no known vulnerabilities in dependencies.
+\textbf{Input/Condition:} Verify that no account is required to use the
+app, trigger actions that require explicit permission, inspect stored
+and transmitted data for protection and minimization, review user
+consent steps for third-party services, and run dependency
+vulnerability scans.
 
-\textbf{How test will be performed:} Start flows that require permissions, look 
-for traffic and logs, and run dependency scans. Run SCA scans.
+\textbf{Output/Result:} No registration is required, required
+permissions must be explicitly granted by the user, stored or
+transmitted data is protected from unauthorized alteration, stored data
+handling aligns with PIPEDA expectations, third-party data sharing is
+minimized and consented to, and no known dependency vulnerabilities
+remain unresolved at release time.
 
-\textbf{Nonfunctional Requirements Covered:} ACS-01, ACS-02; INT-01; PRIV-01; 
-IMM-01, IMM-02
+\textbf{How test will be performed:} Reviewers will execute permission
+flows, inspect privacy-related behavior and consent prompts, inspect
+logs and network traffic at a high level, and run software composition
+and dependency scans.
+
+\textbf{Non-Functional Requirements Covered:} ACS-01, ACS-02, INT-01,
+PRIV-01, IMM-01, IMM-02
+
+\item \textbf{Test NF.SEC.2 -- Replay or Unauthorized Voice Command}
+
+\textbf{Type:} Dynamic / Manual Security Testing
+
+\textbf{Initial State:} System running with voice input enabled.
+
+\textbf{Input/Condition:} Play a recorded high-risk voice command, or
+have a different person issue a destructive command such as deleting a
+draft or removing an event.
+
+\textbf{Output/Result:} The system does not execute the action silently.
+It must either reject the command, require explicit confirmation, or log
+the event for review.
+
+\textbf{How test will be performed:} Reviewers will issue a risky
+command using a recording and then using a second speaker, and will
+verify that the action is not completed without the expected safeguard.
+
+\textbf{Non-Functional Requirements Covered:} SAF.R.1, ACS-02
 
 \end{enumerate}
 
@@ -816,22 +1236,27 @@ IMM-01, IMM-02
 
 \begin{enumerate}
 
-\item{NF.CUL.1 - Language and Tone\\}
-\textbf{Type:} Quick review of content
+\item \textbf{Test NF.CUL.1 -- Language and Tone Check}
 
-\textbf{Initial State:} Final strings and language selector.
+\textbf{Type:} Static Inspection / Manual Testing
 
-\textbf{Input/Condition:} Scan common screens and messages. Switch languages and 
-check key screens.
+\textbf{Initial State:} Final strings, prompts, and language settings
+available.
 
-\textbf{Output/Result:} Polite neutral wording; multiple languages will be usable 
-for many basic flows.
+\textbf{Input/Condition:} Review common screens and messages, including
+welcome text, help text, error messages, confirmation prompts, task
+success messages, and cancellation messages. Then switch languages and
+repeat a subset of basic flows.
 
-\textbf{How test will be performed:} Two people will go through the common screens
-and messages; one person will switch languages, complete tasks, and check key 
-screens.
+\textbf{Output/Result:} Wording remains polite and culturally neutral,
+avoids slang and confusing references, and multiple languages support
+the basic interaction flow.
 
-\textbf{Nonfunctional Requirements Covered:} CULR-01, CULR-02
+\textbf{How test will be performed:} Two reviewers will inspect the
+default language strings, then one reviewer will switch languages,
+repeat the selected flows, and record any broken or untranslated text.
+
+\textbf{Non-Functional Requirements Covered:} CULR-01, CULR-02
 
 \end{enumerate}
 
@@ -839,212 +1264,873 @@ screens.
 
 \begin{enumerate}
 
-\item{NF.CUL.1 - Legal and standards\\}
-\textbf{Type:} Checklist
+\item \textbf{Test NF.COM.1 -- Legal and Standards Compliance Check}
 
-\textbf{Initial State:} Licenses, privacy policy, accessibility notes in repo
-and release.
+\textbf{Type:} Static Inspection / Checklist Testing
 
-\textbf{Input/Condition:} Map behaviors to legal and standards checklist. This 
-includes PIPEDA, MIT.
+\textbf{Initial State:} License file, privacy policy, accessibility
+notes, and release artifacts available in the repository.
 
-\textbf{Output/Result:} PIPEDA IS followed; all licenses are compatible and
-included. The given standards are followed correctly.
+\textbf{Input/Condition:} Review legal and standards compliance against
+the following checklist:
+PIPEDA handling for stored user data, MIT license presence and wording,
+WCAG~2.2 accessibility evidence, and documentation of software quality
+and security practices aligned with ISO~25010 and ISO~27001 goals.
 
-\textbf{How test will be performed:} Check policies vs behaviors, open the
-LICENSE and release notes, do quick scan and spot check, and confirm protocols
-are secure.
+\textbf{Output/Result:} Required legal notices are present, the release
+uses the MIT license correctly, privacy documentation aligns with stated
+behavior, and standards-compliance evidence is present and consistent
+with the implementation.
 
-\textbf{Nonfunctional Requirements Covered:} CULR-01, CULR-02
+\textbf{How test will be performed:} Reviewers will inspect policies,
+license files, release notes, and accessibility evidence, then record
+any missing or inconsistent items in a compliance checklist.
+
+\textbf{Non-Functional Requirements Covered:} LGL-01, LGL-02,
+STDCOMP-01, STDCOMP-02
 
 \end{enumerate}
 
 \subsection{Traceability Between Test Cases and Requirements}
-\begin{center}
-\captionsetup{type=table}
-\caption{Requirements and Test Traceability Matrix}
-\begin{longtable}{|p{2.5cm}|p{4cm}|p{7.5cm}|}
-\hline
-\textbf{Test ID} & \textbf{Requirement ID} & \textbf{Comment} \\ \hline
-\endfirsthead
+\label{section:5.3}
 
-\multicolumn{3}{c}%
-{\tablename\ \thetable\ -- \textit{Continued from previous page}} \\ \hline
-\textbf{Test ID} & \textbf{Requirement ID} & \textbf{Comment} \\ \hline
-\endhead
+Tables~\ref{tab:fr-trace}, \ref{tab:nfr-trace-a}, and
+\ref{tab:nfr-trace-b} show that every requirement defined in the SRS
+is covered by at least one planned system test.
 
-\hline \multicolumn{3}{r}{\textit{Continued on next page}} \\ \hline
-\endfoot
+\begin{table}[H]
+\centering
+\small
+\caption{Functional Requirements Traceability Matrix}
+\label{tab:fr-trace}
+\begin{tabularx}{\textwidth}{|c|*{9}{>{\centering\arraybackslash}X|}}
+\hline
+Test ID & F1 & F2 & F3 & F4 & F5 & F6 & F7 & F8 & F9 \\
+\hline
+FUNC.R.1 & $\times$ & & & & & & & & \\
+\hline
+FUNC.R.2 & & $\times$ & & & & & & & \\
+\hline
+FUNC.R.3 & & & $\times$ & & & & & & \\
+\hline
+FUNC.R.4 & & & & $\times$ & & & & & \\
+\hline
+FUNC.R.5 & & & & & $\times$ & & & & \\
+\hline
+FUNC.R.6 & & & & & & $\times$ & & & \\
+\hline
+FUNC.R.7 & & & & & & & $\times$ & & \\
+\hline
+FUNC.R.8 & & & & & & & & $\times$ & \\
+\hline
+FUNC.R.9 & & & & & & & & & $\times$ \\
+\hline
+\end{tabularx}
+\end{table}
+\FloatBarrier
 
-\hline
-\endlastfoot
+\noindent
+Functional requirement keys:
+F1 = FUNC.R.1, F2 = FUNC.R.2, F3 = FUNC.R.3, F4 = FUNC.R.4,
+F5 = FUNC.R.5, F6 = FUNC.R.6, F7 = FUNC.R.7, F8 = FUNC.R.8,
+F9 = FUNC.R.9.
 
-% --- Function Requirements ---
-FUNC.IR.1  & FUNC.R.1 & Manual Test that checks if system successfully accepted user input\\
+\begin{table}[H]
+\centering
+\small
+\caption{Non-Functional Requirements Traceability Matrix Part 1}
+\label{tab:nfr-trace-a}
+\begin{tabularx}{\textwidth}{|c|*{6}{>{\centering\arraybackslash}X|}}
 \hline
-FUNC.IR.2  & FUNC.R.2 & Automated Test that checks Speech to Text Accuracy \\ \hline
-FUNC.IT.1  & FUNC.R.3 & Automated Test that checks if system corrected interpreted user intent\\
+Req ID & LF1 & LF2 & US1 & US2 & PF1 & PF2 \\
 \hline
-FUNC.IT.2  & FUNC.R.4 & Integration Test that checks the system end-to-end\\
+APP.1 & $\times$ & & & & & \\
 \hline
-FUNC.FR.1  & FUNC.R.5 & Manual Test that checks if system is ready to execute user commands\\
+APP.2 & $\times$ & & & & & \\
 \hline
-FUNC.ML.1  & FUNC.R.6 & Manual Test that checks the short term memory of the model\\
+APP.3 & $\times$ & & & & & \\
 \hline
-FUNC.ML.2  & FUNC.R.7 & Automated Functional that checks if system logs are working as expected\\
+APP.4 & $\times$ & & & & & \\
 \hline
-FUNC.US.1  & FUNC.R.8 & Manual Observational test to check if users can complete task without needing low-level system interface\\
+APP.5 & $\times$ & & & & & \\
 \hline
-FUNC.US.2  & FUNC.R.9 & Automated test to make sure system doesn't use any unauthorized commands without prompting\\
+STY.1 & & $\times$ & & & & \\
 \hline
+STY.2 & & $\times$ & & & & \\
+\hline
+STY.3 & & $\times$ & & & & \\
+\hline
+EOU.R.1 & & & $\times$ & & & \\
+\hline
+EOU.R.2 & & & $\times$ & & & \\
+\hline
+EOU.R.3 & & & $\times$ & & & \\
+\hline
+LEA.R.1 & & & $\times$ & & & \\
+\hline
+LEA.R.2 & & & $\times$ & & & \\
+\hline
+UAP.R.1 & & & $\times$ & & & \\
+\hline
+UAP.R.2 & & & $\times$ & & & \\
+\hline
+UAP.R.3 & & & $\times$ & & & \\
+\hline
+ACC.R.1 & & & & $\times$ & & \\
+\hline
+ACC.R.2 & & & & $\times$ & & \\
+\hline
+PER.R.1 & & & & $\times$ & & \\
+\hline
+PER.R.2 & & & & $\times$ & & \\
+\hline
+SAL.R.1 & & & & & $\times$ & \\
+\hline
+SAL.R.2 & & & & & $\times$ & \\
+\hline
+POA.R.1 & & & & & $\times$ & \\
+\hline
+POA.R.2 & & & & & $\times$ & \\
+\hline
+ROFT.R.1 & & & & & & $\times$ \\
+\hline
+ROFT.R.2 & & & & & & $\times$ \\
+\hline
+CAP.R.1 & & & & & & $\times$ \\
+\hline
+CAP.R.2 & & & & & & $\times$ \\
+\hline
+\end{tabularx}
+\end{table}
+\FloatBarrier
 
-% --- Non-Functional Requirements ---
-NF.LF.1 & APP.1 - APP.5 & Manual Test that covers the Appearance Requirements\\
-\hline
-NF.LF.2 & STY.1 - STY.3 & Manual Test that covers the Style Requirements\\
-\hline
-NF.US.1 & EOU.R.1 - EOU.R.3, LEA.R.1, LEA.R.2, UAP.R.1 - UAP.R.3 & Manual Test that covers the Usability, Learning, Understanding, and Politeness Requirements\\
-\hline
-NF.PF.1  & SAL.R.1-R.2, SAF.R.1-R.2, POA.R.1-R.2, CAP.R.1-R.2, SOE.R.1-R.2, LON.R.1-R.2 & Automatic Test that covers the Performance Requirements\\
-\hline
-NF.OP.1 & EPE.R.1-R.4; WER.R.1-R.2; IAS.R.1-R.4; PRD.R.1-R.3; REL.R.1-R.2 & Automatic Test that covers the Operation and Environmental Requirements\\
-\hline
-NF.MS.1 & 14.1-1, 14.1-2; 14.2-1, 14.2-2; 14.3-1, 14.3-2 & Manual Test that covers the Maintainability and Support Requirements\\
-\hline
-NF.SEC.1 & CS-01, ACS-02, INT-01, PRIV-01, IMM-01, IMM-02 & Automatic Test that covers the Security Requirements\\
-\hline
-NF.CUL.1 & CULR-01, CULR-02 & Manual Test that covers the Cultural Requirements\\
-\hline
-NF.COM.1 & LGL-01, LGL-02 & Automated Test that covers the Compliance Requirements\\
-\hline
+\noindent
+Test keys for Table~\ref{tab:nfr-trace-a}:
+LF1 = NF.LF.1, LF2 = NF.LF.2, US1 = NF.US.1,
+US2 = NF.US.2, PF1 = NF.PF.1, PF2 = NF.PF.2.
 
-\end{longtable}
-\end{center}
+\begin{table}[H]
+\centering
+\small
+\caption{Non-Functional Requirements Traceability Matrix Part 2}
+\label{tab:nfr-trace-b}
+\begin{tabularx}{\textwidth}{|c|*{6}{>{\centering\arraybackslash}X|}}
+\hline
+Req ID & PF3 & OP1 & OP2 & SEC1 & SEC2 & COM1 \\
+\hline
+SAF.R.1 & $\times$ & & & & $\times$ & \\
+\hline
+SAF.R.2 & $\times$ & & & & & \\
+\hline
+SOE.R.1 & $\times$ & & & & & \\
+\hline
+SOE.R.2 & $\times$ & & & & & \\
+\hline
+LON.R.1 & $\times$ & & & & & \\
+\hline
+LON.R.2 & $\times$ & & & & & \\
+\hline
+EPE.R.1 & & $\times$ & & & & \\
+\hline
+EPE.R.2 & & $\times$ & & & & \\
+\hline
+EPE.R.3 & & $\times$ & & & & \\
+\hline
+EPE.R.4 & & $\times$ & & & & \\
+\hline
+WER.R.1 & & $\times$ & & & & \\
+\hline
+WER.R.2 & & $\times$ & & & & \\
+\hline
+IAS.R.1 & & & $\times$ & & & \\
+\hline
+IAS.R.2 & & & $\times$ & & & \\
+\hline
+IAS.R.3 & & & $\times$ & & & \\
+\hline
+IAS.R.4 & & & $\times$ & & & \\
+\hline
+PRD.R.1 & & & $\times$ & & & \\
+\hline
+PRD.R.2 & & & $\times$ & & & \\
+\hline
+PRD.R.3 & & & $\times$ & & & \\
+\hline
+REL.R.1 & & & $\times$ & & & \\
+\hline
+REL.R.2 & & & $\times$ & & & \\
+\hline
+ACS-01 & & & & $\times$ & & \\
+\hline
+ACS-02 & & & & $\times$ & $\times$ & \\
+\hline
+INT-01 & & & & $\times$ & & \\
+\hline
+PRIV-01 & & & & $\times$ & & \\
+\hline
+IMM-01 & & & & $\times$ & & \\
+\hline
+IMM-02 & & & & $\times$ & & \\
+\hline
+LGL-01 & & & & & & $\times$ \\
+\hline
+LGL-02 & & & & & & $\times$ \\
+\hline
+STDCOMP-01 & & & & & & $\times$ \\
+\hline
+STDCOMP-02 & & & & & & $\times$ \\
+\hline
+\end{tabularx}
+\end{table}
+\FloatBarrier
+
+\noindent
+Test keys for Table~\ref{tab:nfr-trace-b}:
+PF3 = NF.PF.3, OP1 = NF.OP.1, OP2 = NF.OP.2,
+SEC1 = NF.SEC.1, SEC2 = NF.SEC.2, COM1 = NF.COM.1.
+
 
 \section{Unit Test Description}
 
-\wss{This section should not be filled in until after the MIS (detailed design
-  document) has been completed.}
+This section describes the planned unit tests for Proxi after the MIS
+was completed. The goal of these tests is to check important module
+logic before moving to integration and system testing.
 
-\wss{Reference your MIS (detailed design document) and explain your overall
-philosophy for test case selection.}  
+Our general testing approach is simple. For each selected module, we
+test the normal case first, then important edge cases and error cases.
+Most of these tests will be automated. For modules that depend on
+outside services or tools, mocks will be used instead of the real
+service.
 
-\wss{To save space and time, it may be an option to provide less detail in this section.  
-For the unit tests you can potentially layout your testing strategy here.  That is, you 
-can explain how tests will be selected for each module.  For instance, your test building 
-approach could be test cases for each access program, including one test for normal behaviour 
-and as many tests as needed for edge cases.  Rather than create the details of the input 
-and output here, you could point to the unit testing code.  For this to work, you code 
-needs to be well-documented, with meaningful names for all of the tests.}
+To keep the unit test section readable, each planned test is given a
+short unit-test ID for traceability and a descriptive test name for
+implementation.
 
 \subsection{Unit Testing Scope}
 
-\wss{What modules are outside of the scope.  If there are modules that are
-  developed by someone else, then you would say here if you aren't planning on
-  verifying them.  There may also be modules that are part of your software, but
-  have a lower priority for verification than others.  If this is the case,
-  explain your rationale for the ranking of module importance.}
+The main modules in scope for direct unit testing are BH-Input,
+BH-NLU, BH-Plan, BH-Safety, BH-Feedback, and BH-UI.
+
+These modules were chosen because they contain important logic, are
+easy to test in isolation, and have clear access programs in the
+MIS.
+
+The following are outside direct unit test scope: external speech
+services, external MCP tools, browser, email, calendar, Notion, and
+operating-system behaviour. These will be verified through mocks,
+integration tests, and system tests instead.
+
+Some support modules, such as SD-Types, SD-Store, SD-AIClient,
+SD-ToolRegistry, and SD-Log, are lower priority for direct unit
+testing in this document. They are either simple support modules or
+are tested indirectly through higher-priority modules.
 
 \subsection{Tests for Functional Requirements}
 
-\wss{Most of the verification will be through automated unit testing.  If
-  appropriate specific modules can be verified by a non-testing based
-  technique.  That can also be documented in this section.}
+Most unit verification will be done using automated tests. The test
+cases below are grouped by module and use short unit-test IDs so
+they can be traced later in the report.
 
-\subsubsection{Module 1}
+\subsubsection{Tests for BH-Input}
 
-\wss{Include a blurb here to explain why the subsections below cover the module.
-  References to the MIS would be good.  You will want tests from a black box
-  perspective and from a white box perspective.  Explain to the reader how the
-  tests were selected.}
+BH-Input is unit tested because it handles voice and text input,
+state changes, and input retrieval.
 
 \begin{enumerate}
 
-\item{test-id1\\}
+\item \textbf{UT.INPUT.1 --
+\texttt{test\_bh\_input\_init\_sets\_idle\_state}}
 
-Type: \wss{Functional, Dynamic, Manual, Automatic, Static etc. Most will
-  be automatic}
-					
-Initial State: 
-					
-Input: 
-					
-Output: \wss{The expected result for the given inputs}
+\textbf{Type:} Functional, Dynamic, Automatic
 
-Test Case Derivation: \wss{Justify the expected value given in the Output field}
+\textbf{Initial State:} Module not initialized.
 
-How test will be performed: 
-					
-\item{test-id2\\}
+\textbf{Input/Condition:} Call \texttt{initInput()}.
 
-Type: \wss{Functional, Dynamic, Manual, Automatic, Static etc. Most will
-  be automatic}
-					
-Initial State: 
-					
-Input: 
-					
-Output: \wss{The expected result for the given inputs}
+\textbf{Output/Result:} State becomes Idle, mode becomes TextOnly, and stored
+text is empty.
 
-Test Case Derivation: \wss{Justify the expected value given in the Output field}
+\textbf{How test will be performed:} An automated unit test will call
+\texttt{initInput()} and check the returned or stored state.
 
-How test will be performed: 
+\item \textbf{UT.INPUT.2 --
+\texttt{test\_bh\_input\_start\_capture\_from\_idle}}
 
-\item{...\\}
-    
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized and idle.
+
+\textbf{Input/Condition:} Call \texttt{startCapture(Mixed)}.
+
+\textbf{Output/Result:} State becomes Listening and mode becomes Mixed.
+
+\textbf{How test will be performed:} An automated unit test will start capture
+and check the new state.
+
+\item \textbf{UT.INPUT.3 --
+\texttt{test\_bh\_input\_duplicate\_start\_raises\_error}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module already listening.
+
+\textbf{Input/Condition:} Call \texttt{startCapture(VoiceOnly)} again.
+
+\textbf{Output/Result:} Exception \texttt{AlreadyCapturing} is raised.
+
+\textbf{How test will be performed:} An automated unit test will start capture
+once and then call it again.
+
+\item \textbf{UT.INPUT.4 --
+\texttt{test\_bh\_input\_stop\_capture\_returns\_idle}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module listening or processing.
+
+\textbf{Input/Condition:} Call \texttt{stopCapture()}.
+
+\textbf{Output/Result:} State returns to Idle.
+
+\textbf{How test will be performed:} An automated unit test will start capture,
+stop it, and verify the resulting state.
+
+\item \textbf{UT.INPUT.5 --
+\texttt{test\_bh\_input\_get\_last\_text\_raises\_when\_empty}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized with no stored text.
+
+\textbf{Input/Condition:} Call \texttt{getLastText()}.
+
+\textbf{Output/Result:} Exception \texttt{NoInputAvailable} is raised.
+
+\textbf{How test will be performed:} An automated unit test will initialize the
+module and request the last text right away.
+
 \end{enumerate}
 
-\subsubsection{Module 2}
+\subsubsection{Tests for BH-NLU}
 
-...
+BH-NLU is unit tested because it converts input text into intents and
+parameters, and its behaviour is mostly deterministic.
 
-\subsection{Tests for Nonfunctional Requirements}
-
-\wss{If there is a module that needs to be independently assessed for
-  performance, those test cases can go here.  In some projects, planning for
-  nonfunctional tests of units will not be that relevant.}
-
-\wss{These tests may involve collecting performance data from previously
-  mentioned functional tests.}
-
-\subsubsection{Module ?}
-		
 \begin{enumerate}
 
-\item{test-id1\\}
+\item \textbf{UT.NLU.1 --
+\texttt{test\_bh\_nlu\_parse\_email\_command}}
 
-Type: \wss{Functional, Dynamic, Manual, Automatic, Static etc. Most will
-  be automatic}
-					
-Initial State: 
-					
-Input/Condition: 
-					
-Output/Result: 
-					
-How test will be performed: 
-					
-\item{test-id2\\}
+\textbf{Type:} Functional, Dynamic, Automatic
 
-Type: Functional, Dynamic, Manual, Static etc.
-					
-Initial State: 
-					
-Input: 
-					
-Output: 
-					
-How test will be performed: 
+\textbf{Initial State:} Parser available.
+
+\textbf{Input/Condition:} Call \texttt{parseText("Draft an email to John about
+tomorrow's meeting")}.
+
+\textbf{Output/Result:} Returned intent matches draft-email and includes useful
+parameters.
+
+\textbf{How test will be performed:} An automated unit test will compare the
+returned intent type and fields to the expected values.
+
+\item \textbf{UT.NLU.2 --
+\texttt{test\_bh\_nlu\_parse\_calendar\_command}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Parser available.
+
+\textbf{Input/Condition:} Call \texttt{parseText("Create a calendar event for
+Friday at 2 PM called Team Sync")}.
+
+\textbf{Output/Result:} Returned intent matches create-calendar-event and
+includes time and title information.
+
+\textbf{How test will be performed:} An automated unit test will verify the
+returned type and parsed fields.
+
+\item \textbf{UT.NLU.3 --
+\texttt{test\_bh\_nlu\_unsupported\_command\_raises\_parse\_error}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Parser available.
+
+\textbf{Input/Condition:} Call \texttt{parseText("Paint my room blue")}.
+
+\textbf{Output/Result:} Exception \texttt{ParseError} is raised.
+
+\textbf{How test will be performed:} An automated unit test will give an
+unsupported command and check the exception.
 
 \end{enumerate}
 
-\subsubsection{Module ?}
+\subsubsection{Tests for BH-Plan}
 
-...
+BH-Plan is unit tested because it creates plans from intents and
+controls execution behaviour. External tools are mocked in these
+tests.
+
+\begin{enumerate}
+
+\item \textbf{UT.PLAN.1 --
+\texttt{test\_bh\_plan\_init\_sets\_default\_state}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module not initialized.
+
+\textbf{Input/Condition:} Call \texttt{initPlan()}.
+
+\textbf{Output/Result:} Current plan is null and last status is Pending.
+
+\textbf{How test will be performed:} An automated unit test will initialize the
+module and check the stored values.
+
+\item \textbf{UT.PLAN.2 --
+\texttt{test\_bh\_plan\_create\_plan\_for\_supported\_intent}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized with a mocked valid tool registry.
+
+\textbf{Input/Condition:} Call \texttt{planAction(i)} for a supported intent.
+
+\textbf{Output/Result:} A plan is created with the expected tool and parameters.
+
+\textbf{How test will be performed:} An automated unit test will mock the tool
+registry and compare the returned plan.
+
+\item \textbf{UT.PLAN.3 --
+\texttt{test\_bh\_plan\_missing\_tool\_raises\_error}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized with no matching tool.
+
+\textbf{Input/Condition:} Call \texttt{planAction(i)} for an unsupported tool
+type.
+
+\textbf{Output/Result:} Exception \texttt{NoToolFound} is raised.
+
+\textbf{How test will be performed:} An automated unit test will use a mocked
+registry with no valid match.
+
+\item \textbf{UT.PLAN.4 --
+\texttt{test\_bh\_plan\_execute\_plan\_updates\_status}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized with a valid mocked plan.
+
+\textbf{Input/Condition:} Call \texttt{executePlan(p)}.
+
+\textbf{Output/Result:} Status becomes Success or Failed based on the mocked
+tool result.
+
+\textbf{How test will be performed:} An automated unit test will mock tool
+results and check the final status.
+
+\item \textbf{UT.PLAN.5 --
+\texttt{test\_bh\_plan\_cancel\_without\_pending\_plan\_fails}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized with no pending plan.
+
+\textbf{Input/Condition:} Call \texttt{cancelPlan()}.
+
+\textbf{Output/Result:} Exception \texttt{NoPendingPlan} is raised.
+
+\textbf{How test will be performed:} An automated unit test will call
+\texttt{cancelPlan()} after initialization and verify the exception.
+
+\end{enumerate}
+
+\subsubsection{Tests for BH-Safety}
+
+BH-Safety is unit tested because it contains important decision rules
+for risky actions and confirmations.
+
+\begin{enumerate}
+
+\item \textbf{UT.SAFE.1 --
+\texttt{test\_bh\_safety\_low\_risk\_action\_is\_allowed}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Safety module available.
+
+\textbf{Input/Condition:} Pass a low-risk action to the safety policy
+functions.
+
+\textbf{Output/Result:} The action is automatically allowed.
+
+\textbf{How test will be performed:} An automated unit test will create a mock
+low-risk action and verify the result.
+
+\item \textbf{UT.SAFE.2 --
+\texttt{test\_bh\_safety\_high\_irreversible\_action\_is\_blocked}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Safety module available.
+
+\textbf{Input/Condition:} Pass a high-risk irreversible action to the safety
+policy functions.
+
+\textbf{Output/Result:} The action is blocked.
+
+\textbf{How test will be performed:} An automated unit test will create a mock
+high-risk action and verify the result.
+
+\item \textbf{UT.SAFE.3 --
+\texttt{test\_bh\_safety\_medium\_risk\_asks\_for\_confirmation}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Safety module available with mocked user response.
+
+\textbf{Input/Condition:} Pass a medium-risk action to the confirmation path.
+
+\textbf{Output/Result:} The action requires user confirmation and follows the
+mocked yes or no response.
+
+\textbf{How test will be performed:} An automated unit test will mock the user
+response and verify the returned decision.
+
+\item \textbf{UT.SAFE.4 --
+\texttt{test\_bh\_safety\_confirmation\_timeout\_raises\_error}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Safety module available with no user response.
+
+\textbf{Input/Condition:} Pass an action that needs confirmation to the
+confirmation path.
+
+\textbf{Output/Result:} The module raises the expected timeout error.
+
+\textbf{How test will be performed:} An automated unit test will simulate no
+response and verify the timeout behaviour.
+
+\end{enumerate}
+
+\subsubsection{Tests for BH-Feedback}
+
+BH-Feedback is unit tested because it controls queue behaviour,
+delivery state, and cancellation logic.
+
+\begin{enumerate}
+
+\item \textbf{UT.FEED.1 --
+\texttt{test\_bh\_feedback\_init\_sets\_idle\_and\_empty\_queue}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module not initialized.
+
+\textbf{Input/Condition:} Call \texttt{initFeedback()}.
+
+\textbf{Output/Result:} Queue is empty and status is Idle.
+
+\textbf{How test will be performed:} An automated unit test will initialize the
+module and check the queue and status.
+
+\item \textbf{UT.FEED.2 --
+\texttt{test\_bh\_feedback\_queue\_message\_appends\_successfully}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized.
+
+\textbf{Input/Condition:} Call \texttt{queueMessage("Ready", Both)}.
+
+\textbf{Output/Result:} The message is added to the queue.
+
+\textbf{How test will be performed:} An automated unit test will queue one
+message and check the queue size.
+
+\item \textbf{UT.FEED.3 --
+\texttt{test\_bh\_feedback\_speak\_now\_updates\_completed\_state}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized with mocked output channels.
+
+\textbf{Input/Condition:} Call \texttt{speakNow("Done", Both)}.
+
+\textbf{Output/Result:} The final status becomes Completed on success.
+
+\textbf{How test will be performed:} An automated unit test will mock the
+output channels and check the final status.
+
+\item \textbf{UT.FEED.4 --
+\texttt{test\_bh\_feedback\_tts\_failure\_is\_handled}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized with a failing mocked TTS path.
+
+\textbf{Input/Condition:} Call \texttt{speakNow("Done", VoiceOnly)}.
+
+\textbf{Output/Result:} The expected failure path or exception is triggered.
+
+\textbf{How test will be performed:} An automated unit test will mock TTS
+failure and verify the result.
+
+\item \textbf{UT.FEED.5 --
+\texttt{test\_bh\_feedback\_cancel\_clears\_queue}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Module initialized with queued messages.
+
+\textbf{Input/Condition:} Call \texttt{cancelAll()}.
+
+\textbf{Output/Result:} Queue is empty and status returns to Idle.
+
+\textbf{How test will be performed:} An automated unit test will queue
+messages, cancel them, and check the final state.
+
+\end{enumerate}
+
+\subsubsection{Tests for BH-UI}
+
+BH-UI is unit tested for state changes and message handling. Visual
+quality itself is checked mainly by system tests.
+
+\begin{enumerate}
+
+\item \textbf{UT.UI.1 --
+\texttt{test\_bh\_ui\_init\_sets\_idle\_state}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} UI module not initialized.
+
+\textbf{Input/Condition:} Call \texttt{initUI()}.
+
+\textbf{Output/Result:} State becomes Idle and last message is empty.
+
+\textbf{How test will be performed:} An automated unit test will initialize the
+module and check the state.
+
+\item \textbf{UT.UI.2 --
+\texttt{test\_bh\_ui\_update\_view\_changes\_ui\_state}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} UI module initialized.
+
+\textbf{Input/Condition:} Call \texttt{updateView(Listening)}.
+
+\textbf{Output/Result:} UI state changes to Listening.
+
+\textbf{How test will be performed:} An automated unit test will call
+\texttt{updateView()} and verify the new state.
+
+\item \textbf{UT.UI.3 --
+\texttt{test\_bh\_ui\_show\_message\_stores\_message}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} UI module initialized.
+
+\textbf{Input/Condition:} Call \texttt{showMessage("Draft created")}.
+
+\textbf{Output/Result:} The stored message is updated and the UI state becomes
+Displaying.
+
+\textbf{How test will be performed:} An automated unit test will call
+\texttt{showMessage()} and check the resulting state.
+
+\item \textbf{UT.UI.4 --
+\texttt{test\_bh\_ui\_prompt\_user\_returns\_response}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} UI module initialized with mocked user response.
+
+\textbf{Input/Condition:} Call \texttt{promptUser("Send this email?")}.
+
+\textbf{Output/Result:} The prompt path returns the expected user response.
+
+\textbf{How test will be performed:} An automated unit test will mock the user
+response and verify the returned value.
+
+\item \textbf{UT.UI.5 --
+\texttt{test\_bh\_ui\_clear\_screen\_resets\_display}}
+
+\textbf{Type:} Functional, Dynamic, Automatic
+
+\textbf{Initial State:} UI module initialized with a shown message.
+
+\textbf{Input/Condition:} Call \texttt{clearScreen()}.
+
+\textbf{Output/Result:} State returns to Idle and the message is cleared.
+
+\textbf{How test will be performed:} An automated unit test will show a
+message, clear the screen, and verify the final state.
+
+\end{enumerate}
+
+\subsection{Tests for Non-Functional Requirements}
+
+Most non-functional requirements are checked better by integration and
+system testing. Only a few simple unit-level checks are included here.
+
+\subsubsection{Tests for BH-Feedback}
+
+\begin{enumerate}
+
+\item \textbf{UT.NF.FEED.1 --
+\texttt{test\_bh\_feedback\_cancel\_leaves\_no\_queued\_messages}}
+
+\textbf{Type:} Non-Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Feedback module initialized.
+
+\textbf{Input/Condition:} Queue a few messages and then call
+\texttt{cancelAll()}.
+
+\textbf{Output/Result:} Queue becomes empty and status returns to Idle.
+
+\textbf{How test will be performed:} An automated unit test will queue
+messages, cancel them, and check the final state.
+
+\end{enumerate}
+
+\subsubsection{Tests for BH-Safety}
+
+\begin{enumerate}
+
+\item \textbf{UT.NF.SAFE.1 --
+\texttt{test\_bh\_safety\_high\_risk\_action\_is\_never\_auto\_approved}}
+
+\textbf{Type:} Non-Functional, Dynamic, Automatic
+
+\textbf{Initial State:} Safety module available.
+
+\textbf{Input/Condition:} Pass a high-risk irreversible action to the safety
+policy functions.
+
+\textbf{Output/Result:} The action is blocked or requires confirmation, but it
+is never auto-approved.
+
+\textbf{How test will be performed:} An automated unit test will create a mock
+high-risk action and verify the result.
+
+\end{enumerate}
 
 \subsection{Traceability Between Test Cases and Modules}
 
-\wss{Provide evidence that all of the modules have been considered.}
+Tables~\ref{tab:unit-mod-func} and \ref{tab:unit-mod-nf} map the
+planned unit tests to the main modules selected for direct unit
+verification.
+
+Modules not shown in these tables were still considered during planning,
+but they are verified mainly through integration tests, system tests, or
+inspection rather than direct detailed unit tests.
+
+\noindent
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Functional Unit Test Traceability Matrix}
+\label{tab:unit-mod-func}
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+Test ID & IN & NLU & PLN & SAF & FDB & UI \\
+\hline
+UT.INPUT.1 & $\times$ & & & & & \\
+\hline
+UT.INPUT.2 & $\times$ & & & & & \\
+\hline
+UT.INPUT.3 & $\times$ & & & & & \\
+\hline
+UT.INPUT.4 & $\times$ & & & & & \\
+\hline
+UT.INPUT.5 & $\times$ & & & & & \\
+\hline
+UT.NLU.1 & & $\times$ & & & & \\
+\hline
+UT.NLU.2 & & $\times$ & & & & \\
+\hline
+UT.NLU.3 & & $\times$ & & & & \\
+\hline
+UT.PLAN.1 & & & $\times$ & & & \\
+\hline
+UT.PLAN.2 & & & $\times$ & & & \\
+\hline
+UT.PLAN.3 & & & $\times$ & & & \\
+\hline
+UT.PLAN.4 & & & $\times$ & & & \\
+\hline
+UT.PLAN.5 & & & $\times$ & & & \\
+\hline
+UT.SAFE.1 & & & & $\times$ & & \\
+\hline
+UT.SAFE.2 & & & & $\times$ & & \\
+\hline
+UT.SAFE.3 & & & & $\times$ & & \\
+\hline
+UT.SAFE.4 & & & & $\times$ & & \\
+\hline
+UT.FEED.1 & & & & & $\times$ & \\
+\hline
+UT.FEED.2 & & & & & $\times$ & \\
+\hline
+UT.FEED.3 & & & & & $\times$ & \\
+\hline
+UT.FEED.4 & & & & & $\times$ & \\
+\hline
+UT.FEED.5 & & & & & $\times$ & \\
+\hline
+UT.UI.1 & & & & & & $\times$ \\
+\hline
+UT.UI.2 & & & & & & $\times$ \\
+\hline
+UT.UI.3 & & & & & & $\times$ \\
+\hline
+UT.UI.4 & & & & & & $\times$ \\
+\hline
+UT.UI.5 & & & & & & $\times$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\noindent
+Module keys:
+IN = BH-Input, NLU = BH-NLU, PLN = BH-Plan, SAF = BH-Safety,
+FDB = BH-Feedback, UI = BH-UI.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Non-Functional Unit Test Traceability Matrix}
+\label{tab:unit-mod-nf}
+\begin{tabular}{|l|c|c|}
+\hline
+Test ID & SAF & FDB \\
+\hline
+UT.NF.SAFE.1 & $\times$ & \\
+\hline
+UT.NF.FEED.1 & & $\times$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\noindent
+The selected modules receive direct unit testing because they contain the
+main deterministic logic of Proxi. Other modules, such as BH-Session,
+HH-IO, HH-Auto, SD-Store, SD-Log, SD-AIClient, and external services,
+are verified more effectively through integration tests, system tests,
+and inspection.
+
+\FloatBarrier
 
 \bibliographystyle{plainnat}
 
@@ -1061,7 +2147,7 @@ This is where you can place additional information.
 The definition of the test cases will call for SYMBOLIC\_CONSTANTS.
 Their values are defined in this section for easy maintenance.
 
-\subsection{Usability Survey Questions?}
+\subsection{Usability Survey Questions}
 
 The purpose of this survey is to validate that Project Proxi meets its
 usability, accessibility, and satisfaction goals from the SRS. Responses
@@ -1194,27 +2280,27 @@ for our software and how to make sure it essentially meets the needs of our user
 \noindent\textbf{2. What pain points did you experience during this deliverable, and how
 did you resolve them?}  
 The main challenge I had faced during this deliverable was making sure that the 
-test cases for the nonfunctional requirements made sense and were realistic to 
+test cases for the non-functional requirements made sense and were realistic to 
 do. To properly do this, I had to really think about what our software was going
 to be used for and how we could truly measure the success of these 
-nonfunctional requirements.
+non-functional requirements.
 
 \noindent\textbf{3. What knowledge and skills will the team collectively need to acquire
 to successfully complete the verification and validation of your project?}  
 The knowledge and skills that our team will need in order to ensure success
 in the verification and validation of our project include dynamic testing
 knowledge, static testing knowledge, and certain tool usage. I hope to improve 
-my knowledge in various testing methods that can helpy verify and validate our 
-projecet.  
+my knowledge in various testing methods that can help verify and validate our 
+project.  
 
 \noindent\textbf{4. For each of the knowledge areas and skills identified in the
 previous question, what are at least two approaches to acquiring the knowledge
 or mastering the skill? Of the identified approaches, which will each team
 member pursue, and why did they make this choice?}  
-For each of the knowledge areas and skills we indentified, our team plans to 
-use a combo of formal and self directed learning. We can start by reviewing 
+For each of the knowledge areas and skills we identified, our team plans to 
+use a combination of formal and self-directed learning. We can start by reviewing 
 course material and by reading online articles and tutorials on relevant topics.
-Each member will then apply this learnt knowledge directly into the successful
+Each member will then apply this learned knowledge directly into the successful
 creation of our project. We can also do small prototype tests or run sample 
 validation sessions to help us learn better.
 
@@ -1228,14 +2314,14 @@ Writing this deliverable went smoothly once I established a clear mapping
  measurable, and realistic test cases for all major system components from input 
  handling to agent-based task execution. Collaboratively, we divided responsibilities 
  efficiently, which allowed us to maintain a consistent level of technical depth and 
- clarity throughout the VnV plan.
+ clarity throughout the V\&V plan.
 
 \noindent\textbf{2. What pain points did you experience during this deliverable, and how did you resolve them?}  
 
 One major challenge we faced was time management. Our group had to apply for an MSAF 
 (McMaster Student Absence Form) to obtain academic relief for a late submission due 
 to unexpected health issues amongst our group members. Getting approval 
-for the MSAF was a bit of a hassle — it required communication with prof and the 
+for the MSAF was a bit of a hassle --- it required communication with the professor and the 
 relevant university department. This delay temporarily disrupted our workflow and 
 added stress to the deliverable timeline. We resolved it by setting up a stricter internal 
 schedule after the approval to get the work completed efficiently.  
@@ -1262,7 +2348,7 @@ like LLMs:
 
     \item \textbf{Usability and Accessibility Testing:}  
     Approaches include (1) conducting supervised user testing sessions with 
-    accessibility-focused participants One of our teammates with a human–computer 
+    accessibility-focused participants. One of our teammates with a human--computer 
     interaction background will lead user testing, while I will focus on analyzing 
     the qualitative data collected from these sessions to guide improvements.  
 \end{itemize}
@@ -1289,7 +2375,7 @@ if we requested academic relief well before the deadline.
 
 \noindent\textbf{3. What knowledge and skills will the team collectively need to acquire
 to successfully complete the verification and validation of your project?}  
-Some basic verficiation and validation skills including coming up with test plans,
+Some basic verification and validation skills including coming up with test plans,
 scenarios, user groups and correctness are required. This is important as the 
 objectives we wish to validate would require comprehensive test cases which 
 cover the vast majority of scenarios we would expect to see in the real world. 
