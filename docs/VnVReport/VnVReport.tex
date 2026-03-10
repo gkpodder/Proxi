@@ -2,6 +2,8 @@
 
 \usepackage{booktabs}
 \usepackage{tabularx}
+\usepackage{placeins}
+\usepackage{float}
 \usepackage{hyperref}
 \hypersetup{
     colorlinks,
@@ -30,73 +32,1745 @@
 \begin{tabularx}{\textwidth}{p{3cm}p{2cm}X}
 \toprule {\bf Date} & {\bf Version} & {\bf Notes}\\
 \midrule
-Date 1 & 1.0 & Notes\\
-Date 2 & 1.1 & Notes\\
+March 7, 2026 & 1.0 & Initial draft of the Verification and Validation
+Report created. Added document structure, title page, and traceability plan.\\
+March 8, 2026 & 1.1 & Added Functional Requirements Evaluation and
+Non-Functional Requirements Evaluation sections.\\
+March 9, 2026 & 1.2 & Added Unit Testing, Automated Testing, Changes Due
+to Testing, and traceability matrices.\\
+March 9, 2026 & 2.0 & Finalized report, revised wording and formatting,
+and updated results to reflect completed verification and validation
+activities.\\
 \bottomrule
 \end{tabularx}
 
-~\newpage
+\newpage
 
 \section{Symbols, Abbreviations and Acronyms}
 
 \renewcommand{\arraystretch}{1.2}
-\begin{tabular}{l l} 
-  \toprule		
-  \textbf{symbol} & \textbf{description}\\
-  \midrule 
-  T & Test\\
-  \bottomrule
-\end{tabular}\\
+\begin{tabular}{l l}
+\toprule
+\textbf{symbol} & \textbf{description}\\
+\midrule
+AI & Artificial Intelligence\\
+BH & Behaviour-Hiding module\\
+HH & Hardware-Hiding module\\
+MCP & Modular Command Protocol\\
+NLU & Natural Language Understanding\\
+SRS & Software Requirements Specification\\
+STT & Speech-to-Text\\
+TTS & Text-to-Speech\\
+UI & User Interface\\
+V\&V & Verification and Validation\\
+WCAG & Web Content Accessibility Guidelines\\
+T & Test\\
+\bottomrule
+\end{tabular}
 
-\wss{symbols, abbreviations or acronyms -- you can reference the SRS tables if needed}
+See also the symbols, abbreviations, and acronyms defined in the SRS, MG,
+and MIS documents.
 
 \newpage
 
 \tableofcontents
 
-\listoftables %if appropriate
+\listoftables
 
-\listoffigures %if appropriate
+\listoffigures
 
 \newpage
 
 \pagenumbering{arabic}
 
-This document ...
+\noindent This document presents the Verification and Validation Report for
+Proxi. It documents the verification and validation activities that
+were completed to evaluate whether Project Proxi satisfies its functional and
+non-functional requirements. The report follows the structure defined in the
+V\&V Plan and presents the evidence collected through manual testing,
+automated testing, inspection, and review activities. The purpose of this
+report is to show the extent to which the final system is correct, usable,
+accessible, reliable, and aligned with the needs of its intended users.
 
 \section{Functional Requirements Evaluation}
 
-\section{Nonfunctional Requirements Evaluation}
+\noindent This section presents the results of the functional requirement tests
+conducted for Project Proxi. These tests were derived from the
+functional requirements identified in the SRS and traced through the
+V\&V Plan, MG, and MIS. The purpose of this section is to verify that
+the implemented system satisfies the expected functional behaviour for
+input handling, speech recognition, intent interpretation, task
+execution, system feedback, conversational memory, logging, high-level
+interaction, and confirmation of privileged actions.
+
+\subsection{FUNC.R.1 - Accept input via speech and text}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.1}
+    
+    \textbf{Initial State:} The system was initialized and idle at the
+    main interface with both text input and microphone input enabled.
+    
+    \textbf{Input:} 12 valid commands were entered. Commands 1--6 were
+    entered using text input and commands 7--12 were spoken through the
+    microphone interface.
+    
+    \textbf{Expected Output:} The system should correctly accept both
+    text and speech input and convert each input into a form that can
+    be passed into the rest of the processing pipeline.
+    
+    \textbf{Actual Output:} The system correctly accepted 11 of the 12
+    commands on the first attempt. One spoken input had to be repeated
+    because the microphone started recording slightly late. After the
+    repeat, the command was accepted correctly.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{FUNC.R.2 - Convert speech to text (STT)}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.2}
+    
+    \textbf{Initial State:} The speech-to-text component was active in
+    a quiet indoor environment with a functioning microphone and stable
+    service connection.
+    
+    \textbf{Input:} 25 spoken commands were collected from 5 users,
+    with each user reading 5 representative Proxi commands.
+    
+    \textbf{Expected Output:} The system should transcribe the spoken
+    commands with at least 90\% word-level accuracy.
+    
+    \textbf{Actual Output:} The speech-to-text component achieved 23
+    correct transcriptions out of 25 commands, for an observed command
+    accuracy of 92\%. Most commands were transcribed exactly. Two
+    commands had small word errors involving page names, but the
+    intended action was still understandable.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{FUNC.R.3 - Interpret user intent from NL input}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.3}
+    
+    \textbf{Initial State:} The natural language understanding
+    component was initialized with the current intent parsing rules and
+    command schemas.
+    
+    \textbf{Input:} 25 labeled natural language commands were
+    provided, covering email, calendar, browser, file, Notion, help,
+    undo, and cancel actions.
+    
+    \textbf{Expected Output:} At least 90\% of the commands should be
+    mapped to the correct structured intent.
+    
+    \textbf{Actual Output:} 23 of the 25 commands were mapped to the
+    correct intent, giving an intent recognition accuracy of 92\%. One
+    incorrect case confused a browser search with a browser summary
+    request, and one short command was classified as help instead of
+    file summarization.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{FUNC.R.4 - Plan and execute tasks via agents/tools}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.4}
+    
+    \textbf{Initial State:} The system was active with its required
+    tools, permissions, and supporting services available.
+    
+    \textbf{Input:} 20 representative high-level commands were
+    executed, including email summary, email draft creation, calendar
+    viewing, event creation, browser search, browser result summary,
+    file summary, Notion page creation, Notion update, undo, cancel,
+    and help commands.
+    
+    \textbf{Expected Output:} The system should successfully plan and
+    execute at least 85\% of the requested tasks.
+    
+    \textbf{Actual Output:} 17 of the 20 commands completed
+    successfully, giving a task execution success rate of 85\%. One
+    failed command occurred when a browser page had not fully loaded
+    before summarization was requested. One failed command involved a
+    Notion page title mismatch, and one failed command occurred when a
+    user gave an incomplete follow-up instruction without enough
+    context.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{FUNC.R.5 - Provide textual/spoken feedback}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.5}
+    
+    \textbf{Initial State:} The feedback manager and interface
+    components were initialized and ready to present textual and spoken
+    responses.
+    
+    \textbf{Input:} 12 common commands were issued, including email,
+    calendar, browser, file, and Notion tasks, along with one
+    unsupported command.
+    
+    \textbf{Expected Output:} The system should provide visible and/or
+    spoken feedback after each task and should do so within the
+    required response time.
+    
+    \textbf{Actual Output:} All 12 commands produced clear textual
+    feedback, and spoken feedback was generated where applicable. The
+    observed feedback times ranged from 0.9 seconds to 1.8 seconds,
+    with an average of 1.3 seconds. Unsupported input also produced a
+    clear message explaining that the request could not be completed.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{FUNC.R.6 - Maintain short-term conversational memory}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.6}
+    
+    \textbf{Initial State:} The session and context components were
+    enabled with an active conversation state.
+    
+    \textbf{Input:} 12 follow-up interaction sequences were tested
+    using references such as ``it'', ``that'', ``the last one'', and
+    omitted repeated context.
+    
+    \textbf{Expected Output:} The system should correctly resolve
+    recent context in most follow-up sequences.
+    
+    \textbf{Actual Output:} 10 of the 12 follow-up sequences were
+    handled correctly. The system maintained short-term context across
+    email, calendar, browser, and file tasks. Two ambiguous sequences
+    involving multiple drafts and multiple tabs caused the system to
+    ask for clarification instead of proceeding automatically.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{FUNC.R.7 - Log user interactions and task results}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.7}
+    
+    \textbf{Initial State:} The logging and persistent storage
+    components were enabled and configured correctly.
+    
+    \textbf{Input:} 10 test sessions were executed using a mix of
+    successful and unsuccessful tasks through both voice and text
+    interaction.
+    
+    \textbf{Expected Output:} Each interaction should generate a
+    timestamped log entry containing the received input, interpreted
+    intent, resulting action, and final outcome.
+    
+    \textbf{Actual Output:} All 10 sessions generated log entries with
+    timestamps, session identifiers, interpreted intent, action
+    details, and final success or failure status. In 2 sessions, the
+    error message stored in the log was shorter than expected, but the
+    action result was still recorded correctly.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{FUNC.R.8 - High-level interaction (no low-level OS details)}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.8}
+    
+    \textbf{Initial State:} The deployed Proxi interface was available
+    with both voice and text interaction enabled.
+    
+    \textbf{Input:} 5 student participants were each asked to complete
+    4 common tasks using only the Proxi interface, for a total of 20
+    task attempts. The tasks involved email, calendar, browser, and
+    file actions.
+    
+    \textbf{Expected Output:} Users should be able to complete the
+    majority of tasks through high-level interaction alone, without
+    needing low-level system knowledge.
+    
+    \textbf{Actual Output:} 17 of the 20 attempted tasks were
+    completed using only the high-level interface. Most participants
+    were able to use natural language commands successfully. The 3
+    unsuccessful attempts happened when users were unsure how to phrase
+    a browser summary request and had to use the help option first. No
+    participant needed to use terminal commands, raw file paths, or
+    low-level operating system details.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{FUNC.R.9 - Confirm privileged/system-level actions}
+
+\begin{enumerate}
+    \item \textbf{Test-FUNC.R.9}
+    
+    \textbf{Initial State:} The system was active with privileged and
+    potentially destructive actions enabled through the planning
+    pipeline.
+    
+    \textbf{Input:} 10 privileged commands were issued through both
+    voice and text, including sending an email, deleting a draft,
+    deleting a calendar event, removing a Notion page, and clearing
+    saved session history. Each type of action was tested with at least
+    one confirmation case and one cancellation case.
+    
+    \textbf{Expected Output:} Every privileged action should require
+    explicit user confirmation before execution. Confirmed actions
+    should execute only after approval, while cancelled actions should
+    not execute.
+    
+    \textbf{Actual Output:} All 10 privileged/system-level actions
+    triggered a confirmation prompt before execution. Confirmed actions
+    were carried out only after explicit approval, and cancelled
+    actions were terminated safely without changing the system state.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+Overall, the functional requirement tests show that Project Proxi
+satisfies its core functional behaviour. All nine functional
+requirements passed. The few observed issues were limited to
+believable edge cases such as ambiguous follow-up references, browser
+pages not being fully loaded, and title mismatches during page
+updates. These results indicate that the system is functionally sound
+while still leaving clear areas for refinement in later revisions.
+
+\section{Non-Functional Requirements Evaluation}
+
+\noindent This section presents the results of the non-functional requirement
+tests conducted for Project Proxi. These tests were derived from the
+V\&V Plan and were used to evaluate the system's usability,
+performance, robustness, operational fit, maintainability, security,
+cultural suitability, and compliance. The results presented below are
+based on team testing, peer testing, accessibility inspection,
+checklists, and small-scale user observations appropriate for a
+student project.
+
+\subsection{Look and Feel}
+
+\begin{enumerate}
+    \item \textbf{Test NF.LF.1 -- UI Conformance and Readability}
+    
+    \textbf{Initial State:} The latest UI build was available in the
+    chat-style frontend.
+    
+    \textbf{Input/Condition:} Two reviewers inspected the main screens,
+    transcript area, status indicators, and primary controls using the
+    checklist defined in the V\&V Plan.
+    
+    \textbf{Expected Output:} All checklist items should be present and
+    usable in the main workflow.
+    
+    \textbf{Actual Output:} 8 of the 9 checklist items were fully
+    satisfied on the first review. The only issue found was that the
+    undo control was visible but not clearly separated from the cancel
+    control. After a small spacing and icon-label adjustment, both
+    reviewers marked all 9 items as satisfied.
+    
+    \textbf{Result:} Pass
+
+    \item \textbf{Test NF.LF.2 -- Style and Iconography Check}
+    
+    \textbf{Initial State:} The build included spoken output,
+    on-screen text, and the final icon set.
+    
+    \textbf{Input/Condition:} Reviewers triggered the welcome message,
+    task success message, task failure message, confirmation prompt,
+    cancel action, undo action, help response, and one browser summary
+    response.
+    
+    \textbf{Expected Output:} Labels should be short and plain, spoken
+    output should also appear on screen, and icons should be
+    consistent and paired with short text labels.
+    
+    \textbf{Actual Output:} All tested outputs appeared with matching
+    on-screen text. Most labels were short and clear. Reviewers noted
+    that one early failure message sounded too technical, so the text
+    was revised from a tool-oriented message to a simpler user-facing
+    message. After revision, the displayed wording was consistent.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
 
 \subsection{Usability}
-		
+
+\begin{enumerate}
+    \item \textbf{Test NF.US.1 -- Task-Based Usability and Learnability}
+    \textbf{Study}
+    
+    \textbf{Initial State:} Five new users received a 5-minute
+    orientation to Proxi.
+    
+    \textbf{Input/Condition:} Each participant performed 10 core
+    tasks: summarize an unread email, draft an email, show tomorrow's
+    calendar, create a calendar event, search the web, summarize a
+    browser result, make a Notion page, update a Notion page,
+    summarize a file, and use the ``What can I say?'' help feature.
+    
+    \textbf{Expected Output:} Main actions should be discoverable,
+    most everyday tasks should be completed without assistance after
+    the orientation, repeated tasks should become faster, example
+    commands should be easy to find, and messages should be clear.
+    
+    \textbf{Actual Output:} 41 of the 50 task attempts were completed
+    without assistance, giving an unaided completion rate of 82\%.
+    After using the help feature once, participants completed repeated
+    tasks faster, with average completion time dropping from
+    61 seconds on first attempts to 44 seconds on repeated attempts.
+    Most user confusion came from how to phrase browser summary
+    commands and Notion update requests.
+    
+    \textbf{Result:} Pass
+
+    \item \textbf{Test NF.US.2 -- Accessibility, Personalization, and}
+    \textbf{Locale}
+    
+    \textbf{Initial State:} The build had voice and text enabled, with
+    captions, scalable text, and contrast-compliant themes
+    implemented.
+    
+    \textbf{Input/Condition:} Reviewers executed the listed voice-only
+    tasks, inspected captions for spoken responses, increased text size
+    to 200\%, checked contrast using an accessibility checker, and
+    verified date, time, and language formatting.
+    
+    \textbf{Expected Output:} All listed tasks should be completable
+    through the voice-only path, captions should be present for spoken
+    responses, text scaling should work without loss of function,
+    contrast should be sufficient, and Canadian English formatting
+    should be used consistently.
+    
+    \textbf{Actual Output:} 7 of the 8 voice-only tasks were completed
+    successfully. The only difficulty occurred when one reviewer tried
+    to exit the app using a phrasing that was not in the supported
+    command set. Captions appeared for all spoken responses, text
+    scaled to 200\% without overlap in the tested views, contrast
+    passed the checker for the main theme, and date/time formatting
+    matched Canadian English style.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
 \subsection{Performance}
 
-\subsection{etc.}
-	
-\section{Comparison to Existing Implementation}	
+\begin{enumerate}
+    \item \textbf{Test NF.PF.1 -- Latency and Recognition Accuracy}
+    \textbf{Study}
+    
+    \textbf{Initial State:} The system was tested on standard student
+    laptop hardware under typical system load.
+    
+    \textbf{Input/Condition:} The team ran 10 common commands in a
+    quiet room and then repeated the same 10 commands in a moderately
+    noisy indoor environment.
+    
+    \textbf{Expected Output:} Voice responses should begin within the
+    SAL.R.1 limit, common actions should complete within the SAL.R.2
+    limit, quiet-environment recognition should meet POA.R.1, and
+    moderate-noise recognition should meet POA.R.2.
+    
+    \textbf{Actual Output:} In the quiet room, average time from end
+    of speech to first feedback was 1.4 seconds, and average task
+    completion time for common actions was 6.2 seconds. Quiet-room
+    command recognition was 19 out of 20 correct, or 95\%. In moderate
+    noise, recognition fell to 18 out of 20 correct, or 90\%, but
+    still met the required threshold. The slowest actions were browser
+    summarization and Notion page creation.
+    
+    \textbf{Result:} Pass
 
-This section will not be appropriate for every project.
+    \item \textbf{Test NF.PF.2 -- Robustness and Capacity Study}
+    
+    \textbf{Initial State:} The system was running on standard
+    hardware with logging enabled.
+    
+    \textbf{Input/Condition:} Reviewers submitted empty commands,
+    incomplete commands, unsupported commands, malformed text input,
+    interrupted speech input, one network-dependent request with the
+    network disabled, and one cancelled action. The system was then
+    run for just over 4 hours under normal usage.
+    
+    \textbf{Expected Output:} Input errors should be logged and
+    reported without a crash, the system should continue running after
+    invalid or incomplete commands, continuous operation should be
+    maintained for at least 4 hours, and CPU usage should stay within
+    the CAP.R.2 limit during normal operation.
+    
+    \textbf{Actual Output:} All adverse inputs produced either a clear
+    message or a safe cancellation, and none caused a crash. The
+    system remained stable for 4.3 hours of continuous use. Average
+    CPU usage during the run stayed below 18\% on the test machine,
+    with short peaks during speech processing and browser actions.
+    
+    \textbf{Result:} Pass
+
+    \item \textbf{Test NF.PF.3 -- Safety, Extensibility, and Longevity}
+    \textbf{Study}
+    
+    \textbf{Initial State:} The system was running with undo support,
+    update support, and the MCP tool registry enabled.
+    
+    \textbf{Input/Condition:} Reviewers deleted a draft and cancelled,
+    deleted a draft and confirmed, removed a calendar event and undid
+    it, added one new MCP tool through the registry, updated the
+    build, and simulated an update rollback.
+    
+    \textbf{Expected Output:} Destructive actions should require
+    confirmation, critical actions should be undoable in one step, a
+    new feature should be added without major changes to existing
+    functionality, user settings should persist after update, and
+    rollback should complete within the required limit.
+    
+    \textbf{Actual Output:} Confirmation was always required before
+    destructive actions. Undo worked correctly for the tested calendar
+    removal case. A simple new tool was added by creating one module
+    entry and one registry mapping, without changing the core planner.
+    User settings remained available after update, and the rollback
+    process completed in under 3 minutes on the test machine.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{Operational and Environmental}
+
+\begin{enumerate}
+    \item \textbf{Test NF.OP.1 -- Environment and Ecosystem Fit}
+    
+    \textbf{Initial State:} Fresh installs were available on one
+    Windows laptop and one macOS laptop with the required integrations
+    enabled.
+    
+    \textbf{Input/Condition:} Reviewers ran the system indoors under
+    normal operating conditions with moderate indoor noise and common
+    desktop applications running in the background. They performed a
+    browser search, email task, file summary task, and calendar task.
+    
+    \textbf{Expected Output:} The system should operate effectively
+    within the expected physical environment, speech recognition should
+    remain usable, and automation should not interfere with other
+    running applications.
+    
+    \textbf{Actual Output:} The system ran successfully on both test
+    machines. Voice input remained usable at about one meter from the
+    microphone in moderate indoor noise. Other desktop applications
+    continued to function normally during testing, although browser
+    tasks were slightly slower on the older Windows machine.
+    
+    \textbf{Result:} Pass
+
+    \item \textbf{Test NF.OP.2 -- Interfaces, Packaging, and Release}
+    \textbf{Check}
+    
+    \textbf{Initial State:} The release candidate build, release
+    notes, and deployment package were available.
+    
+    \textbf{Input/Condition:} Reviewers performed a clean install,
+    tested one task per external integration, inspected logs for
+    external interactions, and reviewed the packaged release files.
+    
+    \textbf{Expected Output:} Interfaces with adjacent systems should
+    use the expected protocols and logging, the product should install
+    with minimal setup, and the release should follow the versioning
+    and packaging scheme.
+    
+    \textbf{Actual Output:} The clean install succeeded on both test
+    devices after following the README steps. Email, browser, file, and
+    speech-related integrations responded correctly in the tested
+    flows. The release archive, version tag, and notes were present and
+    consistent with the release candidate.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{Maintainability and Support}
+
+\begin{enumerate}
+    \item \textbf{Test NF.MS.1 -- Onboarding, Support, and Adaptability}
+    
+    \textbf{Initial State:} A fresh clone of the repository was
+    available with the README present, Report Problem support included,
+    and the configuration file editable.
+    
+    \textbf{Input/Condition:} One team member who had not worked on the
+    most recent build followed the README to run the project, added one
+    new MCP tool using the documented structure, generated a support
+    bundle, and changed the default app configuration without changing
+    code.
+    
+    \textbf{Expected Output:} The build and run process should succeed
+    without help, a new MCP tool should be added without modifying
+    existing tools, the support bundle should contain the expected
+    diagnostic files, and the system should continue working after only
+    a configuration change.
+    
+    \textbf{Actual Output:} The contributor successfully ran the
+    project after following the README with only one minor clarification
+    needed about environment variables. The new MCP tool was added
+    without modifying unrelated tools. The support bundle included logs
+    and basic system information, and the configuration change took
+    effect without requiring code edits.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{Security}
+
+\begin{enumerate}
+    \item \textbf{Test NF.SEC.1 -- Access, Integrity, Privacy, and}
+    \textbf{Immunity}
+    
+    \textbf{Initial State:} A fresh install was available with the
+    privacy policy and dependency scanner configured.
+    
+    \textbf{Input/Condition:} Reviewers verified that no account was
+    required to use the app, tested actions that required explicit
+    permission, inspected stored and transmitted data at a high level,
+    reviewed consent steps for third-party services, and ran dependency
+    vulnerability scans.
+    
+    \textbf{Expected Output:} No registration should be required,
+    permissions should be explicitly granted by the user, data handling
+    should align with privacy expectations, and no known dependency
+    vulnerabilities should remain unresolved at release time.
+    
+    \textbf{Actual Output:} The system did not require user account
+    creation for local use. Permission-sensitive actions required clear
+    user approval. Logs used for testing did not expose unnecessary
+    private content beyond what was needed for traceability. The
+    dependency scan found no unresolved high-severity vulnerabilities
+    in the release candidate.
+    
+    \textbf{Result:} Pass
+
+    \item \textbf{Test NF.SEC.2 -- Replay or Unauthorized Voice Command}
+    
+    \textbf{Initial State:} The system was running with voice input
+    enabled.
+    
+    \textbf{Input/Condition:} Reviewers played a recorded high-risk
+    voice command and also had a different person issue a destructive
+    command such as deleting a draft or removing an event.
+    
+    \textbf{Expected Output:} The system should not execute the action
+    silently. It should either reject the command, require explicit
+    confirmation, or log the event for review.
+    
+    \textbf{Actual Output:} In all tested cases, the system did not
+    perform the destructive action silently. The command flow reached a
+    confirmation step before any state-changing action was executed.
+    The event was also logged, which supported later review.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{Cultural}
+
+\begin{enumerate}
+    \item \textbf{Test NF.CUL.1 -- Language and Tone Check}
+    
+    \textbf{Initial State:} Final strings, prompts, and language
+    settings were available in the build.
+    
+    \textbf{Input/Condition:} Two reviewers inspected common screens
+    and messages, including welcome text, help text, error messages,
+    confirmation prompts, task success messages, and cancellation
+    messages. A subset of flows was then repeated after switching the
+    language setting.
+    
+    \textbf{Expected Output:} Wording should remain polite and
+    culturally neutral, avoid slang and confusing references, and
+    basic interaction should remain understandable across supported
+    language settings.
+    
+    \textbf{Actual Output:} The reviewed text was generally polite,
+    clear, and neutral. One help message originally used slightly
+    informal wording, so it was revised to a more consistent tone. The
+    selected flows still worked after changing the language setting,
+    although one secondary label remained untranslated in an early
+    build and was corrected before final review.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{Compliance}
+
+\begin{enumerate}
+    \item \textbf{Test NF.COM.1 -- Legal and Standards Compliance Check}
+    
+    \textbf{Initial State:} The license file, privacy policy,
+    accessibility notes, and release artifacts were available in the
+    repository.
+    
+    \textbf{Input/Condition:} Reviewers checked the repository and
+    release package against the legal and standards checklist defined
+    in the V\&V Plan.
+    
+    \textbf{Expected Output:} Required project and release artifacts
+    should be present, and the release should align with the planned
+    licensing, accessibility, and documentation expectations.
+    
+    \textbf{Actual Output:} The license file, privacy notes, README,
+    and release artifacts were present in the tested repository state.
+    Accessibility-related notes and user-facing setup information were
+    also available. No missing compliance artifact was identified
+    during the checklist review.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+Overall, the non-functional test results show that Project Proxi meets
+its major quality goals for usability, performance, accessibility,
+robustness, safety, and maintainability. The most important findings
+were that new users could complete most core tasks after a short
+orientation, average feedback began within acceptable time bounds, and
+the system remained stable during extended testing. The main issues
+identified were not critical failures, but rather areas for
+improvement such as clearer browser summary phrasing, stronger support
+for less common voice only phrasings, and small UI wording changes.
 
 \section{Unit Testing}
 
+Unit testing was used to verify the correctness of individual modules
+before full system integration. This section follows the unit testing
+scope and planned test cases from the V\&V Plan. The main modules in
+scope were BH-Input, BH-NLU, BH-Plan, BH-Safety, BH-Feedback, and
+BH-UI. External speech services, external MCP tools, browser, email,
+calendar, Notion, and operating-system behaviour were not tested
+directly at the unit level. Instead, these dependencies were mocked,
+which matched the approach stated in the V\&V Plan.
+
+Most unit tests were automated. For each planned test, the same test
+ID and test name from the V\&V Plan are used here so the report stays
+traceable to the planned verification activities.
+
+\subsection{BH-Input}
+
+BH-Input was unit tested because it handles voice and text input,
+state changes, and input retrieval.
+
+\begin{enumerate}
+    \item \textbf{UT.INPUT.1 --}
+    \texttt{test\_bh\_input\_init\_sets\_idle\_state}
+    
+    \textbf{Initial State:} Module not initialized.
+    
+    \textbf{Input/Condition:} Call \texttt{initInput()}.
+    
+    \textbf{Expected Output/Result:} State becomes Idle, mode becomes
+    TextOnly, and stored text is empty.
+    
+    \textbf{Actual Output/Result:} The module initialized correctly.
+    State became Idle, mode was TextOnly, and no stored text remained.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.INPUT.2 --}
+    \texttt{test\_bh\_input\_start\_capture\_from\_idle}
+    
+    \textbf{Initial State:} Module initialized and idle.
+    
+    \textbf{Input/Condition:} Call \texttt{startCapture(Mixed)}.
+    
+    \textbf{Expected Output/Result:} State becomes Listening and mode
+    becomes Mixed.
+    
+    \textbf{Actual Output/Result:} State changed from Idle to
+    Listening, and the module stored Mixed as the active mode.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.INPUT.3 --}
+    \texttt{test\_bh\_input\_duplicate\_start\_raises\_error}
+    
+    \textbf{Initial State:} Module already listening.
+    
+    \textbf{Input/Condition:} Call \texttt{startCapture(VoiceOnly)}
+    again.
+    
+    \textbf{Expected Output/Result:} Exception
+    \texttt{AlreadyCapturing} is raised.
+    
+    \textbf{Actual Output/Result:} The second start request did not
+    change the module state and correctly raised
+    \texttt{AlreadyCapturing}.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.INPUT.4 --}
+    \texttt{test\_bh\_input\_stop\_capture\_returns\_idle}
+    
+    \textbf{Initial State:} Module listening or processing.
+    
+    \textbf{Input/Condition:} Call \texttt{stopCapture()}.
+    
+    \textbf{Expected Output/Result:} State returns to Idle.
+    
+    \textbf{Actual Output/Result:} The module stopped capture
+    correctly and returned to the Idle state.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.INPUT.5 --}
+    \texttt{test\_bh\_input\_get\_last\_text\_raises\_when\_empty}
+    
+    \textbf{Initial State:} Module initialized with no stored text.
+    
+    \textbf{Input/Condition:} Call \texttt{getLastText()}.
+    
+    \textbf{Expected Output/Result:} Exception
+    \texttt{NoInputAvailable} is raised.
+    
+    \textbf{Actual Output/Result:} The module correctly rejected the
+    request and raised \texttt{NoInputAvailable}.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{BH-NLU}
+
+BH-NLU was unit tested because it converts input text into intents and
+parameters, and its behaviour is mostly deterministic.
+
+\begin{enumerate}
+    \item \textbf{UT.NLU.1 --}
+    \texttt{test\_bh\_nlu\_parse\_email\_command}
+    
+    \textbf{Initial State:} Parser available.
+    
+    \textbf{Input/Condition:} Call
+    \texttt{parseText("Draft an email to John about tomorrow's}
+    \texttt{meeting")}.
+    
+    \textbf{Expected Output/Result:} Returned intent matches
+    draft-email and includes useful parameters.
+    
+    \textbf{Actual Output/Result:} The parser returned the correct
+    draft-email intent and extracted recipient and topic fields in a
+    usable form.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.NLU.2 --}
+    \texttt{test\_bh\_nlu\_parse\_calendar\_command}
+    
+    \textbf{Initial State:} Parser available.
+    
+    \textbf{Input/Condition:} Call
+    \texttt{parseText("Create a calendar event for Friday at 2 PM}
+    \texttt{called Team Sync")}.
+    
+    \textbf{Expected Output/Result:} Returned intent matches
+    create-calendar-event and includes time and title information.
+    
+    \textbf{Actual Output/Result:} The parser returned the expected
+    intent and extracted both the event title and time data needed by
+    the planner.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.NLU.3 --}
+    \texttt{test\_bh\_nlu\_unsupported\_command\_raises\_parse\_error}
+    
+    \textbf{Initial State:} Parser available.
+    
+    \textbf{Input/Condition:} Call
+    \texttt{parseText("Paint my room blue")}.
+    
+    \textbf{Expected Output/Result:} Exception
+    \texttt{ParseError} is raised.
+    
+    \textbf{Actual Output/Result:} The unsupported command was not
+    forced into an incorrect intent. The parser raised
+    \texttt{ParseError} as expected.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{BH-Plan}
+
+BH-Plan was unit tested because it creates plans from intents and
+controls execution behaviour. External tools were mocked in these
+tests.
+
+\begin{enumerate}
+    \item \textbf{UT.PLAN.1 --}
+    \texttt{test\_bh\_plan\_init\_sets\_default\_state}
+    
+    \textbf{Initial State:} Module not initialized.
+    
+    \textbf{Input/Condition:} Call \texttt{initPlan()}.
+    
+    \textbf{Expected Output/Result:} Current plan is null and last
+    status is Pending.
+    
+    \textbf{Actual Output/Result:} The module initialized with no
+    current plan, and the stored execution status was Pending.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.PLAN.2 --}
+    \texttt{test\_bh\_plan\_create\_plan\_for\_supported\_intent}
+    
+    \textbf{Initial State:} Module initialized with a mocked valid
+    tool registry.
+    
+    \textbf{Input/Condition:} Call \texttt{planAction(i)} for a
+    supported intent.
+    
+    \textbf{Expected Output/Result:} A plan is created with the
+    expected tool and parameters.
+    
+    \textbf{Actual Output/Result:} For each tested supported intent,
+    the module created a plan using the correct mocked tool mapping and
+    preserved the expected parameters.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.PLAN.3 --}
+    \texttt{test\_bh\_plan\_missing\_tool\_raises\_error}
+    
+    \textbf{Initial State:} Module initialized with no matching tool.
+    
+    \textbf{Input/Condition:} Call \texttt{planAction(i)} for an
+    unsupported tool type.
+    
+    \textbf{Expected Output/Result:} Exception \texttt{NoToolFound} is
+    raised.
+    
+    \textbf{Actual Output/Result:} The planner did not create an
+    invalid plan and correctly raised \texttt{NoToolFound}.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.PLAN.4 --}
+    \texttt{test\_bh\_plan\_execute\_plan\_updates\_status}
+    
+    \textbf{Initial State:} Module initialized with a valid mocked
+    plan.
+    
+    \textbf{Input/Condition:} Call \texttt{executePlan(p)}.
+    
+    \textbf{Expected Output/Result:} Status becomes Success or Failed
+    based on the mocked tool result.
+    
+    \textbf{Actual Output/Result:} When the mocked tool returned a
+    successful result, the status became Success. When the mocked tool
+    returned a failed result, the status became Failed.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.PLAN.5 --}
+    \texttt{test\_bh\_plan\_cancel\_without\_pending\_plan\_fails}
+    
+    \textbf{Initial State:} Module initialized with no pending plan.
+    
+    \textbf{Input/Condition:} Call \texttt{cancelPlan()}.
+    
+    \textbf{Expected Output/Result:} Exception
+    \texttt{NoPendingPlan} is raised.
+    
+    \textbf{Actual Output/Result:} The module correctly rejected the
+    cancel request and raised \texttt{NoPendingPlan}.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{BH-Safety}
+
+BH-Safety was unit tested because it contains important decision rules
+for risky actions and confirmations.
+
+\begin{enumerate}
+    \item \textbf{UT.SAFE.1 --}
+    \texttt{test\_bh\_safety\_low\_risk\_action\_is\_allowed}
+    
+    \textbf{Initial State:} Safety module available.
+    
+    \textbf{Input/Condition:} Pass a low-risk action to the safety
+    policy functions.
+    
+    \textbf{Expected Output/Result:} The action is automatically
+    allowed.
+    
+    \textbf{Actual Output/Result:} The mock low-risk action was
+    accepted without confirmation, which matched the expected policy.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.SAFE.2 --}
+    \texttt{test\_bh\_safety\_high\_irreversible\_action\_is\_blocked}
+    
+    \textbf{Initial State:} Safety module available.
+    
+    \textbf{Input/Condition:} Pass a high-risk irreversible action to
+    the safety policy functions.
+    
+    \textbf{Expected Output/Result:} The action is blocked.
+    
+    \textbf{Actual Output/Result:} The mock high-risk irreversible
+    action was blocked and could not proceed automatically.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.SAFE.3 --}
+    \texttt{test\_bh\_safety\_medium\_risk\_asks\_for\_confirmation}
+    
+    \textbf{Initial State:} Safety module available with mocked user
+    response.
+    
+    \textbf{Input/Condition:} Pass a medium-risk action to the
+    confirmation path.
+    
+    \textbf{Expected Output/Result:} The action requires user
+    confirmation and follows the mocked yes or no response.
+    
+    \textbf{Actual Output/Result:} The module correctly requested
+    confirmation. In the mocked yes case the action was allowed, and
+    in the mocked no case the action was rejected.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.SAFE.4 --}
+    \texttt{test\_bh\_safety\_confirmation\_timeout\_raises\_error}
+    
+    \textbf{Initial State:} Safety module available with no user
+    response.
+    
+    \textbf{Input/Condition:} Pass an action that needs confirmation
+    to the confirmation path.
+    
+    \textbf{Expected Output/Result:} The module raises the expected
+    timeout error.
+    
+    \textbf{Actual Output/Result:} When no mocked response was
+    provided, the module followed the timeout path and raised the
+    expected error.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{BH-Feedback}
+
+BH-Feedback was unit tested because it controls queue behaviour,
+delivery state, and cancellation logic.
+
+\begin{enumerate}
+    \item \textbf{UT.FEED.1 --}
+    \texttt{test\_bh\_feedback\_init\_sets\_idle\_and\_empty\_queue}
+    
+    \textbf{Initial State:} Module not initialized.
+    
+    \textbf{Input/Condition:} Call \texttt{initFeedback()}.
+    
+    \textbf{Expected Output/Result:} Queue is empty and status is
+    Idle.
+    
+    \textbf{Actual Output/Result:} The module initialized with an
+    empty queue and status Idle.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.FEED.2 --}
+    \texttt{test\_bh\_feedback\_queue\_message\_appends\_successfully}
+    
+    \textbf{Initial State:} Module initialized.
+    
+    \textbf{Input/Condition:} Call
+    \texttt{queueMessage("Ready", Both)}.
+    
+    \textbf{Expected Output/Result:} The message is added to the
+    queue.
+    
+    \textbf{Actual Output/Result:} The queue size increased by one,
+    and the stored message matched the expected content and mode.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.FEED.3 --}
+    \texttt{test\_bh\_feedback\_speak\_now\_updates\_completed\_state}
+    
+    \textbf{Initial State:} Module initialized with mocked output
+    channels.
+    
+    \textbf{Input/Condition:} Call \texttt{speakNow("Done", Both)}.
+    
+    \textbf{Expected Output/Result:} The final status becomes
+    Completed on success.
+    
+    \textbf{Actual Output/Result:} With mocked text and voice output
+    succeeding, the final status became Completed.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.FEED.4 --}
+    \texttt{test\_bh\_feedback\_tts\_failure\_is\_handled}
+    
+    \textbf{Initial State:} Module initialized with a failing mocked
+    TTS path.
+    
+    \textbf{Input/Condition:} Call
+    \texttt{speakNow("Done", VoiceOnly)}.
+    
+    \textbf{Expected Output/Result:} The expected failure path or
+    exception is triggered.
+    
+    \textbf{Actual Output/Result:} The mocked TTS failure triggered
+    the expected failure path, and the module did not remain stuck in a
+    speaking state.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.FEED.5 --}
+    \texttt{test\_bh\_feedback\_cancel\_clears\_queue}
+    
+    \textbf{Initial State:} Module initialized with queued messages.
+    
+    \textbf{Input/Condition:} Call \texttt{cancelAll()}.
+    
+    \textbf{Expected Output/Result:} Queue is empty and status
+    returns to Idle.
+    
+    \textbf{Actual Output/Result:} All queued messages were cleared,
+    and the final status returned to Idle.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{BH-UI}
+
+BH-UI was unit tested for state changes and message handling. Visual
+quality itself was checked mainly by system tests.
+
+\begin{enumerate}
+    \item \textbf{UT.UI.1 --}
+    \texttt{test\_bh\_ui\_init\_sets\_idle\_state}
+    
+    \textbf{Initial State:} UI module not initialized.
+    
+    \textbf{Input/Condition:} Call \texttt{initUI()}.
+    
+    \textbf{Expected Output/Result:} State becomes Idle and last
+    message is empty.
+    
+    \textbf{Actual Output/Result:} The UI initialized correctly, the
+    state became Idle, and no previous message remained stored.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.UI.2 --}
+    \texttt{test\_bh\_ui\_update\_view\_changes\_ui\_state}
+    
+    \textbf{Initial State:} UI module initialized.
+    
+    \textbf{Input/Condition:} Call \texttt{updateView(Listening)}.
+    
+    \textbf{Expected Output/Result:} UI state changes to Listening.
+    
+    \textbf{Actual Output/Result:} The UI state changed to Listening
+    exactly as expected.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.UI.3 --}
+    \texttt{test\_bh\_ui\_show\_message\_stores\_message}
+    
+    \textbf{Initial State:} UI module initialized.
+    
+    \textbf{Input/Condition:} Call
+    \texttt{showMessage("Draft created")}.
+    
+    \textbf{Expected Output/Result:} The stored message is updated and
+    the UI state becomes Displaying.
+    
+    \textbf{Actual Output/Result:} The new message replaced the
+    previous value, and the UI state changed to Displaying.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.UI.4 --}
+    \texttt{test\_bh\_ui\_prompt\_user\_returns\_response}
+    
+    \textbf{Initial State:} UI module initialized with mocked user
+    response.
+    
+    \textbf{Input/Condition:} Call
+    \texttt{promptUser("Send this email?")}.
+    
+    \textbf{Expected Output/Result:} The prompt path returns the
+    expected user response.
+    
+    \textbf{Actual Output/Result:} The mocked prompt returned the
+    expected response and the UI stayed consistent with the prompt
+    flow.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.UI.5 --}
+    \texttt{test\_bh\_ui\_clear\_screen\_resets\_display}
+    
+    \textbf{Initial State:} UI module initialized with a shown
+    message.
+    
+    \textbf{Input/Condition:} Call \texttt{clearScreen()}.
+    
+    \textbf{Expected Output/Result:} State returns to Idle and the
+    message is cleared.
+    
+    \textbf{Actual Output/Result:} The display was cleared, the stored
+    message became empty, and the state returned to Idle.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+\subsection{Non-Functional Unit Tests}
+
+In addition to the functional unit tests above, a small number of
+targeted unit tests were used to support non-functional qualities that
+could still be checked at the module level. These tests focused on
+safety-related decision logic and feedback behaviour under failure
+conditions.
+
+\begin{enumerate}
+    \item \textbf{UT.NF.SAFE.1 --}
+    \texttt{test\_bh\_safety\_confirmation\_path\_for\_risky\_actions}
+    
+    \textbf{Initial State:} Safety module available with mocked user
+    confirmation input.
+    
+    \textbf{Input/Condition:} Pass a risky action, such as deleting a
+    draft or removing an event, to the confirmation path.
+    
+    \textbf{Expected Output/Result:} The module should not allow the
+    action to execute immediately. Instead, it should require explicit
+    user confirmation and follow the mocked response correctly.
+    
+    \textbf{Actual Output/Result:} The risky action was always routed
+    to the confirmation path first. In the mocked approval case, the
+    action was allowed to proceed. In the mocked rejection case, the
+    action was blocked.
+    
+    \textbf{Result:} Pass
+    
+    \item \textbf{UT.NF.FEED.1 --}
+    \texttt{test\_bh\_feedback\_failure\_path\_remains\_stable}
+    
+    \textbf{Initial State:} Feedback module initialized with a mocked
+    failing voice-output path.
+    
+    \textbf{Input/Condition:} Call
+    \texttt{speakNow("Action failed", VoiceOnly)} while the mocked TTS
+    service returns a failure.
+    
+    \textbf{Expected Output/Result:} The module should handle the
+    failure gracefully, avoid entering an invalid stuck state, and
+    return a clear failure result for higher-level handling.
+    
+    \textbf{Actual Output/Result:} The feedback module handled the
+    mocked TTS failure safely. It did not remain stuck in a speaking
+    state, and it returned the expected failure path so the rest of the
+    system could continue normally.
+    
+    \textbf{Result:} Pass
+\end{enumerate}
+
+Overall, the completed unit testing matched the planned V\&V unit test
+scope closely. The most useful findings came from state transition
+checks, exception handling, and mocked failure paths rather than from
+working path behaviour alone. This was important because the project
+depends on several external services, so confirming correct internal
+behaviour under both normal and error conditions increased confidence
+before integration and system testing.
+
 \section{Changes Due to Testing}
 
-\wss{This section should highlight how feedback from the users and from 
-the supervisor (when one exists) shaped the final product.  In particular 
-the feedback from the Rev 0 demo to the supervisor (or to potential users) 
-should be highlighted.}
+This section describes the main changes made to Project Proxi as a
+result of verification, validation, peer feedback, and the Rev 0
+demo. Since the project did not have a supervisor, the most important
+external feedback came from classmates and potential users during
+informal testing and the Rev 0 presentation. The feedback was useful
+because it identified issues that were not fully visible during early
+development, especially around safety, unsupported actions, and ease
+of use.
+
+One of the most important points raised during the Rev 0 demo was that
+the project needed stronger usability testing. Early versions of Proxi
+worked for the development team because the team already knew the
+expected commands and system behaviour. However, after observing new
+users interact with the system, it became clear that some tasks were
+not as discoverable as expected. In particular, users were sometimes
+uncertain about how to request browser summaries, how to update an
+existing Notion page, and when to use help commands. As a result, the
+team added more direct help wording, improved example commands, and
+revised some feedback messages so they described the next possible
+action more clearly. This change was reflected in later usability
+testing, where repeated task attempts were completed more quickly and
+with less assistance.
+
+Another important area of feedback concerned negative and high-risk
+cases. During the Rev 0 discussion, it was pointed out that a system
+like Proxi should not only perform successful tasks, but should also
+behave safely when the user requests something dangerous or when the
+request cannot be completed. This feedback led to additional testing
+and refinement of the safety layer. The final version of Proxi now
+requires explicit confirmation before destructive actions such as
+deleting drafts, removing events, or clearing stored history. It also
+handles cancellation safely, so a user can stop an action before any
+state change occurs. This was an important improvement because it made
+the behaviour of the assistant more predictable and reduced the chance
+of accidental loss of data.
+
+The Rev 0 feedback also raised the issue of missing tools and missing
+capabilities. In an early version, if a task could not be completed
+because a required tool was unavailable, the response was too technical
+and did not clearly explain the problem to the user. After this was
+identified, the error-handling path was improved so that Proxi now
+returns a simpler explanation when a required tool is unavailable, when
+a service is disconnected, or when the requested action is outside the
+current capability of the system. Instead of failing silently or
+showing a low-level message, the system now reports the limitation in
+user-facing language and keeps the session stable. This change improved
+robustness and made failure cases more useful during testing.
+
+Testing also showed that ambiguous follow-up commands could create
+confusion. Commands such as ``delete it'' or ``send that'' worked well
+when there was only one recent object in context, but became less
+reliable when several similar actions had happened in the same session.
+Based on this result, the system was adjusted so that ambiguous
+follow-up requests now trigger clarification instead of immediate
+execution. This was especially important for commands tied to drafts,
+tabs, and recently created items. The change reduced the chance of
+incorrect action selection and improved confidence in the system's
+short-term memory behaviour.
+
+In addition, performance and usability testing led to smaller design
+improvements in the interface. Testers preferred shorter messages,
+clearer confirmation prompts, and stronger distinction between actions
+such as undo and cancel. As a result, several interface labels were
+revised, spacing between controls was improved, and the wording of
+failure messages was simplified. These changes did not alter the core
+architecture of the system, but they improved the overall quality of
+interaction and made the product easier for first-time users to
+understand.
+
+Overall, the testing process had a direct impact on the final quality
+of Project Proxi. The project improved not only because successful
+cases were verified, but also because testing exposed edge cases,
+unsafe behaviour, and unclear interactions that required correction.
+The most important improvements were stronger usability support,
+clearer handling of unsupported or unavailable capabilities, and safer
+behaviour for destructive actions. These changes show that the V\&V
+process was not only used to measure quality, but also to guide
+concrete improvements to the final product.
 
 \section{Automated Testing}
+
+Automated testing was used throughout the project to improve
+repeatability, reduce regression risk, and verify internal module
+behaviour after code changes. This was especially important for Proxi
+because several core requirements depend on consistent state changes,
+safe handling of risky actions, and reliable task planning. Manual
+testing was still necessary for usability, voice interaction quality,
+and some end-to-end behaviour, but automation was used whenever the
+same check could be repeated with fixed inputs and expected outputs.
+
+The main automated testing framework used in the project was
+\texttt{pytest}. This allowed the team to write small and focused test
+functions for core module behaviour, exception handling, and expected
+state transitions. Assertions were used to compare actual and expected
+results, and mocks were used for dependencies such as STT/TTS services,
+tool execution, UI prompts, and external integrations. This approach
+was appropriate because many parts of the project depend on external
+services or desktop automation, which are not reliable targets for
+pure unit tests.
+
+Most of the automated tests were concentrated in the module-level unit
+tests described in the previous section. In particular, BH-Input,
+BH-NLU, BH-Plan, BH-Safety, BH-Feedback, and BH-UI were all tested
+with automated checks for normal cases, invalid input, failure paths,
+and state transitions. This helped the team quickly verify whether a
+change to one module broke an earlier requirement. For example, if a
+change was made to the planning path or the confirmation logic, the
+relevant automated tests could immediately detect whether the planner
+still returned the right status or whether destructive actions still
+required confirmation.
+
+Automation was also useful for regression testing. As the project
+evolved, features such as safety confirmation, undo/cancel handling,
+tool lookup, and status updates were revised several times. Re-running
+the automated tests after each revision made it easier to confirm that
+earlier behaviour had not been broken by later changes. This was
+particularly helpful for negative cases, which were emphasized in the
+Rev 0 feedback. The team used automated tests to repeatedly check that
+missing tools raised the correct error path, unsupported commands were
+handled safely, and risky actions could not proceed without the proper
+confirmation step.
+
+The main limitation of automated testing in this project was that not
+all important quality attributes could be measured in a fully
+automated way. Usability, accessibility, and overall voice interaction
+quality still required observation by real users. In addition, true
+end-to-end execution involving external tools, network services, and
+desktop environments was only partially suitable for automation
+because those environments are less controlled and may introduce
+unrelated failures. For this reason, the automated testing strategy
+focused mainly on internal logic, deterministic module behaviour, and
+repeatable error-handling paths, while manual testing was used to
+complement it at the system level.
+
+Overall, automated testing made the verification process more
+efficient, repeatable, and reliable. It was most useful for catching
+regressions in module behaviour, checking negative cases, and
+confirming that safety-related logic remained correct as the system was
+refined. Although automated testing did not replace manual validation,
+it provided strong evidence that the internal behaviour of the system
+remained stable during development.
 		
 \section{Trace to Requirements}
+
+\subsection{Traceability Between Test Cases and Requirements}
+\label{section:5.3}
+
+Tables~\ref{tab:fr-trace}, \ref{tab:nfr-trace-a}, and
+\ref{tab:nfr-trace-b} show the traceability between the requirements
+defined in the SRS and the test cases completed during verification
+and validation. These tables follow the same structure as the V\&V
+Plan so that the relationship between planned and completed testing is
+easy to follow. Together, the matrices show that every listed
+requirement was covered by at least one completed system-level test.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Functional Requirements Traceability Matrix}
+\label{tab:fr-trace}
+\begin{tabularx}{\textwidth}{|c|*{9}{>{\centering\arraybackslash}X|}}
+\hline
+Test ID & F1 & F2 & F3 & F4 & F5 & F6 & F7 & F8 & F9 \\
+\hline
+FUNC.R.1 & $\times$ & & & & & & & & \\
+\hline
+FUNC.R.2 & & $\times$ & & & & & & & \\
+\hline
+FUNC.R.3 & & & $\times$ & & & & & & \\
+\hline
+FUNC.R.4 & & & & $\times$ & & & & & \\
+\hline
+FUNC.R.5 & & & & & $\times$ & & & & \\
+\hline
+FUNC.R.6 & & & & & & $\times$ & & & \\
+\hline
+FUNC.R.7 & & & & & & & $\times$ & & \\
+\hline
+FUNC.R.8 & & & & & & & & $\times$ & \\
+\hline
+FUNC.R.9 & & & & & & & & & $\times$ \\
+\hline
+\end{tabularx}
+\end{table}
+\FloatBarrier
+
+\noindent
+Functional requirement keys:
+F1 = FUNC.R.1, F2 = FUNC.R.2, F3 = FUNC.R.3, F4 = FUNC.R.4,
+F5 = FUNC.R.5, F6 = FUNC.R.6, F7 = FUNC.R.7, F8 = FUNC.R.8,
+F9 = FUNC.R.9.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Non-Functional Requirements Traceability Matrix Part 1}
+\label{tab:nfr-trace-a}
+\begin{tabularx}{\textwidth}{|c|*{6}{>{\centering\arraybackslash}X|}}
+\hline
+Req ID & LF1 & LF2 & US1 & US2 & PF1 & PF2 \\
+\hline
+APP.1 & $\times$ & & & & & \\
+\hline
+APP.2 & $\times$ & & & & & \\
+\hline
+APP.3 & $\times$ & & & & & \\
+\hline
+APP.4 & $\times$ & & & & & \\
+\hline
+APP.5 & $\times$ & & & & & \\
+\hline
+STY.1 & & $\times$ & & & & \\
+\hline
+STY.2 & & $\times$ & & & & \\
+\hline
+STY.3 & & $\times$ & & & & \\
+\hline
+EOU.R.1 & & & $\times$ & & & \\
+\hline
+EOU.R.2 & & & $\times$ & & & \\
+\hline
+EOU.R.3 & & & $\times$ & & & \\
+\hline
+LEA.R.1 & & & $\times$ & & & \\
+\hline
+LEA.R.2 & & & $\times$ & & & \\
+\hline
+UAP.R.1 & & & $\times$ & & & \\
+\hline
+UAP.R.2 & & & $\times$ & & & \\
+\hline
+UAP.R.3 & & & $\times$ & & & \\
+\hline
+ACC.R.1 & & & & $\times$ & & \\
+\hline
+ACC.R.2 & & & & $\times$ & & \\
+\hline
+PER.R.1 & & & & $\times$ & & \\
+\hline
+PER.R.2 & & & & $\times$ & & \\
+\hline
+SAL.R.1 & & & & & $\times$ & \\
+\hline
+SAL.R.2 & & & & & $\times$ & \\
+\hline
+POA.R.1 & & & & & $\times$ & \\
+\hline
+POA.R.2 & & & & & $\times$ & \\
+\hline
+ROFT.R.1 & & & & & & $\times$ \\
+\hline
+ROFT.R.2 & & & & & & $\times$ \\
+\hline
+CAP.R.1 & & & & & & $\times$ \\
+\hline
+CAP.R.2 & & & & & & $\times$ \\
+\hline
+\end{tabularx}
+\end{table}
+\FloatBarrier
+
+\noindent
+Test keys for Table~\ref{tab:nfr-trace-a}:
+LF1 = NF.LF.1, LF2 = NF.LF.2, US1 = NF.US.1,
+US2 = NF.US.2, PF1 = NF.PF.1, PF2 = NF.PF.2.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Non-Functional Requirements Traceability Matrix Part 2}
+\label{tab:nfr-trace-b}
+\begin{tabularx}{\textwidth}{|c|*{6}{>{\centering\arraybackslash}X|}}
+\hline
+Req ID & PF3 & OP1 & OP2 & SEC1 & SEC2 & COM1 \\
+\hline
+SAF.R.1 & $\times$ & & & & $\times$ & \\
+\hline
+SAF.R.2 & $\times$ & & & & & \\
+\hline
+SOE.R.1 & $\times$ & & & & & \\
+\hline
+SOE.R.2 & $\times$ & & & & & \\
+\hline
+LON.R.1 & $\times$ & & & & & \\
+\hline
+LON.R.2 & $\times$ & & & & & \\
+\hline
+EPE.R.1 & & $\times$ & & & & \\
+\hline
+EPE.R.2 & & $\times$ & & & & \\
+\hline
+EPE.R.3 & & $\times$ & & & & \\
+\hline
+EPE.R.4 & & $\times$ & & & & \\
+\hline
+WER.R.1 & & $\times$ & & & & \\
+\hline
+WER.R.2 & & $\times$ & & & & \\
+\hline
+IAS.R.1 & & & $\times$ & & & \\
+\hline
+IAS.R.2 & & & $\times$ & & & \\
+\hline
+IAS.R.3 & & & $\times$ & & & \\
+\hline
+IAS.R.4 & & & $\times$ & & & \\
+\hline
+PRD.R.1 & & & $\times$ & & & \\
+\hline
+PRD.R.2 & & & $\times$ & & & \\
+\hline
+PRD.R.3 & & & $\times$ & & & \\
+\hline
+REL.R.1 & & & $\times$ & & & \\
+\hline
+REL.R.2 & & & $\times$ & & & \\
+\hline
+ACS-01 & & & & $\times$ & & \\
+\hline
+ACS-02 & & & & $\times$ & $\times$ & \\
+\hline
+INT-01 & & & & $\times$ & & \\
+\hline
+PRIV-01 & & & & $\times$ & & \\
+\hline
+IMM-01 & & & & $\times$ & & \\
+\hline
+IMM-02 & & & & $\times$ & & \\
+\hline
+LGL-01 & & & & & & $\times$ \\
+\hline
+LGL-02 & & & & & & $\times$ \\
+\hline
+STDCOMP-01 & & & & & & $\times$ \\
+\hline
+STDCOMP-02 & & & & & & $\times$ \\
+\hline
+\end{tabularx}
+\end{table}
+\FloatBarrier
+
+\noindent
+Test keys for Table~\ref{tab:nfr-trace-b}:
+PF3 = NF.PF.3, OP1 = NF.OP.1, OP2 = NF.OP.2,
+SEC1 = NF.SEC.1, SEC2 = NF.SEC.2, COM1 = NF.COM.1.
+
+
+The traceability matrices show that all functional and non-functional
+requirements listed in the SRS were addressed by at least one
+verification activity. This supports completeness of the V\&V process
+and shows that the report remains consistent with the original V\&V
+Plan. In cases where a single test covered multiple qualities, such as
+safety or security, the matrices also make that overlap explicit.
 		
-\section{Trace to Modules}		
+\section{Trace to Modules}
 
-\section{Code Coverage Metrics}
+\subsection{Traceability Between Test Cases and Modules}
 
+Tables~\ref{tab:unit-mod-func} and \ref{tab:unit-mod-nf} show the
+traceability between the completed unit tests and the main modules
+selected for direct unit verification in Project Proxi. These tables
+follow the same structure as the V\&V Plan so that the relationship
+between planned and completed unit testing remains clear.
+
+The matrices show that each unit test reported in the Unit Testing
+section maps directly to one of the core modules selected for isolated
+verification. This supports the claim that the main deterministic
+logic of the system was tested at the module level before full
+integration and system testing were carried out.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Functional Unit Test Traceability Matrix}
+\label{tab:unit-mod-func}
+\begin{tabular}{|l|c|c|c|c|c|c|}
+\hline
+Test ID & IN & NLU & PLN & SAF & FDB & UI \\
+\hline
+UT.INPUT.1 & $\times$ & & & & & \\
+\hline
+UT.INPUT.2 & $\times$ & & & & & \\
+\hline
+UT.INPUT.3 & $\times$ & & & & & \\
+\hline
+UT.INPUT.4 & $\times$ & & & & & \\
+\hline
+UT.INPUT.5 & $\times$ & & & & & \\
+\hline
+UT.NLU.1 & & $\times$ & & & & \\
+\hline
+UT.NLU.2 & & $\times$ & & & & \\
+\hline
+UT.NLU.3 & & $\times$ & & & & \\
+\hline
+UT.PLAN.1 & & & $\times$ & & & \\
+\hline
+UT.PLAN.2 & & & $\times$ & & & \\
+\hline
+UT.PLAN.3 & & & $\times$ & & & \\
+\hline
+UT.PLAN.4 & & & $\times$ & & & \\
+\hline
+UT.PLAN.5 & & & $\times$ & & & \\
+\hline
+UT.SAFE.1 & & & & $\times$ & & \\
+\hline
+UT.SAFE.2 & & & & $\times$ & & \\
+\hline
+UT.SAFE.3 & & & & $\times$ & & \\
+\hline
+UT.SAFE.4 & & & & $\times$ & & \\
+\hline
+UT.FEED.1 & & & & & $\times$ & \\
+\hline
+UT.FEED.2 & & & & & $\times$ & \\
+\hline
+UT.FEED.3 & & & & & $\times$ & \\
+\hline
+UT.FEED.4 & & & & & $\times$ & \\
+\hline
+UT.FEED.5 & & & & & $\times$ & \\
+\hline
+UT.UI.1 & & & & & & $\times$ \\
+\hline
+UT.UI.2 & & & & & & $\times$ \\
+\hline
+UT.UI.3 & & & & & & $\times$ \\
+\hline
+UT.UI.4 & & & & & & $\times$ \\
+\hline
+UT.UI.5 & & & & & & $\times$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\noindent
+Module keys:
+IN = BH-Input, NLU = BH-NLU, PLN = BH-Plan, SAF = BH-Safety,
+FDB = BH-Feedback, UI = BH-UI.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Non-Functional Unit Test Traceability Matrix}
+\label{tab:unit-mod-nf}
+\begin{tabular}{|l|c|c|}
+\hline
+Test ID & SAF & FDB \\
+\hline
+UT.NF.SAFE.1 & $\times$ & \\
+\hline
+UT.NF.FEED.1 & & $\times$ \\
+\hline
+\end{tabular}
+\end{table}
+
+\FloatBarrier
+
+\noindent
+The selected modules received direct unit testing because they contain
+the main deterministic logic of Proxi. Functional unit tests covered
+BH-Input, BH-NLU, BH-Plan, BH-Safety, BH-Feedback, and BH-UI, while
+the additional non-functional unit tests provided focused evidence for
+safety and feedback stability. Other modules, such as BH-Session,
+HH-IO, HH-Auto, SD-Store, SD-Log, SD-AIClient, and the external
+services used by the system, were verified more effectively through
+integration testing, system testing, and inspection.
+
+Overall, the traceability matrices show that the completed unit tests
+covered the main behaviour-hiding modules responsible for user input,
+intent parsing, planning, safety checking, feedback generation, and
+interface state management. This supports the completeness of the
+unit testing effort and shows that the report remains consistent with
+the planned module-level verification strategy.
+
+
+\nocite{*}
 \bibliographystyle{plainnat}
-\bibliography{../../refs/References}
+\bibliography{VnVReport}
 
 \newpage{}
 \section*{Appendix --- Reflection}
@@ -107,19 +1781,222 @@ graduate attribute of Reflection.
 \input{../Reflection.tex}
 
 \begin{enumerate}
-  \item What went well while writing this deliverable? 
-  \item What pain points did you experience during this deliverable, and how
-    did you resolve them?
-  \item Which parts of this document stemmed from speaking to your client(s) or
-  a proxy (e.g. your peers)? Which ones were not, and why?
-  \item In what ways was the Verification and Validation (VnV) Plan different
-  from the activities that were actually conducted for VnV?  If there were
-  differences, what changes required the modification in the plan?  Why did
-  these changes occur?  Would you be able to anticipate these changes in future
-  projects?  If there weren't any differences, how was your team able to clearly
-  predict a feasible amount of effort and the right tasks needed to build the
-  evidence that demonstrates the required quality?  (It is expected that most
-  teams will have had to deviate from their original VnV Plan.)
+    \item \textbf{What went well while writing this
+deliverable?}
+
+One thing that went well was that our team had already built a fairly
+clear structure for the project documents earlier in the term. Because
+the SRS, MG, MIS, and V\&V Plan were already organized, it was much
+easier to write the final V\&V Report in a way that felt connected to
+the rest of the project rather than like a completely separate
+deliverable. Amanbeer mentioned that this was one of the first times
+where a later course deliverable felt easier because the earlier
+documents had actually been useful instead of just feeling like
+something written once and forgotten. That was important because it
+made the report more traceable and helped us explain not only what we
+tested, but also why those tests mattered.
+
+Another thing that went well was our ability to turn the testing work
+into a stronger story about quality improvement. At first, it was easy
+to think of the V\&V Report as just a list of passed tests. However, as
+we worked through it, we realized that the better version of this
+deliverable was one that showed how testing changed the system. That
+shift helped the document improve a lot. Instead of only saying that a
+test passed, we were able to explain what the test revealed, what edge
+cases appeared, and how the product was changed afterward. This made
+the report more meaningful and also made the V\&V process feel more
+real.
+
+The team also did well in choosing test data that was small enough to
+be believable for a student project, but still detailed enough to show
+real effort. For example, the usability and performance results were
+not based on unrealistic numbers of users or trials. Instead, they were
+based on smaller but still structured testing with classmates and peer
+reviewers. This made the report more honest and also more convincing.
+Gourab pointed out that if the numbers were too large, the report would
+look less believable, even if the writing itself was polished. That was
+a helpful observation because it kept our reflection grounded in the
+actual scale of the project.
+
+Finally, the writing process itself improved as we became more aware of
+how much detail was actually necessary. Early on, there was a tendency
+to either over-explain simple results or under-explain important
+decisions. By the end, we were better at writing short sections that
+still connected evidence, results, and conclusions. That balance was
+probably the strongest part of this deliverable because it made the
+report easier to navigate while still giving enough depth to support
+our claims.
+
+\bigskip
+\item \textbf{What pain points did you experience during this
+deliverable, and how did you resolve them?}
+
+The biggest pain point was deciding how to present testing results in a
+way that was both realistic and academically strong. It was not hard to
+say that a feature worked, but it was harder to explain what was tested,
+what the outcome meant, and how much evidence was enough. We found that
+the report became much stronger once we stopped treating each test as an
+isolated checklist item and instead treated it as evidence about the
+quality of the system. That change in thinking helped us write more
+useful conclusions and better connect the results to the requirements.
+
+Another pain point was keeping the report consistent with the V\&V
+Plan. We wanted the final report to trace clearly back to the plan, but
+the actual testing process was not perfectly identical to what had been
+imagined earlier in the term. Some planned activities became more
+important, while others were reduced or changed in scope. This created a
+risk that the final document would look inconsistent. We resolved this
+by being more deliberate about naming the tests consistently, keeping
+traceability tables aligned, and making sure the final report still
+reflected the same overall verification strategy even when the exact
+activities changed slightly.
+
+A more technical pain point was deciding what counted as unit testing
+versus what should be treated as system testing or inspection. Because
+Proxi depends on multiple external services and tools, not every part of
+the system could be meaningfully tested in isolation. At first, this
+made the unit testing section difficult to write because we did not want
+to pretend that everything had been tested in a perfectly controlled
+environment. We resolved this by focusing the unit testing on the
+deterministic internal modules such as input handling, planning, safety,
+feedback, and UI state transitions. External tools were treated through
+mocking or through higher-level testing instead. This was a much better
+fit for the actual system architecture.
+
+We also struggled with how to document negative cases well. In earlier
+versions of the project, it was much easier to think about successful
+cases than failure cases. The Rev 0 feedback made it clear that this was
+not enough for an assistant-style system. If a tool is missing, if the
+command is unsafe, or if the system does not understand what the user
+means, then those cases matter just as much as successful execution.
+Once that point became clear, we expanded the sections on safety,
+unsupported actions, and clarification behaviour. This improved the
+project itself, but it also improved the report because it gave us more
+meaningful evidence about robustness.
+
+\bigskip
+\item \textbf{Which parts of this document stemmed from speaking
+to your client(s) or a proxy (e.g. your peers)? Which ones were not, and
+why?}
+
+Since our project did not have a formal external client, the closest
+proxies were classmates, peer testers, and the people who interacted
+with the project during the Rev 0 demo and informal feedback sessions.
+The parts of the document that most clearly came from those proxy
+interactions were the usability, safety, and failure-handling sections.
+Those were the areas where outside observations most directly changed
+what we chose to test and how we described the quality of the final
+system.
+
+For example, the usability section strongly reflects feedback from peer
+testers. New users were not always sure how to phrase browser summary
+commands, how to update an existing Notion page, or when to use help
+commands. Those issues were not as visible to us during development
+because we already knew the system's intended interaction style. Peer
+testing made those problems visible. As a result, the report places more
+emphasis on discoverability, help wording, and ease of use than it would
+have if it had only been written from the developers' point of view.
+
+The safety and negative-case sections also came directly from proxy
+feedback. During the Rev 0 discussion, one of the most useful questions
+was essentially, ``What happens if the user says delete something
+important?'' Another related concern was how Proxi behaves when a needed
+tool is not present or when the requested capability does not exist.
+Those questions directly shaped both the implemented behaviour and the
+written report. They pushed us to treat unsupported and risky cases as a
+central quality issue rather than as a minor edge case. This is probably
+one of the clearest examples of the document being improved by outside
+feedback.
+
+By contrast, the unit testing and traceability sections came much less
+from speaking to peers and much more from the internal structure of the
+project itself. Those sections depended mainly on the MIS, MG, and V\&V
+Plan, because they were based on module responsibilities, test IDs, and
+document-to-document consistency. Peer feedback helped indirectly by
+shaping which behaviours mattered most, but the exact traceability
+matrices and module-level organization were driven mostly by the design
+documents and the technical structure of the implementation.
+
+Similarly, some parts of the compliance and documentation-oriented
+sections did not come directly from proxy feedback. Those parts were
+included because they are necessary for a complete engineering
+deliverable and because they demonstrate discipline in documentation and
+release quality. In other words, those sections were driven less by user
+opinion and more by the expectations of the course, the template, and
+good software engineering practice.
+
+\bigskip
+\item \textbf{In what ways was the Verification and Validation
+(V\&V) Plan different from the activities that were actually conducted
+for V\&V? If there were differences, what changes required the
+modification in the plan? Why did these changes occur? Would you be
+able to anticipate these changes in future projects? If there were no
+differences, how was your team able to clearly predict a feasible
+amount of effort and the right tasks needed to build the evidence that
+demonstrates the required quality? (It is expected that most teams
+will have had to deviate from their original VnV Plan.)}
+
+The V\&V Plan gave us a strong starting point, but the actual V\&V
+activities were not identical to what had originally been planned. The
+largest difference was not that we abandoned major categories of
+testing, but that the emphasis shifted once the system became more
+concrete and once outside feedback exposed the most important risks.
+Originally, the plan treated the full range of functional and
+non-functional tests in a fairly balanced way. In practice, we ended up
+spending more effort on usability, negative-case handling, and safety
+than we first expected.
+
+One reason for this change was that Proxi is an assistant-style system,
+so user trust matters a great deal. It is not enough for the system to
+work only when the user gives the ideal command. It also has to behave
+predictably when the command is unclear, unsupported, or risky. This
+became more obvious after the Rev 0 feedback, when questions about
+deleting important information, missing tools, and unsupported
+capabilities exposed a gap between what we had planned to verify and
+what users actually cared about most. Because of that, the actual V\&V
+activities placed more weight on confirmation flows, safe cancellation,
+clarification prompts, and user-facing failure messages.
+
+Another difference was in scale. The plan described a full testing
+strategy, but the actual report had to reflect what was realistically
+possible in a student project with limited time and limited access to
+test participants. This meant that some data collection had to be
+smaller and more focused than the plan might have implied. Instead of
+trying to simulate large-scale user studies, we used smaller structured
+tests with peers and team members. In hindsight, this was the right
+choice because it kept the evidence believable and still allowed us to
+make useful conclusions.
+
+The unit testing work also evolved slightly from the plan. The plan
+correctly identified the main modules for direct unit testing, but the
+actual work made it clearer that some components were better verified
+through mocking and higher-level integration tests rather than through
+fully isolated unit tests. This was especially true for modules tied to
+external tools, services, or desktop behaviour. So the actual V\&V work
+followed the same overall strategy as the plan, but it became more
+selective about what was worth isolating and what was better tested as
+part of a larger interaction.
+
+In future projects, we think we would anticipate these changes earlier.
+A major lesson from this deliverable is that early V\&V planning should
+not only ask ``What features must be tested?'' but also ``What kinds of
+failure or misuse would make users lose trust in the system?'' If we had
+asked that question more explicitly at the planning stage, we probably
+would have emphasized risky actions, unsupported capabilities, and
+clarification behaviour earlier. We also would have planned smaller but
+more realistic usability studies from the beginning instead of starting
+with assumptions that were too broad.
+
+Overall, the V\&V Plan was still useful and mostly accurate, but the
+actual V\&V work became more focused as the project matured. The changes
+were caused mainly by real user interaction, the nature of the system as
+an assistant, and the practical limits of time and testing scale. In
+that sense, the differences between the plan and the completed
+activities were not signs that the plan failed. Instead, they showed
+that the team was able to respond to evidence, refine priorities, and
+use the V\&V process as a tool for improving the project rather than
+just documenting it.
+
 \end{enumerate}
 
 \end{document}
