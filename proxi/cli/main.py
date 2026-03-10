@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,18 @@ from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSou
 from proxi.workspace import WorkspaceManager
 
 logger = get_logger(__name__)
+
+
+DEFAULT_MCP_CONFIG: dict[str, Any] = {
+    "mcpServers": {
+        "proxi": {
+            "command": "uv",
+            "args": ["run", "--", "python", "-m", "proxi.mcp.servers.server"],
+            "description": "Default local Proxi MCP server",
+        }
+    },
+    "imports": [],
+}
 
 
 def create_llm_client(provider: str = "openai") -> OpenAIClient | AnthropicClient:
@@ -70,17 +83,17 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
 
 
 async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]:
-    """Auto-load all configured MCP servers from mcporter config.\n
+    """Auto-load all configured MCP servers from MCP config.\n
     Returns list of loaded adapters for cleanup.
     """
-    config = load_mcporter_config()
+    config = load_mcp_config()
     mcp_servers = config.get("mcpServers", {})
     loaded_adapters = []
     
     for server_name in mcp_servers:
         try:
             logger.info("auto_loading_mcp_server", server=server_name)
-            adapter = await setup_mcp_from_mcporter_config(server_name)
+            adapter = await setup_mcp_from_config(server_name)
             if adapter:
                 mcp_tools = await adapter.get_tools()
                 for tool in mcp_tools:
@@ -93,22 +106,26 @@ async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]
     return loaded_adapters
 
 
-def load_mcporter_config() -> dict[str, Any]:
-    """Load mcporter configuration from config/mcporter.json."""
-    import json
-    config_path = Path("config/mcporter.json")
+def load_mcp_config() -> dict[str, Any]:
+    """Load MCP configuration from config/mcp.json.
+
+    Falls back to a built-in default when the file is absent, so MCP auto-load
+    behavior remains stable without requiring a repo-level config file.
+    """
+    config_path = Path("config/mcp.json")
     if config_path.exists():
         try:
             with open(config_path) as f:
                 return json.load(f)
         except Exception as e:
-            logger.warning("mcporter_config_load_error", error=str(e))
-    return {}
+            logger.warning("mcp_config_load_error", error=str(e))
+    logger.info("mcp_config_missing_using_defaults", path=str(config_path))
+    return deepcopy(DEFAULT_MCP_CONFIG)
 
 
-async def setup_mcp_from_mcporter_config(server_name: str) -> MCPAdapter | None:
-    """Set up MCP adapter from mcporter configuration."""
-    config = load_mcporter_config()
+async def setup_mcp_from_config(server_name: str) -> MCPAdapter | None:
+    """Set up MCP adapter from MCP configuration."""
+    config = load_mcp_config()
     mcp_servers = config.get("mcpServers", {})
     
     if server_name not in mcp_servers:
@@ -143,11 +160,11 @@ async def setup_mcp(mcp_server: str | None = None) -> MCPAdapter | None:
     if not mcp_server:
         return None
 
-    # Check if it's a mcporter config server shortcut (e.g., "gmail")
-    config = load_mcporter_config()
+    # Check if it's an MCP config server shortcut (e.g., "proxi")
+    config = load_mcp_config()
     mcp_servers = config.get("mcpServers", {})
     if mcp_server in mcp_servers:
-        return await setup_mcp_from_mcporter_config(mcp_server)
+        return await setup_mcp_from_config(mcp_server)
 
     # Parse MCP server command
     # Format: "command:arg1:arg2" or just "command"
@@ -328,9 +345,9 @@ async def main():
         tool_registry.register(ManageTodosTool(workspace_config))
         tool_registry.register(ReadSoulTool(workspace_config))
 
-        # Set up MCP adapters (auto-load by default from mcporter config)
+        # Set up MCP adapters (auto-load by default from MCP config)
         if not args.no_mcp:
-            # Auto-load all configured MCP servers from mcporter config
+            # Auto-load all configured MCP servers from MCP config
             logger.info("auto_loading_mcp_servers")
             mcp_adapters = await auto_load_mcp_servers(tool_registry)
 
