@@ -60,9 +60,11 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     # Native browser tools (Playwright-backed)
     artifacts_root = Path("browser_artifacts")
     headless = os.environ.get("PROXI_BROWSER_HEADLESS", "true").lower() in ("1", "true", "yes")
+    browser_timeout_ms = int(os.environ.get("BROWSER_TIMEOUT_MS", "30000"))
     browser_session_manager = BrowserSessionManager(
         artifacts_root=artifacts_root,
         headless=headless,
+        default_timeout_ms=browser_timeout_ms,
     )
     register_browser_tools(registry, browser_session_manager)
     setattr(registry, "_browser_session_manager", browser_session_manager)
