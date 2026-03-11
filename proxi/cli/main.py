@@ -16,6 +16,7 @@ from proxi.llm.openai import OpenAIClient
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
 from proxi.observability.logging import setup_logging, get_logger, init_log_manager
+from proxi.security.key_store import get_key_value
 from proxi.tools.datetime import DateTimeTool
 from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
 from proxi.tools.registry import ToolRegistry
@@ -41,14 +42,14 @@ DEFAULT_MCP_CONFIG: dict[str, Any] = {
 def create_llm_client(provider: str = "openai") -> OpenAIClient | AnthropicClient:
     """Create an LLM client based on provider."""
     if provider.lower() == "anthropic":
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = get_key_value("ANTHROPIC_API_KEY")
         if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY environment variable not set")
+            raise ValueError("ANTHROPIC_API_KEY is not set in SQLite key store. Use the React frontend (🔐 button) to add it.")
         return AnthropicClient(api_key=api_key)
     else:
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = get_key_value("OPENAI_API_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
+            raise ValueError("OPENAI_API_KEY is not set in SQLite key store. Use the React frontend (🔐 button) to add it.")
         return OpenAIClient(api_key=api_key)
 
 
@@ -83,14 +84,23 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
 
 
 async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]:
-    """Auto-load all configured MCP servers from MCP config.\n
+    """Auto-load only enabled MCP servers from DB and MCP config.
+
     Returns list of loaded adapters for cleanup.
     """
+    from proxi.security.key_store import get_enabled_mcps
+
     config = load_mcp_config()
     mcp_servers = config.get("mcpServers", {})
+    enabled_mcp_names = get_enabled_mcps()
     loaded_adapters = []
     
     for server_name in mcp_servers:
+        # Skip MCPs not in enabled list
+        if server_name not in enabled_mcp_names:
+            logger.info("mcp_server_skipped_not_enabled", server=server_name)
+            continue
+
         try:
             logger.info("auto_loading_mcp_server", server=server_name)
             adapter = await setup_mcp_from_config(server_name)

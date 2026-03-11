@@ -19,6 +19,13 @@ class ToolRegistry:
         """Register a tool."""
         self._tools[tool.name] = tool
 
+    def unregister_by_prefix(self, prefix: str) -> int:
+        """Unregister tools whose names start with the given prefix."""
+        to_remove = [name for name in self._tools if name.startswith(prefix)]
+        for name in to_remove:
+            self._tools.pop(name, None)
+        return len(to_remove)
+
     def register_raw_spec(self, spec: ToolSpec) -> None:
         """Register a raw tool spec (e.g. for tools that are intercepted, not executed)."""
         self._raw_specs.append(spec)

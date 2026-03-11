@@ -5,8 +5,18 @@ from typing import Any
 from proxi.mcp.client import MCPClient
 from proxi.tools.base import BaseTool, ToolResult
 from proxi.observability.logging import get_logger
+from proxi.security.key_store import get_enabled_mcps
 
 logger = get_logger(__name__)
+
+
+def tool_mcp_category(tool_name: str) -> str | None:
+    """Determine which MCP category a tool belongs to (gmail, notion, etc)."""
+    if tool_name.startswith("notion_"):
+        return "notion"
+    if tool_name in ("read_emails", "send_email", "get_email"):
+        return "gmail"
+    return None
 
 
 class MCPToolAdapter(BaseTool):
@@ -36,6 +46,25 @@ class MCPToolAdapter(BaseTool):
     async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         """Execute the MCP tool."""
         try:
+            # Enforce current DB toggles at execution time so disabling an MCP
+            # takes effect immediately in already-running sessions.
+            enabled_mcps = set(get_enabled_mcps())
+            tool_category = tool_mcp_category(self.mcp_tool_name)
+            if tool_category and tool_category not in enabled_mcps:
+                self.logger.info(
+                    "mcp_tool_blocked_disabled_runtime",
+                    tool=self.mcp_tool_name,
+                    category=tool_category,
+                )
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=(
+                        f"MCP tool '{self.mcp_tool_name}' is currently disabled "
+                        f"(category: {tool_category})."
+                    ),
+                )
+
             result = await self.mcp_client.call_tool(self.mcp_tool_name, arguments)
 
             if "error" in result:
@@ -88,14 +117,25 @@ class MCPAdapter:
         await self.mcp_client.initialize()
 
     async def get_tools(self) -> list[MCPToolAdapter]:
-        """Get all tools from MCP server as proxi tools."""
+        """Get all tools from MCP server as proxi tools, filtered by enabled MCPs."""
         tools = []
+        enabled_mcps = get_enabled_mcps()
+        
         try:
             mcp_tools = await self.mcp_client.list_tools()
             for tool_spec in mcp_tools:
+                tool_name = tool_spec.get("name", "unknown")
+                tool_category = tool_mcp_category(tool_name)
+                
+                # Skip tools from disabled MCPs
+                if tool_category and tool_category not in enabled_mcps:
+                    self.logger.info("mcp_tool_skipped_disabled", tool=tool_name, category=tool_category)
+                    continue
+                
                 adapter = MCPToolAdapter(self.mcp_client, tool_spec)
                 tools.append(adapter)
-            self.logger.info("mcp_tools_loaded", count=len(tools))
+            
+            self.logger.info("mcp_tools_loaded", count=len(tools), enabled_mcps=enabled_mcps)
         except Exception as e:
             self.logger.error("mcp_tools_error", error=str(e))
         return tools

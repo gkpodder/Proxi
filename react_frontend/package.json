@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prestart": "uv run python ../scripts/init_api_keys_db.py",
     "start": "node server.js"
   },
   "dependencies": {

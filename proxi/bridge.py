@@ -192,6 +192,46 @@ async def run_bridge(agent_id: str | None = None) -> None:
         except Exception as e:
             logger.warning("mcp_setup_error", error=str(e))
 
+    async def refresh_mcp_tools() -> None:
+        """Reload MCP tools from currently enabled MCPs without restarting bridge."""
+        nonlocal mcp_adapters
+        no_mcp_local = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
+        if no_mcp_local:
+            return
+
+        # Remove previously registered MCP tools, then re-load and re-register.
+        removed = tool_registry.unregister_by_prefix("mcp_")
+        if removed:
+            logger.info("mcp_tools_unregistered", count=removed)
+
+        for adapter in mcp_adapters:
+            try:
+                await adapter.close()
+            except Exception as e:
+                logger.warning("mcp_close_error", error=str(e))
+        mcp_adapters = []
+
+        try:
+            logger.info("refreshing_mcp_servers")
+            mcp_adapters = await asyncio.wait_for(auto_load_mcp_servers(tool_registry), timeout=15.0)
+            logger.info("mcp_servers_reloaded", count=len(mcp_adapters))
+        except asyncio.TimeoutError:
+            logger.warning("mcp_refresh_timeout")
+        except Exception as e:
+            logger.warning("mcp_refresh_error", error=str(e))
+
+        if mcp_server:
+            try:
+                mcp_adapter = await asyncio.wait_for(setup_mcp(mcp_server), timeout=10.0)
+                if mcp_adapter:
+                    mcp_adapters.append(mcp_adapter)
+                    for tool in await mcp_adapter.get_tools():
+                        tool_registry.register(tool)
+            except asyncio.TimeoutError:
+                logger.warning("mcp_setup_timeout", server=mcp_server)
+            except Exception as e:
+                logger.warning("mcp_setup_error", error=str(e))
+
     async def request_user_input(
         method: str,
         prompt: str,
@@ -349,6 +389,10 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 task = cmd.get("task") or ""
                 if not task:
                     continue
+
+                # Re-evaluate MCP toggles before each task so current-session
+                # enable/disable changes take effect immediately.
+                await refresh_mcp_tools()
 
                 logger.info("starting_agent", task=task[:100])
                 emitter.emit(
