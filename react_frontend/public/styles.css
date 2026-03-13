@@ -216,6 +216,118 @@ body.light {
   display: block;
 }
 
+/* Markdown rendering inside assistant bubbles */
+.msg .content.md p {
+  margin: 0 0 8px;
+}
+.msg .content.md p:last-child {
+  margin-bottom: 0;
+}
+.msg .content.md h1,
+.msg .content.md h2,
+.msg .content.md h3,
+.msg .content.md h4 {
+  margin: 10px 0 4px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.msg .content.md h1 { font-size: 1.15em; }
+.msg .content.md h2 { font-size: 1.05em; }
+.msg .content.md h3 { font-size: 1em; }
+.msg .content.md ul,
+.msg .content.md ol {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+}
+.msg .content.md ul { list-style: disc; }
+.msg .content.md ol { list-style: decimal; }
+.msg .content.md li {
+  margin-bottom: 3px;
+  line-height: 1.5;
+}
+.msg .content.md strong { font-weight: 600; }
+.msg .content.md em { font-style: italic; }
+.msg .content.md code {
+  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  font-size: 0.85em;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.msg .content.md pre {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.msg .content.md pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85em;
+  color: #e6edf3;
+}
+.msg .content.md blockquote {
+  border-left: 3px solid #444;
+  margin: 6px 0;
+  padding: 2px 12px;
+  color: #9ca3af;
+}
+.msg .content.md a {
+  color: #7aadde;
+  text-decoration: underline;
+}
+.msg .content.md hr {
+  border: none;
+  border-top: 1px solid #333;
+  margin: 10px 0;
+}
+.msg .content.md table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9em;
+  margin: 8px 0;
+}
+.msg .content.md th,
+.msg .content.md td {
+  border: 1px solid #333;
+  padding: 5px 10px;
+  text-align: left;
+}
+.msg .content.md th {
+  background: rgba(255,255,255,0.05);
+  font-weight: 600;
+}
+/* Light mode adjustments */
+.app.light .msg .content.md code {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.app.light .msg .content.md pre {
+  background: #f6f8fa;
+  border-color: #d1d5db;
+}
+.app.light .msg .content.md pre code {
+  color: #1f2937;
+}
+.app.light .msg .content.md blockquote {
+  border-left-color: #d1d5db;
+  color: #6b7280;
+}
+.app.light .msg .content.md a {
+  color: #2563eb;
+}
+.app.light .msg .content.md th,
+.app.light .msg .content.md td {
+  border-color: #e5e7eb;
+}
+.app.light .msg .content.md th {
+  background: rgba(0,0,0,0.03);
+}
+
 .msg.user {
   background: #111317;
   border-color: #2c323b;

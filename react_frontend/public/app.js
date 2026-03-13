@@ -1,6 +1,13 @@
 const { useEffect, useMemo, useRef, useState } = React;
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+marked.setOptions({ gfm: true, breaks: false });
+function renderMarkdown(text) {
+  if (!text) return "";
+  const raw = marked.parse(text);
+  return DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
+}
 const OTHER_OPTION = "Other (type your own)";
 
 function evaluateShowIf(showIf, answers) {
@@ -577,17 +584,21 @@ function App() {
           <div className="chat" ref={chatRef}>
             {messages.map((m, i) => {
               const displayRole = m.role === "assistant" ? "proxi" : m.role;
+              const isMarkdown = m.role === "assistant";
               return (
                 <div key={i} className={`msg ${m.role}`}>
                   <span className="role">{displayRole}</span>
-                  <span className="content">{m.content}</span>
+                  {isMarkdown
+                    ? <span className="content md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
+                    : <span className="content">{m.content}</span>
+                  }
                 </div>
               );
             })}
             {streaming && (
               <div className="msg assistant">
                 <span className="role">proxi</span>
-                <span className="content">{streaming}</span>
+                <span className="content md" dangerouslySetInnerHTML={{ __html: renderMarkdown(streaming) }} />
               </div>
             )}
           </div>
