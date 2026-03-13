@@ -97,10 +97,20 @@ You can run `proxi` via `uv run proxi` (no global install) or, after `uv sync`, 
 
 **API keys** (required for the agent):
 
+Proxi now stores API keys in a local SQLite database at `config/api_keys.db`.
+
+Initialize the table manually (optional, this is run automatically by the React frontend startup scripts):
+
 ```bash
-export OPENAI_API_KEY="your-key-here"
+uv run python scripts/init_api_keys_db.py
+```
+
+Manage keys from the React frontend key manager (`🔐` button in the top bar), or via CLI:
+
+```bash
+uv run python -m proxi.security.key_store upsert --key OPENAI_API_KEY --value "your-key-here"
 # or
-export ANTHROPIC_API_KEY="your-key-here"
+uv run python -m proxi.security.key_store upsert --key ANTHROPIC_API_KEY --value "your-key-here"
 ```
 
 **Optional environment variables**
