@@ -70,6 +70,32 @@ body.light {
   gap: 12px;
 }
 
+.pageTabs {
+  display: flex;
+  gap: 6px;
+}
+
+.tabBtn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid #333;
+}
+
+.tabBtn.active {
+  border-color: #52525b;
+  background: #26272b;
+}
+
+.app.light .tabBtn {
+  border-color: #d1d5db;
+}
+
+.app.light .tabBtn.active {
+  border-color: #9ca3af;
+  background: #eef1f5;
+}
+
 .headerStatus {
   display: flex;
   align-items: center;
@@ -157,13 +183,14 @@ body.light {
 .msg {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   margin: 0;
-  padding: 10px 12px;
-  border-radius: 8px;
-  line-height: 1.5;
+  padding: 8px 10px;
+  border-radius: 6px;
+  line-height: 1.45;
   white-space: pre-wrap;
   word-wrap: break-word;
+  border: 1px solid transparent;
 }
 
 .msg.user {
@@ -190,24 +217,25 @@ body.light {
 }
 
 .msg.user {
-  background: rgba(59, 130, 246, 0.1);
-  border-left: 3px solid #3b82f6;
+  background: #111317;
+  border-color: #2c323b;
 }
 
 .msg.user .role {
-  color: #60a5fa;
+  color: #8aa4c8;
 }
 
 .msg.user .content {
-  color: #e5e5e5;
+  color: #e2e8f0;
 }
 
 .app.light .msg.user {
-  background: rgba(59, 130, 246, 0.05);
+  background: #f4f6f8;
+  border-color: #d7dde5;
 }
 
 .app.light .msg.user .role {
-  color: #1d4ed8;
+  color: #355b87;
 }
 
 .app.light .msg.user .content {
@@ -215,24 +243,25 @@ body.light {
 }
 
 .msg.assistant {
-  background: rgba(16, 185, 129, 0.1);
-  border-left: 3px solid #10b981;
+  background: #0f1114;
+  border-color: #252a31;
 }
 
 .msg.assistant .role {
-  color: #6ee7b7;
+  color: #a3adb8;
 }
 
 .msg.assistant .content {
-  color: #d1d5db;
+  color: #d4d4d8;
 }
 
 .app.light .msg.assistant {
-  background: rgba(16, 185, 129, 0.05);
+  background: #ffffff;
+  border-color: #e5e7eb;
 }
 
 .app.light .msg.assistant .role {
-  color: #059669;
+  color: #6b7280;
 }
 
 .app.light .msg.assistant .content {
@@ -240,8 +269,9 @@ body.light {
 }
 
 .msg.system {
-  background: rgba(107, 114, 128, 0.1);
-  border-left: 3px solid #6b7280;
+  background: transparent;
+  border-color: transparent;
+  padding-left: 2px;
 }
 
 .msg.system .role {
@@ -253,8 +283,8 @@ body.light {
 }
 
 .msg.error {
-  background: rgba(239, 68, 68, 0.1);
-  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.25);
 }
 
 .msg.error .role {
@@ -646,6 +676,58 @@ button:disabled {
   border-radius: 4px;
 }
 
+.settingsPage {
+  overflow-y: auto;
+  padding: 16px;
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settingsCard {
+  border: 1px solid #30323a;
+  background: #111216;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.app.light .settingsCard {
+  border-color: #dde2ea;
+  background: #ffffff;
+}
+
+.settingsTitle {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.settingsHint {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.settingsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settingsLabel {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.settingsValue {
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .app.light .mcpRow {
   background: rgba(59, 130, 246, 0.02);
   border-color: rgba(59, 130, 246, 0.1);
@@ -682,6 +764,18 @@ button:disabled {
 }
 
 @media (max-width: 900px) {
+  .header {
+    padding: 0 10px;
+  }
+
+  .headerControls {
+    gap: 8px;
+  }
+
+  .headerStatus {
+    display: none;
+  }
+
   .keyRow {
     grid-template-columns: 1fr;
   }
@@ -692,5 +786,10 @@ button:disabled {
 
   .mcpRow {
     grid-template-columns: 1fr;
+  }
+
+  .settingsRow {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

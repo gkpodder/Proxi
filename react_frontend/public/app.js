@@ -26,6 +26,7 @@ function getOptionsWithOther(question) {
 }
 
 function App() {
+  const [currentPage, setCurrentPage] = useState("chat");
   const [socketState, setSocketState] = useState("connecting");
   const [statusLabel, setStatusLabel] = useState("Starting...");
   const [messages, setMessages] = useState([]);
@@ -36,7 +37,6 @@ function App() {
   const [formUi, setFormUi] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
-  const [keyManagerOpen, setKeyManagerOpen] = useState(false);
   const [apiKeys, setApiKeys] = useState([]);
   const [keysLoading, setKeysLoading] = useState(false);
   const [keysSaving, setKeysSaving] = useState(false);
@@ -44,7 +44,6 @@ function App() {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyValue, setNewKeyValue] = useState("");
   const [keyFeedback, setKeyFeedback] = useState("");
-  const [mcpManagerOpen, setMcpManagerOpen] = useState(false);
   const [mcps, setMcps] = useState([]);
   const [mcpsLoading, setMcpsLoading] = useState(false);
   const [mcpsSaving, setMcpsSaving] = useState(false);
@@ -111,6 +110,12 @@ function App() {
     chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, streaming]);
 
+  useEffect(() => {
+    if (currentPage !== "settings") return;
+    loadApiKeys();
+    loadMcps();
+  }, [currentPage]);
+
   async function loadApiKeys() {
     setKeysLoading(true);
     setKeyFeedback("");
@@ -128,11 +133,6 @@ function App() {
     }
   }
 
-  function openKeyManager() {
-    setKeyManagerOpen(true);
-    loadApiKeys();
-  }
-
   async function loadMcps() {
     setMcpsLoading(true);
     setMcpFeedback("");
@@ -148,11 +148,6 @@ function App() {
     } finally {
       setMcpsLoading(false);
     }
-  }
-
-  function openMcpManager() {
-    setMcpManagerOpen(true);
-    loadMcps();
   }
 
   async function toggleMcp(mcpName, enabled) {
@@ -541,6 +536,20 @@ function App() {
       <div className="header">
         <div className="headerTitle">✨ Proxi</div>
         <div className="headerControls">
+          <div className="pageTabs">
+            <button
+              className={`tabBtn ${currentPage === "chat" ? "active" : ""}`}
+              onClick={() => setCurrentPage("chat")}
+            >
+              Chat
+            </button>
+            <button
+              className={`tabBtn ${currentPage === "settings" ? "active" : ""}`}
+              onClick={() => setCurrentPage("settings")}
+            >
+              Settings
+            </button>
+          </div>
           <div className="headerStatus">
             <span className={`statusDot ${socketState}`}></span>
             {connectionText} · {statusLabel}
@@ -560,75 +569,185 @@ function App() {
           >
             🔄
           </button>
-          <button
-            className="switchAgentBtn"
-            onClick={openKeyManager}
-            title="Manage API keys"
-          >
-            🔐
-          </button>
-          <button
-            className="switchAgentBtn"
-            onClick={openMcpManager}
-            title="Manage MCPs"
-          >
-            ⚙️
-          </button>
         </div>
       </div>
 
-      <div className="chat" ref={chatRef}>
-        {messages.map((m, i) => {
-          const displayRole = m.role === "assistant" ? "proxi" : m.role;
-          return (
-            <div key={i} className={`msg ${m.role}`}>
-              <span className="role">{displayRole}</span>
-              <span className="content">{m.content}</span>
-            </div>
-          );
-        })}
-        {streaming && (
-          <div className="msg assistant">
-            <span className="role">proxi</span>
-            <span className="content">{streaming}</span>
+      {currentPage === "chat" && (
+        <>
+          <div className="chat" ref={chatRef}>
+            {messages.map((m, i) => {
+              const displayRole = m.role === "assistant" ? "proxi" : m.role;
+              return (
+                <div key={i} className={`msg ${m.role}`}>
+                  <span className="role">{displayRole}</span>
+                  <span className="content">{m.content}</span>
+                </div>
+              );
+            })}
+            {streaming && (
+              <div className="msg assistant">
+                <span className="role">proxi</span>
+                <span className="content">{streaming}</span>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="footer-wrapper">
-        <div className="footer">
-          {bootInfo && (
-            <div className="bootInfo">
-              Agent: <strong>{bootInfo.agentId}</strong> · Session:{" "}
-              <strong>{bootInfo.sessionId.slice(0, 8)}</strong>
+          <div className="footer-wrapper">
+            <div className="footer">
+              {bootInfo && (
+                <div className="bootInfo">
+                  Agent: <strong>{bootInfo.agentId}</strong> · Session:{" "}
+                  <strong>{bootInfo.sessionId.slice(0, 8)}</strong>
+                </div>
+              )}
+              <div className="inputRow">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={onKeyDown}
+                  placeholder={hasSelectedAgent ? "Ask anything or click 🎤 to speak..." : "Select an agent first..."}
+                  disabled={!canInteract}
+                />
+                <button
+                  className={`micBtn ${isListening ? "listening" : ""}`}
+                  onClick={onMicClick}
+                  disabled={!canInteract}
+                  title="Click to start/stop listening"
+                >
+                  {isListening ? "⏹️" : "🎤"}
+                </button>
+                <button onClick={onSend} disabled={!canInteract}>
+                  Send
+                </button>
+                <button onClick={onAbort} disabled={!canInteract}>
+                  Abort
+                </button>
+              </div>
             </div>
-          )}
-          <div className="inputRow">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder={hasSelectedAgent ? "Ask anything or click 🎤 to speak..." : "Select an agent first..."}
-              disabled={!canInteract}
-            />
-            <button
-              className={`micBtn ${isListening ? "listening" : ""}`}
-              onClick={onMicClick}
-              disabled={!canInteract}
-              title="Click to start/stop listening"
-            >
-              {isListening ? "⏹️" : "🎤"}
-            </button>
-            <button onClick={onSend} disabled={!canInteract}>
-              Send
-            </button>
-            <button onClick={onAbort} disabled={!canInteract}>
-              Abort
-            </button>
+          </div>
+        </>
+      )}
+
+      {currentPage === "settings" && (
+        <div className="settingsPage">
+          <div className="settingsCard">
+            <h2 className="settingsTitle">Agent</h2>
+            <div className="settingsHint">Switch agents between tasks.</div>
+            <div className="settingsRow">
+              <div>
+                <div className="settingsLabel">Current agent</div>
+                <div className="settingsValue">{bootInfo?.agentId || "Not selected"}</div>
+              </div>
+              <button
+                className="primaryBtn"
+                onClick={onSwitchAgent}
+                disabled={socketState !== "connected" || isPromptActive}
+              >
+                Switch Agent
+              </button>
+            </div>
+          </div>
+
+          <div className="settingsCard">
+            <h2 className="settingsTitle">API Keys</h2>
+            <div className="settingsHint">Keys are stored in SQLite and injected when the bridge starts.</div>
+            {keysLoading ? (
+              <div className="formHint">Loading keys...</div>
+            ) : (
+              <div className="keyList">
+                {apiKeys.length === 0 && <div className="formHint">No keys saved yet.</div>}
+                {apiKeys.map((item) => (
+                  <div key={item.key_name} className="keyRow">
+                    <div className="keyMeta">
+                      <div className="keyName">{item.key_name}</div>
+                      <div className="keyMasked">Current: {item.masked_value}</div>
+                    </div>
+                    <input
+                      type="text"
+                      className="keyInput"
+                      value={keyDrafts[item.key_name] || ""}
+                      placeholder="Enter new value to replace"
+                      onChange={(e) =>
+                        setKeyDrafts((prev) => ({ ...prev, [item.key_name]: e.target.value }))
+                      }
+                    />
+                    <button
+                      className="primaryBtn"
+                      disabled={keysSaving || !(keyDrafts[item.key_name] || "").trim()}
+                      onClick={() => saveKey(item.key_name, keyDrafts[item.key_name])}
+                    >
+                      Save
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="keyAddSection">
+              <div className="keyAddTitle">Add New Key</div>
+              <div className="keyAddRow">
+                <input
+                  type="text"
+                  className="keyInput"
+                  value={newKeyName}
+                  placeholder="Example: OPENAI_API_KEY"
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="keyInput"
+                  value={newKeyValue}
+                  placeholder="Paste key value"
+                  onChange={(e) => setNewKeyValue(e.target.value)}
+                />
+                <button
+                  className="primaryBtn"
+                  disabled={keysSaving || !newKeyName.trim() || !newKeyValue.trim()}
+                  onClick={() => saveKey(newKeyName, newKeyValue)}
+                >
+                  Add Key
+                </button>
+              </div>
+            </div>
+            {keyFeedback && <div className="formHint">{keyFeedback}</div>}
+            <div className="formActions">
+              <button onClick={() => loadApiKeys()} disabled={keysLoading || keysSaving}>Refresh</button>
+            </div>
+          </div>
+
+          <div className="settingsCard">
+            <h2 className="settingsTitle">MCPs</h2>
+            <div className="settingsHint">Changes take effect on the next agent session.</div>
+            {mcpsLoading ? (
+              <div className="formHint">Loading MCPs...</div>
+            ) : (
+              <div className="mcpList">
+                {mcps.length === 0 && <div className="formHint">No MCPs available.</div>}
+                {mcps.map((item) => (
+                  <div key={item.mcp_name} className="mcpRow">
+                    <div className="mcpMeta">
+                      <div className="mcpName">{item.mcp_name}</div>
+                      <div className="mcpStatus">{item.enabled ? "Enabled" : "Disabled"}</div>
+                    </div>
+                    <button
+                      className={`primaryBtn ${item.enabled ? "disableBtn" : ""}`}
+                      disabled={mcpsSaving}
+                      onClick={() => toggleMcp(item.mcp_name, item.enabled)}
+                    >
+                      {item.enabled ? "Disable" : "Enable"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {mcpFeedback && <div className="formHint">{mcpFeedback}</div>}
+            <div className="formActions">
+              <button onClick={() => loadMcps()} disabled={mcpsLoading || mcpsSaving}>Refresh</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {bootstrapInput && (
         <div className="modalOverlay">
@@ -810,119 +929,6 @@ function App() {
         </div>
       )}
 
-      {keyManagerOpen && (
-        <div className="modalOverlay" onClick={() => setKeyManagerOpen(false)}>
-          <div className="modalContent modalContentWide" onClick={(e) => e.stopPropagation()}>
-            <h2 className="modalTitle">API Key Manager</h2>
-            <div className="formHint">Keys are stored in SQLite and injected when the bridge starts.</div>
-
-            {keysLoading ? (
-              <div className="formHint">Loading keys...</div>
-            ) : (
-              <div className="keyList">
-                {apiKeys.length === 0 && <div className="formHint">No keys saved yet.</div>}
-                {apiKeys.map((item) => (
-                  <div key={item.key_name} className="keyRow">
-                    <div className="keyMeta">
-                      <div className="keyName">{item.key_name}</div>
-                      <div className="keyMasked">Current: {item.masked_value}</div>
-                    </div>
-                    <input
-                      type="text"
-                      className="keyInput"
-                      value={keyDrafts[item.key_name] || ""}
-                      placeholder="Enter new value to replace"
-                      onChange={(e) =>
-                        setKeyDrafts((prev) => ({ ...prev, [item.key_name]: e.target.value }))
-                      }
-                    />
-                    <button
-                      className="primaryBtn"
-                      disabled={keysSaving || !(keyDrafts[item.key_name] || "").trim()}
-                      onClick={() => saveKey(item.key_name, keyDrafts[item.key_name])}
-                    >
-                      Save
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="keyAddSection">
-              <div className="keyAddTitle">Add New Key</div>
-              <div className="keyAddRow">
-                <input
-                  type="text"
-                  className="keyInput"
-                  value={newKeyName}
-                  placeholder="Example: OPENAI_API_KEY"
-                  onChange={(e) => setNewKeyName(e.target.value)}
-                />
-                <input
-                  type="text"
-                  className="keyInput"
-                  value={newKeyValue}
-                  placeholder="Paste key value"
-                  onChange={(e) => setNewKeyValue(e.target.value)}
-                />
-                <button
-                  className="primaryBtn"
-                  disabled={keysSaving || !newKeyName.trim() || !newKeyValue.trim()}
-                  onClick={() => saveKey(newKeyName, newKeyValue)}
-                >
-                  Add Key
-                </button>
-              </div>
-            </div>
-
-            {keyFeedback && <div className="formHint">{keyFeedback}</div>}
-
-            <div className="formActions">
-              <button onClick={() => loadApiKeys()} disabled={keysLoading || keysSaving}>Refresh</button>
-              <button onClick={() => setKeyManagerOpen(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {mcpManagerOpen && (
-        <div className="modalOverlay" onClick={() => setMcpManagerOpen(false)}>
-          <div className="modalContent modalContentWide" onClick={(e) => e.stopPropagation()}>
-            <h2 className="modalTitle">MCP Manager</h2>
-            <div className="formHint">Select which MCPs to enable. Changes take effect on the next agent session.</div>
-
-            {mcpsLoading ? (
-              <div className="formHint">Loading MCPs...</div>
-            ) : (
-              <div className="mcpList">
-                {mcps.length === 0 && <div className="formHint">No MCPs available.</div>}
-                {mcps.map((item) => (
-                  <div key={item.mcp_name} className="mcpRow">
-                    <div className="mcpMeta">
-                      <div className="mcpName">{item.mcp_name}</div>
-                      <div className="mcpStatus">{item.enabled ? "Enabled" : "Disabled"}</div>
-                    </div>
-                    <button
-                      className={`primaryBtn ${item.enabled ? "disableBtn" : ""}`}
-                      disabled={mcpsSaving}
-                      onClick={() => toggleMcp(item.mcp_name, item.enabled)}
-                    >
-                      {item.enabled ? "Disable" : "Enable"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {mcpFeedback && <div className="formHint">{mcpFeedback}</div>}
-
-            <div className="formActions">
-              <button onClick={() => loadMcps()} disabled={mcpsLoading || mcpsSaving}>Refresh</button>
-              <button onClick={() => setMcpManagerOpen(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

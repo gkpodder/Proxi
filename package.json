@@ -6,6 +6,6 @@
   "scripts": {
     "init-keys-db": "uv run python scripts/init_api_keys_db.py",
     "proxi-tui": "cd cli_ink && bun run dev",
-    "proxi-react": "cd react_frontend && npm start"
+    "proxi-react": "cd react_frontend && bun run start"
   }
 }
