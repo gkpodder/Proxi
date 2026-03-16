@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Combined MCP Server for Gmail and Notion."""
+"""Combined MCP Server for Gmail, Notion, and Weather."""
 
 import asyncio
 import json
@@ -8,18 +8,20 @@ from typing import Any
 
 from proxi.mcp.servers.gmail_tools import GmailTools
 from proxi.mcp.servers.notion_tools import NotionTools
+from proxi.mcp.servers.weather_tools import WeatherTools
 from proxi.observability.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class CombinedMCPServer:
-    """MCP server for Gmail and Notion operations."""
+    """MCP server for Gmail, Notion, and Weather operations."""
 
     def __init__(self) -> None:
         """Initialize the combined MCP server."""
         self._gmail: GmailTools | None = None
         self._notion: NotionTools | None = None
+        self._weather: WeatherTools | None = None
 
     def _get_gmail(self) -> GmailTools:
         """Lazily initialize Gmail tools to avoid blocking initialize."""
@@ -32,6 +34,12 @@ class CombinedMCPServer:
         if self._notion is None:
             self._notion = NotionTools()
         return self._notion
+
+    def _get_weather(self) -> WeatherTools:
+        """Lazily initialize Weather tools to avoid blocking initialize."""
+        if self._weather is None:
+            self._weather = WeatherTools()
+        return self._weather
 
     async def handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle initialize request."""
@@ -144,6 +152,46 @@ class CombinedMCPServer:
                         "required": ["page_id"],
                     },
                 },
+                {
+                    "name": "weather_get_current",
+                    "description": "Get current weather for a location",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "location": {
+                                "type": "string",
+                                "description": "City or place name (e.g., Toronto)",
+                            },
+                            "unit": {
+                                "type": "string",
+                                "description": "Temperature unit: celsius or fahrenheit",
+                            },
+                        },
+                        "required": ["location"],
+                    },
+                },
+                {
+                    "name": "weather_get_forecast",
+                    "description": "Get weather forecast for a location",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "location": {
+                                "type": "string",
+                                "description": "City or place name (e.g., Toronto)",
+                            },
+                            "days": {
+                                "type": "integer",
+                                "description": "Number of forecast days (1-7)",
+                            },
+                            "unit": {
+                                "type": "string",
+                                "description": "Temperature unit: celsius or fahrenheit",
+                            },
+                        },
+                        "required": ["location"],
+                    },
+                },
             ]
         }
 
@@ -190,6 +238,19 @@ class CombinedMCPServer:
             if name == "notion_get_page":
                 page_id = arguments.get("page_id")
                 result = await self._get_notion().get_page(page_id)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "weather_get_current":
+                location = arguments.get("location")
+                unit = arguments.get("unit", "celsius")
+                result = await self._get_weather().get_current_weather(location, unit)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "weather_get_forecast":
+                location = arguments.get("location")
+                days = arguments.get("days", 3)
+                unit = arguments.get("unit", "celsius")
+                result = await self._get_weather().get_forecast(location, days, unit)
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
             return {

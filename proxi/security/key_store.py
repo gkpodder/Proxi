@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from proxi.mcp.catalog import known_mcp_categories
+
 DEFAULT_DB_PATH = Path(os.getenv("PROXI_KEYS_DB_PATH", "config/api_keys.db"))
 
 
@@ -176,13 +178,23 @@ def is_mcp_enabled(mcp_name: str, db_path: str | Path | None = None) -> bool:
 
 
 def list_mcps(db_path: str | Path | None = None) -> list[MCPRecord]:
-    """List all MCP records sorted by name."""
+    """List MCP records sorted by name, including known MCPs not yet persisted."""
     init_db(db_path)
     with get_connection(db_path) as conn:
         rows = conn.execute(
             "SELECT mcp_name, enabled, created_at FROM enabled_mcps ORDER BY mcp_name"
         ).fetchall()
-    return [MCPRecord(row["mcp_name"], bool(row["enabled"]), row["created_at"]) for row in rows]
+
+    records: dict[str, MCPRecord] = {
+        row["mcp_name"]: MCPRecord(row["mcp_name"], bool(row["enabled"]), row["created_at"])
+        for row in rows
+    }
+
+    for mcp_name in known_mcp_categories():
+        if mcp_name not in records:
+            records[mcp_name] = MCPRecord(mcp_name=mcp_name, enabled=False, created_at="")
+
+    return [records[name] for name in sorted(records.keys())]
 
 
 def get_enabled_mcps(db_path: str | Path | None = None) -> list[str]:
@@ -219,10 +231,10 @@ def _build_parser() -> argparse.ArgumentParser:
     list_mcps_parser = subparsers.add_parser("list-mcps", help="List all MCPs and their status")
 
     enable_mcp_parser = subparsers.add_parser("enable-mcp", help="Enable an MCP")
-    enable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, notion)")
+    enable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, notion, weather)")
 
     disable_mcp_parser = subparsers.add_parser("disable-mcp", help="Disable an MCP")
-    disable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, notion)")
+    disable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, notion, weather)")
 
     return parser
 

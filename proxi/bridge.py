@@ -26,6 +26,7 @@ from proxi.core.loop import AgentLoop
 from proxi.core.state import AgentState
 from proxi.observability.logging import get_logger, init_log_manager
 from proxi.observability.perf import elapsed_ms, emit_perf, now_ns, perf_enabled
+from proxi.security.key_store import enable_mcp, list_mcps
 from proxi.workspace import WorkspaceManager
 
 logger = get_logger(__name__)
@@ -390,6 +391,59 @@ async def run_bridge(agent_id: str | None = None) -> None:
             if cmd.get("type") == "user_input":
                 return cmd.get("value")
 
+    async def manage_mcps_interactively() -> None:
+        """Interactive MCP enable/disable workflow for the TUI."""
+        done_label = "[Done]"
+
+        while True:
+            records = list_mcps()
+            records = sorted(records, key=lambda r: r.mcp_name)
+            options = [
+                (
+                    f"{r.mcp_name} [{'Enabled' if r.enabled else 'Disabled'}] "
+                    f"-> {'Disable' if r.enabled else 'Enable'}"
+                )
+                for r in records
+            ]
+            options.append(done_label)
+
+            choice = await request_user_input(
+                "select",
+                "MCP Settings: choose an MCP to toggle, or select [Done]",
+                options=options,
+            )
+            choice_str = str(choice)
+
+            if choice_str == done_label:
+                emitter.emit({
+                    "type": "text_stream",
+                    "content": "MCP settings updated.\n",
+                })
+                break
+
+            selected_index = next(
+                (idx for idx, option in enumerate(options[:-1]) if option == choice_str),
+                None,
+            )
+            if selected_index is None:
+                continue
+
+            selected = records[selected_index]
+            new_enabled = not selected.enabled
+            enable_mcp(selected.mcp_name, enabled=new_enabled)
+
+            await refresh_mcp_tools()
+
+            emitter.emit(
+                {
+                    "type": "text_stream",
+                    "content": (
+                        f"MCP '{selected.mcp_name}' "
+                        f"{'enabled' if new_enabled else 'disabled'}.\n"
+                    ),
+                }
+            )
+
     async def bootstrap_workspace(force_interactive: bool = False) -> tuple[WorkspaceManager, Any]:
         """Select or create an agent and single-session workspace.
 
@@ -526,6 +580,28 @@ async def run_bridge(agent_id: str | None = None) -> None:
                         "status": "done",
                     }
                 )
+                continue
+
+            if msg_type == "manage_mcps":
+                emitter.emit(
+                    {
+                        "type": "status_update",
+                        "label": "Updating MCP settings...",
+                        "status": "running",
+                    }
+                )
+                await manage_mcps_interactively()
+                emitter.emit(
+                    {
+                        "type": "status_update",
+                        "label": "MCP settings updated",
+                        "status": "done",
+                    }
+                )
+                continue
+
+            if msg_type == "refresh_mcps":
+                await refresh_mcp_tools()
                 continue
 
             if msg_type == "start":

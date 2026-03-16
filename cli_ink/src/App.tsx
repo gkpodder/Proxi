@@ -301,6 +301,13 @@ export default function App() {
         case "agent":
           onSwitchAgent();
           break;
+        case "mcps": {
+          const proc = childRef.current;
+          if (proc?.stdin?.writable) {
+            proc.stdin.write(serializeTuiMessage({ type: "manage_mcps" }));
+          }
+          break;
+        }
         case "clear":
           setScrollback([]);
           break;
@@ -314,6 +321,7 @@ export default function App() {
           setScrollback((s) => [
             ...s,
             { type: "agent_line", content: "/agent - Switch active agent", isFirst: true },
+            { type: "agent_line", content: "/mcps - Enable/disable MCPs", isFirst: false },
             { type: "agent_line", content: "/clear - Clear conversation", isFirst: false },
             { type: "agent_line", content: "/plan - View current plan", isFirst: false },
             { type: "agent_line", content: "/todos - View open todos", isFirst: false },

@@ -11,6 +11,16 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const publicDir = path.join(__dirname, "public");
 const port = Number(process.env.PORT || 5174);
+const activeBridges = new Set();
+
+function broadcastBridgeCommand(command) {
+  const payload = JSON.stringify(command);
+  for (const bridge of activeBridges) {
+    if (bridge?.stdin?.writable) {
+      bridge.stdin.write(`${payload}\n`);
+    }
+  }
+}
 
 function runPython(commandArgs) {
   return new Promise((resolve, reject) => {
@@ -172,6 +182,7 @@ const server = createServer(async (req, res) => {
       const enabled = Boolean(body?.enabled);
 
       await toggleMcp(mcpName, enabled);
+      broadcastBridgeCommand({ type: "refresh_mcps" });
       sendJson(res, 200, { ok: true, mcpName, enabled });
     } catch (error) {
       sendJson(res, 500, { error: String(error) });
@@ -214,6 +225,7 @@ wss.on("connection", (ws) => {
         shell: process.platform === "win32",
         stdio: ["pipe", "pipe", "pipe"],
       });
+      activeBridges.add(bridge);
 
       bridge.stdout.setEncoding("utf-8");
       bridge.stderr.setEncoding("utf-8");
@@ -239,6 +251,7 @@ wss.on("connection", (ws) => {
       });
 
       bridge.on("exit", (code, signal) => {
+        activeBridges.delete(bridge);
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify({ type: "bridge_exit", code, signal }));
           ws.close();
@@ -268,6 +281,9 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
+    if (bridge) {
+      activeBridges.delete(bridge);
+    }
     if (bridge && bridge.exitCode == null) {
       bridge.kill();
     }
