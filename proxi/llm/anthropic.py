@@ -62,8 +62,11 @@ class AnthropicClient:
         tools: Sequence[ToolSpec] | None = None,
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
+        session_id: str | None = None,
     ) -> ModelResponse:
         """Generate a response from Anthropic."""
+        # session_id is intentionally unused for Anthropic.
+        _ = session_id
         self.logger.info("llm_call", model=self.model, provider="anthropic")
         anthropic_messages = self._convert_messages(messages)
         anthropic_tools = self._convert_tools(tools) if tools else None
@@ -133,12 +136,19 @@ class AnthropicClient:
         tools: Sequence[ToolSpec] | None = None,
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
+        session_id: str | None = None,
     ) -> AsyncIterator[tuple[str, ModelResponse | None]]:
         """
         Generate a response; yields content in one chunk then the full response.
         (Anthropic streaming can be added later for token-by-token.)
         """
-        response = await self.generate(messages, tools=tools, agents=agents, system=system)
+        response = await self.generate(
+            messages,
+            tools=tools,
+            agents=agents,
+            system=system,
+            session_id=session_id,
+        )
         content = response.decision.payload.get("content") or ""
         if content:
             yield content, None

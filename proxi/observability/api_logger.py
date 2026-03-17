@@ -8,56 +8,42 @@ from proxi.observability.logging import get_log_manager
 class OpenAIAPILogger:
     """Logger for OpenAI API calls."""
 
-    def log_chat_completion(
+    def log_response(
         self,
         model: str,
-        messages: list[dict[str, Any]],
+        input_items: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
         response_data: dict[str, Any],
         usage: dict[str, Any],
     ) -> None:
-        """Log a chat completion API call with clean, readable output."""
+        """Log a Responses API call with clean, readable output."""
         log_manager = get_log_manager()
         if not log_manager:
             return
-
-        # Clean request: extract just what's needed
-        clean_messages = []
-        for msg in messages:
-            clean_msg = {
-                "role": msg.get("role"),
-                "content": msg.get("content", ""),
-            }
-            clean_messages.append(clean_msg)
 
         # Extract tool names only (not full definitions)
         tool_names = []
         if tools:
             for tool in tools:
-                if isinstance(tool, dict) and "function" in tool:
-                    tool_names.append(tool["function"].get("name", "unknown"))
+                if isinstance(tool, dict):
+                    tool_names.append(tool.get("name", "unknown"))
 
         request = {
             "model": model,
-            "messages": clean_messages,
+            "input": input_items,
             "tools": tool_names if tool_names else None,
+            "prompt_cache_key": response_data.get("prompt_cache_key"),
         }
 
-        # Extract response content cleanly
-        choices = response_data.get("choices", [])
-        response_content = ""
-        if choices and isinstance(choices, list):
-            msg = choices[0].get("message", {})
-            response_content = msg.get("content", "")
-
         response = {
-            "content": response_content,
+            "content": response_data.get("output_text", ""),
             "usage": usage,
-            "finish_reason": response_data.get("finish_reason"),
+            "usage_raw": response_data.get("usage_raw"),
+            "finish_reason": response_data.get("status"),
         }
 
         log_manager.log_api_call(
-            method="chat.completions.create",
+            method="responses.create",
             request=request,
             response=response,
         )

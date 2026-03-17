@@ -20,8 +20,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
-
 from proxi.core.state import WorkspaceConfig
 
 
@@ -204,7 +202,7 @@ class WorkspaceManager:
         a single ephemeral session per agent.
         """
         import shutil
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         self.ensure_base_dirs()
         sessions_root = agent.path / "sessions"
@@ -212,7 +210,7 @@ class WorkspaceManager:
             shutil.rmtree(sessions_root)
         sessions_root.mkdir(parents=True, exist_ok=True)
 
-        session_id = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        session_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         session_dir = sessions_root / session_id
         session_dir.mkdir(parents=True, exist_ok=True)
 
