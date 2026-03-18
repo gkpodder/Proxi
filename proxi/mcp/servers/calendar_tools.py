@@ -19,7 +19,10 @@ logger = get_logger(__name__)
 
 load_dotenv()
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+SHARED_GOOGLE_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/calendar",
+]
 
 
 class CalendarTools:
@@ -32,7 +35,12 @@ class CalendarTools:
 
     def _authenticate(self) -> None:
         """Authenticate with Google Calendar API using OAuth 2.0."""
-        token_path = os.getenv("CALENDAR_TOKEN_PATH", "calendar_token.json")
+        token_path = (
+            os.getenv("GOOGLE_TOKEN_PATH")
+            or os.getenv("CALENDAR_TOKEN_PATH")
+            or os.getenv("GMAIL_TOKEN_PATH")
+            or "config/google_token.json"
+        )
         client_id = os.getenv("CALENDAR_CLIENT_ID") or os.getenv("GMAIL_CLIENT_ID")
         client_secret = os.getenv("CALENDAR_CLIENT_SECRET") or os.getenv("GMAIL_CLIENT_SECRET")
         redirect_uri = os.getenv("CALENDAR_REDIRECT_URI") or os.getenv(
@@ -55,7 +63,7 @@ class CalendarTools:
             except Exception as e:
                 logger.warning("calendar_token_load_error", error=str(e))
 
-        if not creds or not creds.valid:
+        if not creds or not creds.valid or not creds.has_scopes(SHARED_GOOGLE_SCOPES):
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
@@ -68,11 +76,12 @@ class CalendarTools:
                         "redirect_uris": [redirect_uri],
                     }
                 }
-                flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+                flow = InstalledAppFlow.from_client_config(client_config, SHARED_GOOGLE_SCOPES)
                 creds = flow.run_local_server(port=8765)
 
             if creds:
                 token_data = json.loads(creds.to_json())
+                Path(token_path).parent.mkdir(parents=True, exist_ok=True)
                 with open(token_path, "w") as token_file:
                     json.dump(token_data, token_file)
 

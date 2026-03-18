@@ -12,6 +12,7 @@ from pathlib import Path
 
 from proxi.mcp.catalog import known_mcp_categories
 
+# All database files are stored in the config/ directory for centralized configuration
 DEFAULT_DB_PATH = Path(os.getenv("PROXI_KEYS_DB_PATH", "config/api_keys.db"))
 
 
@@ -23,21 +24,37 @@ class ApiKeyRecord:
 
 
 def resolve_db_path(db_path: str | Path | None = None) -> Path:
-    """Resolve the SQLite DB path and ensure parent directory exists."""
+    """Resolve the SQLite DB path and ensure parent directory (config/) exists.
+    
+    All database files are stored in the config/ directory. If a custom db_path
+    is provided, it will be used; otherwise the default config/api_keys.db is used.
+    """
     target = Path(db_path) if db_path else DEFAULT_DB_PATH
     target.parent.mkdir(parents=True, exist_ok=True)
     return target
 
 
 def get_connection(db_path: str | Path | None = None) -> sqlite3.Connection:
-    """Open a sqlite3 connection with row factory."""
+    """Open a sqlite3 connection with row factory.
+    
+    Args:
+        db_path: Optional path to database file. Defaults to config/api_keys.db.
+    """
     conn = sqlite3.connect(resolve_db_path(db_path))
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db(db_path: str | Path | None = None) -> Path:
-    """Create the API keys and enabled_mcps tables if they do not exist."""
+    """Create the API keys and enabled_mcps tables if they do not exist.
+    
+    Args:
+        db_path: Optional path to database file. Defaults to config/api_keys.db.
+               All databases should be stored in the config/ directory.
+    
+    Returns:
+        Path object pointing to the initialized database file in config/.
+    """
     db_file = resolve_db_path(db_path)
     with get_connection(db_file) as conn:
         conn.execute(

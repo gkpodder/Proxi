@@ -21,7 +21,10 @@ logger = get_logger(__name__)
 # Load .env file
 load_dotenv()
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+SHARED_GOOGLE_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/calendar",
+]
 
 
 class GmailTools:
@@ -34,7 +37,11 @@ class GmailTools:
 
     def _authenticate(self) -> None:
         """Authenticate with Gmail API using OAuth 2.0."""
-        token_path = os.getenv("GMAIL_TOKEN_PATH", "token.json")
+        token_path = (
+            os.getenv("GOOGLE_TOKEN_PATH")
+            or os.getenv("GMAIL_TOKEN_PATH")
+            or "config/google_token.json"
+        )
         client_id = os.getenv("GMAIL_CLIENT_ID")
         client_secret = os.getenv("GMAIL_CLIENT_SECRET")
         redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:8765")
@@ -51,7 +58,7 @@ class GmailTools:
                 logger.warning("gmail_token_load_error", error=str(e))
 
         # If no valid credentials, create new ones
-        if not creds or not creds.valid:
+        if not creds or not creds.valid or not creds.has_scopes(SHARED_GOOGLE_SCOPES):
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
@@ -66,12 +73,13 @@ class GmailTools:
                     }
                 }
 
-                flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+                flow = InstalledAppFlow.from_client_config(client_config, SHARED_GOOGLE_SCOPES)
                 creds = flow.run_local_server(port=8765)
 
             # Save credentials for future use
             if creds:
                 token_data = json.loads(creds.to_json())
+                Path(token_path).parent.mkdir(parents=True, exist_ok=True)
                 with open(token_path, "w") as token_file:
                     json.dump(token_data, token_file)
 
