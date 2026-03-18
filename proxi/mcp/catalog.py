@@ -5,13 +5,21 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 # Single source of truth for MCP categories that can be toggled in UI/CLI.
-MCP_CATEGORIES: tuple[str, ...] = ("proxi", "gmail", "calendar", "notion", "weather")
+MCP_CATEGORIES: tuple[str, ...] = (
+    "proxi",
+    "gmail",
+    "calendar",
+    "notion",
+    "weather",
+    "obsidian",
+)
 
 # Prefix-based tool category routing.
 TOOL_CATEGORY_PREFIXES: tuple[tuple[str, str], ...] = (
     ("calendar_", "calendar"),
     ("notion_", "notion"),
     ("weather_", "weather"),
+    ("obsidian_", "obsidian"),
 )
 
 # Exact-name routing for legacy tools that do not use a category prefix.

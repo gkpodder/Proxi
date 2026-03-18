@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Combined MCP Server for Gmail, Calendar, Notion, and Weather."""
+"""Combined MCP Server for Gmail, Calendar, Notion, Weather, and Obsidian."""
 
 import asyncio
 import json
@@ -12,13 +12,14 @@ if TYPE_CHECKING:
     from proxi.mcp.servers.calendar_tools import CalendarTools
     from proxi.mcp.servers.gmail_tools import GmailTools
     from proxi.mcp.servers.notion_tools import NotionTools
+    from proxi.mcp.servers.obsidian_tools import ObsidianTools
     from proxi.mcp.servers.weather_tools import WeatherTools
 
 logger = get_logger(__name__)
 
 
 class CombinedMCPServer:
-    """MCP server for Gmail, Calendar, Notion, and Weather operations."""
+    """MCP server for Gmail, Calendar, Notion, Weather, and Obsidian operations."""
 
     def __init__(self) -> None:
         """Initialize the combined MCP server."""
@@ -26,6 +27,7 @@ class CombinedMCPServer:
         self._calendar: "CalendarTools | None" = None
         self._notion: "NotionTools | None" = None
         self._weather: "WeatherTools | None" = None
+        self._obsidian: "ObsidianTools | None" = None
 
     def _get_gmail(self) -> "GmailTools":
         """Lazily initialize Gmail tools to avoid blocking initialize."""
@@ -58,6 +60,14 @@ class CombinedMCPServer:
         if self._weather is None:
             self._weather = WeatherTools()
         return self._weather
+
+    def _get_obsidian(self) -> "ObsidianTools":
+        """Lazily initialize Obsidian tools to avoid blocking initialize."""
+        from proxi.mcp.servers.obsidian_tools import ObsidianTools
+
+        if self._obsidian is None:
+            self._obsidian = ObsidianTools()
+        return self._obsidian
 
     @staticmethod
     def _calendar_clarification_response(
@@ -384,6 +394,167 @@ class CombinedMCPServer:
                         "required": ["location"],
                     },
                 },
+                {
+                    "name": "obsidian_list_vaults",
+                    "description": "List discovered Obsidian vaults",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "obsidian_list_notes",
+                    "description": "List markdown notes in an Obsidian vault",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "vault_name": {
+                                "type": "string",
+                                "description": "Discovered vault name",
+                            },
+                            "vault_path": {
+                                "type": "string",
+                                "description": "Absolute vault path override",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum number of notes to return (default: 200)",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "obsidian_read_note",
+                    "description": "Read a note from an Obsidian vault",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "vault_name": {
+                                "type": "string",
+                                "description": "Discovered vault name",
+                            },
+                            "vault_path": {
+                                "type": "string",
+                                "description": "Absolute vault path override",
+                            },
+                            "note_path": {
+                                "type": "string",
+                                "description": "Path to the note within the vault",
+                            },
+                        },
+                        "required": ["note_path"],
+                    },
+                },
+                {
+                    "name": "obsidian_create_note",
+                    "description": "Create a note in an Obsidian vault",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "vault_name": {
+                                "type": "string",
+                                "description": "Discovered vault name",
+                            },
+                            "vault_path": {
+                                "type": "string",
+                                "description": "Absolute vault path override",
+                            },
+                            "note_path": {
+                                "type": "string",
+                                "description": "Path to the note within the vault",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Markdown content to write",
+                            },
+                            "overwrite": {
+                                "type": "boolean",
+                                "description": "Overwrite if note already exists (default: false)",
+                            },
+                        },
+                        "required": ["note_path", "content"],
+                    },
+                },
+                {
+                    "name": "obsidian_update_note",
+                    "description": "Update or append to an existing Obsidian note",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "vault_name": {
+                                "type": "string",
+                                "description": "Discovered vault name",
+                            },
+                            "vault_path": {
+                                "type": "string",
+                                "description": "Absolute vault path override",
+                            },
+                            "note_path": {
+                                "type": "string",
+                                "description": "Path to the note within the vault",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Markdown content to write",
+                            },
+                            "append": {
+                                "type": "boolean",
+                                "description": "Append content instead of replacing (default: false)",
+                            },
+                        },
+                        "required": ["note_path", "content"],
+                    },
+                },
+                {
+                    "name": "obsidian_search_notes",
+                    "description": "Search notes in an Obsidian vault",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "vault_name": {
+                                "type": "string",
+                                "description": "Discovered vault name",
+                            },
+                            "vault_path": {
+                                "type": "string",
+                                "description": "Absolute vault path override",
+                            },
+                            "query": {
+                                "type": "string",
+                                "description": "Search text",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum number of matches to return (default: 25)",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+                {
+                    "name": "obsidian_get_note_metadata",
+                    "description": "Get metadata and frontmatter for an Obsidian note",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "vault_name": {
+                                "type": "string",
+                                "description": "Discovered vault name",
+                            },
+                            "vault_path": {
+                                "type": "string",
+                                "description": "Absolute vault path override",
+                            },
+                            "note_path": {
+                                "type": "string",
+                                "description": "Path to the note within the vault",
+                            },
+                        },
+                        "required": ["note_path"],
+                    },
+                },
             ]
         }
 
@@ -572,6 +743,63 @@ class CombinedMCPServer:
                 days = arguments.get("days", 3)
                 unit = arguments.get("unit", "celsius")
                 result = await self._get_weather().get_forecast(location, days, unit)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "obsidian_list_vaults":
+                result = await self._get_obsidian().list_vaults()
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "obsidian_list_notes":
+                result = await self._get_obsidian().list_notes(
+                    vault_name=arguments.get("vault_name"),
+                    vault_path=arguments.get("vault_path"),
+                    max_results=arguments.get("max_results", 200),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "obsidian_read_note":
+                result = await self._get_obsidian().read_note(
+                    note_path=arguments.get("note_path", ""),
+                    vault_name=arguments.get("vault_name"),
+                    vault_path=arguments.get("vault_path"),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "obsidian_create_note":
+                result = await self._get_obsidian().create_note(
+                    note_path=arguments.get("note_path", ""),
+                    content=arguments.get("content", ""),
+                    vault_name=arguments.get("vault_name"),
+                    vault_path=arguments.get("vault_path"),
+                    overwrite=arguments.get("overwrite", False),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "obsidian_update_note":
+                result = await self._get_obsidian().update_note(
+                    note_path=arguments.get("note_path", ""),
+                    content=arguments.get("content", ""),
+                    vault_name=arguments.get("vault_name"),
+                    vault_path=arguments.get("vault_path"),
+                    append=arguments.get("append", False),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "obsidian_search_notes":
+                result = await self._get_obsidian().search_notes(
+                    query=arguments.get("query", ""),
+                    vault_name=arguments.get("vault_name"),
+                    vault_path=arguments.get("vault_path"),
+                    max_results=arguments.get("max_results", 25),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "obsidian_get_note_metadata":
+                result = await self._get_obsidian().get_note_metadata(
+                    note_path=arguments.get("note_path", ""),
+                    vault_name=arguments.get("vault_name"),
+                    vault_path=arguments.get("vault_path"),
+                )
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
             return {
