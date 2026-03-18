@@ -231,10 +231,10 @@ def _build_parser() -> argparse.ArgumentParser:
     list_mcps_parser = subparsers.add_parser("list-mcps", help="List all MCPs and their status")
 
     enable_mcp_parser = subparsers.add_parser("enable-mcp", help="Enable an MCP")
-    enable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, notion, weather)")
+    enable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, calendar, notion, weather)")
 
     disable_mcp_parser = subparsers.add_parser("disable-mcp", help="Disable an MCP")
-    disable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, notion, weather)")
+    disable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, calendar, notion, weather)")
 
     return parser
 

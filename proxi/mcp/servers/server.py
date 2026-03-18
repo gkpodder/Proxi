@@ -1,45 +1,96 @@
 #!/usr/bin/env python3
-"""Combined MCP Server for Gmail, Notion, and Weather."""
+"""Combined MCP Server for Gmail, Calendar, Notion, and Weather."""
 
 import asyncio
 import json
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from proxi.mcp.servers.gmail_tools import GmailTools
-from proxi.mcp.servers.notion_tools import NotionTools
-from proxi.mcp.servers.weather_tools import WeatherTools
 from proxi.observability.logging import get_logger
+
+if TYPE_CHECKING:
+    from proxi.mcp.servers.calendar_tools import CalendarTools
+    from proxi.mcp.servers.gmail_tools import GmailTools
+    from proxi.mcp.servers.notion_tools import NotionTools
+    from proxi.mcp.servers.weather_tools import WeatherTools
 
 logger = get_logger(__name__)
 
 
 class CombinedMCPServer:
-    """MCP server for Gmail, Notion, and Weather operations."""
+    """MCP server for Gmail, Calendar, Notion, and Weather operations."""
 
     def __init__(self) -> None:
         """Initialize the combined MCP server."""
-        self._gmail: GmailTools | None = None
-        self._notion: NotionTools | None = None
-        self._weather: WeatherTools | None = None
+        self._gmail: "GmailTools | None" = None
+        self._calendar: "CalendarTools | None" = None
+        self._notion: "NotionTools | None" = None
+        self._weather: "WeatherTools | None" = None
 
-    def _get_gmail(self) -> GmailTools:
+    def _get_gmail(self) -> "GmailTools":
         """Lazily initialize Gmail tools to avoid blocking initialize."""
+        from proxi.mcp.servers.gmail_tools import GmailTools
+
         if self._gmail is None:
             self._gmail = GmailTools()
         return self._gmail
 
-    def _get_notion(self) -> NotionTools:
+    def _get_notion(self) -> "NotionTools":
         """Lazily initialize Notion tools to avoid blocking initialize."""
+        from proxi.mcp.servers.notion_tools import NotionTools
+
         if self._notion is None:
             self._notion = NotionTools()
         return self._notion
 
-    def _get_weather(self) -> WeatherTools:
+    def _get_calendar(self) -> "CalendarTools":
+        """Lazily initialize Calendar tools to avoid blocking initialize."""
+        from proxi.mcp.servers.calendar_tools import CalendarTools
+
+        if self._calendar is None:
+            self._calendar = CalendarTools()
+        return self._calendar
+
+    def _get_weather(self) -> "WeatherTools":
         """Lazily initialize Weather tools to avoid blocking initialize."""
+        from proxi.mcp.servers.weather_tools import WeatherTools
+
         if self._weather is None:
             self._weather = WeatherTools()
         return self._weather
+
+    @staticmethod
+    def _calendar_clarification_response(
+        missing_fields: list[str],
+        invalid_fields: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Build a structured clarification response for underspecified calendar requests."""
+        invalid_fields = invalid_fields or []
+        prompts = {
+            "summary": "What is the exact event title?",
+            "start_time": "What is the start time? Use RFC3339 (for example: 2026-03-19T14:00:00-04:00).",
+            "end_time": "What is the end time? Use RFC3339 (for example: 2026-03-19T15:00:00-04:00).",
+            "timezone": "What timezone should be used (IANA name, for example: America/Toronto)?",
+            "attendees": "Who else should be invited? Provide a list of emails, or [] if no attendees.",
+        }
+
+        questions = [prompts[field] for field in missing_fields if field in prompts]
+        if invalid_fields:
+            for field in invalid_fields:
+                if field in prompts and prompts[field] not in questions:
+                    questions.append(prompts[field])
+
+        message = "Need a few more details before I can create this calendar event."
+        if invalid_fields:
+            message = "Some event details are invalid or missing. Please clarify before creation."
+
+        return {
+            "needs_clarification": True,
+            "missing_fields": missing_fields,
+            "invalid_fields": invalid_fields,
+            "questions": questions,
+            "message": message,
+        }
 
     async def handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
         """Handle initialize request."""
@@ -101,6 +152,147 @@ class CombinedMCPServer:
                             }
                         },
                         "required": ["email_id"],
+                    },
+                },
+                {
+                    "name": "calendar_list_events",
+                    "description": "List upcoming Google Calendar events",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum number of events to retrieve (default: 10)",
+                            },
+                            "calendar_id": {
+                                "type": "string",
+                                "description": "Google Calendar ID (default: primary)",
+                            },
+                            "time_min": {
+                                "type": "string",
+                                "description": "RFC3339 lower time bound (default: now)",
+                            },
+                            "time_max": {
+                                "type": "string",
+                                "description": "RFC3339 upper time bound",
+                            },
+                            "query": {
+                                "type": "string",
+                                "description": "Free-text search query for events",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "calendar_create_event",
+                    "description": (
+                        "Create a Google Calendar event. Do not invent defaults: "
+                        "request explicit time, timezone, and attendees from the user if missing."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "summary": {"type": "string", "description": "Event title"},
+                            "start_time": {
+                                "type": "string",
+                                "description": "RFC3339 event start date-time",
+                            },
+                            "end_time": {
+                                "type": "string",
+                                "description": "RFC3339 event end date-time",
+                            },
+                            "timezone": {
+                                "type": "string",
+                                "description": "IANA timezone name (for example: America/Toronto)",
+                            },
+                            "calendar_id": {
+                                "type": "string",
+                                "description": "Google Calendar ID (default: primary)",
+                            },
+                            "attendees": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of attendee emails. Use [] if no attendees.",
+                            },
+                            "description": {"type": "string", "description": "Event description"},
+                            "location": {"type": "string", "description": "Event location"},
+                        },
+                        "required": ["summary", "start_time", "end_time", "timezone", "attendees"],
+                    },
+                },
+                {
+                    "name": "calendar_get_event",
+                    "description": "Get details of a specific Google Calendar event",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "event_id": {
+                                "type": "string",
+                                "description": "Google Calendar event ID",
+                            },
+                            "calendar_id": {
+                                "type": "string",
+                                "description": "Google Calendar ID (default: primary)",
+                            },
+                        },
+                        "required": ["event_id"],
+                    },
+                },
+                {
+                    "name": "calendar_update_event",
+                    "description": "Update fields of an existing Google Calendar event",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "event_id": {
+                                "type": "string",
+                                "description": "Google Calendar event ID",
+                            },
+                            "calendar_id": {
+                                "type": "string",
+                                "description": "Google Calendar ID (default: primary)",
+                            },
+                            "summary": {"type": "string", "description": "Updated event title"},
+                            "start_time": {
+                                "type": "string",
+                                "description": "Updated RFC3339 event start date-time",
+                            },
+                            "end_time": {
+                                "type": "string",
+                                "description": "Updated RFC3339 event end date-time",
+                            },
+                            "timezone": {
+                                "type": "string",
+                                "description": "IANA timezone name (for example: America/Toronto)",
+                            },
+                            "attendees": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Updated attendee email list. Use [] to clear attendees.",
+                            },
+                            "description": {"type": "string", "description": "Updated event description"},
+                            "location": {"type": "string", "description": "Updated event location"},
+                        },
+                        "required": ["event_id"],
+                    },
+                },
+                {
+                    "name": "calendar_delete_event",
+                    "description": "Delete a Google Calendar event",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "event_id": {
+                                "type": "string",
+                                "description": "Google Calendar event ID",
+                            },
+                            "calendar_id": {
+                                "type": "string",
+                                "description": "Google Calendar ID (default: primary)",
+                            },
+                        },
+                        "required": ["event_id"],
                     },
                 },
                 {
@@ -216,6 +408,135 @@ class CombinedMCPServer:
             if name == "get_email":
                 email_id = arguments.get("email_id")
                 result = await self._get_gmail().get_email(email_id)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "calendar_list_events":
+                max_results = arguments.get("max_results", 10)
+                calendar_id = arguments.get("calendar_id", "primary")
+                time_min = arguments.get("time_min")
+                time_max = arguments.get("time_max")
+                query = arguments.get("query", "")
+                result = await self._get_calendar().list_events(
+                    max_results=max_results,
+                    calendar_id=calendar_id,
+                    time_min=time_min,
+                    time_max=time_max,
+                    query=query,
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "calendar_create_event":
+                required_fields = ["summary", "start_time", "end_time", "timezone", "attendees"]
+                missing_fields = []
+                for field in required_fields:
+                    value = arguments.get(field)
+                    if value is None:
+                        missing_fields.append(field)
+                    elif isinstance(value, str) and not value.strip():
+                        missing_fields.append(field)
+
+                attendees = arguments.get("attendees")
+                invalid_fields = []
+                if attendees is not None and not isinstance(attendees, list):
+                    invalid_fields.append("attendees")
+
+                if missing_fields or invalid_fields:
+                    clarification = self._calendar_clarification_response(
+                        missing_fields=missing_fields,
+                        invalid_fields=invalid_fields,
+                    )
+                    return {"content": [{"type": "text", "text": json.dumps(clarification)}]}
+
+                summary = arguments.get("summary")
+                start_time = arguments.get("start_time")
+                end_time = arguments.get("end_time")
+                timezone_name = arguments.get("timezone")
+                calendar_id = arguments.get("calendar_id", "primary")
+                description = arguments.get("description")
+                location = arguments.get("location")
+                result = await self._get_calendar().create_event(
+                    summary=summary,
+                    start_time=start_time,
+                    end_time=end_time,
+                    timezone_name=timezone_name,
+                    calendar_id=calendar_id,
+                    attendees=attendees,
+                    description=description,
+                    location=location,
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "calendar_get_event":
+                event_id = arguments.get("event_id")
+                calendar_id = arguments.get("calendar_id", "primary")
+                result = await self._get_calendar().get_event(event_id=event_id, calendar_id=calendar_id)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "calendar_update_event":
+                event_id = arguments.get("event_id")
+                if not event_id:
+                    clarification = {
+                        "needs_clarification": True,
+                        "missing_fields": ["event_id"],
+                        "message": "Please provide the event_id to update.",
+                    }
+                    return {"content": [{"type": "text", "text": json.dumps(clarification)}]}
+
+                updatable_fields = [
+                    "summary",
+                    "start_time",
+                    "end_time",
+                    "timezone",
+                    "attendees",
+                    "description",
+                    "location",
+                ]
+                has_any_updates = any(field in arguments for field in updatable_fields)
+                if not has_any_updates:
+                    clarification = {
+                        "needs_clarification": True,
+                        "message": (
+                            "Please specify what to update (for example summary, time, "
+                            "timezone, attendees, description, or location)."
+                        ),
+                    }
+                    return {"content": [{"type": "text", "text": json.dumps(clarification)}]}
+
+                attendees = arguments.get("attendees")
+                if attendees is not None and not isinstance(attendees, list):
+                    clarification = {
+                        "needs_clarification": True,
+                        "invalid_fields": ["attendees"],
+                        "message": "attendees must be a list of emails, or [] to clear attendees.",
+                    }
+                    return {"content": [{"type": "text", "text": json.dumps(clarification)}]}
+
+                calendar_id = arguments.get("calendar_id", "primary")
+                result = await self._get_calendar().update_event(
+                    event_id=event_id,
+                    calendar_id=calendar_id,
+                    summary=arguments.get("summary"),
+                    start_time=arguments.get("start_time"),
+                    end_time=arguments.get("end_time"),
+                    timezone_name=arguments.get("timezone"),
+                    attendees=attendees,
+                    description=arguments.get("description"),
+                    location=arguments.get("location"),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "calendar_delete_event":
+                event_id = arguments.get("event_id")
+                if not event_id:
+                    clarification = {
+                        "needs_clarification": True,
+                        "missing_fields": ["event_id"],
+                        "message": "Please provide the event_id to delete.",
+                    }
+                    return {"content": [{"type": "text", "text": json.dumps(clarification)}]}
+
+                calendar_id = arguments.get("calendar_id", "primary")
+                result = await self._get_calendar().delete_event(event_id=event_id, calendar_id=calendar_id)
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
             if name == "notion_list_children":
