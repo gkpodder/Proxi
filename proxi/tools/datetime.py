@@ -13,6 +13,7 @@ class DateTimeTool(BaseTool):
         super().__init__(
             name="get_datetime",
             description="Get the current date and time. Use this when you need to know today's date, the current time, or temporal context (e.g. for scheduling, relative dates, or time-sensitive tasks).",
+            parallel_safe=True,
             parameters_schema={
                 "type": "object",
                 "properties": {

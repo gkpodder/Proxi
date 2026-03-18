@@ -40,11 +40,19 @@ class Tool(Protocol):
 class BaseTool:
     """Base implementation for tools."""
 
-    def __init__(self, name: str, description: str, parameters_schema: dict[str, Any]):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        parameters_schema: dict[str, Any],
+        *,
+        parallel_safe: bool = False,
+    ):
         """Initialize the tool."""
         self.name = name
         self.description = description
         self.parameters_schema = parameters_schema
+        self.parallel_safe = parallel_safe
 
     def to_spec(self) -> dict[str, Any]:
         """Convert to tool specification."""

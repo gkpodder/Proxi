@@ -14,6 +14,8 @@ The agent pulls it on demand via manage_plan / manage_todos tools.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Sequence
 
@@ -32,6 +34,10 @@ class PromptPayload:
 class PromptBuilder:
     """Builds prompts following the Static→Incremental structure."""
 
+    def __init__(self) -> None:
+        self._cached_key: str | None = None
+        self._cached_system_prefix: str | None = None
+
     def build(self, state: AgentState, tools: Sequence[ToolSpec] | None = None) -> PromptPayload:
         """Build a PromptPayload from agent state and tools.
 
@@ -43,7 +49,7 @@ class PromptBuilder:
 
         system_prefix = None
         if workspace is not None:
-            system_prefix = self._build_system_prefix(workspace, tools or [])
+            system_prefix = self._get_cached_system_prefix(workspace, tools or [])
 
         if not state.history:
             return PromptPayload(messages=[], system=system_prefix)
@@ -51,6 +57,41 @@ class PromptBuilder:
         return PromptPayload(messages=list(state.history), system=system_prefix)
 
     # --- Internal helpers -------------------------------------------------
+
+    def _get_cached_system_prefix(self, workspace, tools: Sequence[ToolSpec]) -> str:
+        """Build system prefix with a cache keyed by workspace and tool signature."""
+        key = self._system_prefix_cache_key(workspace, tools)
+        if self._cached_key == key and self._cached_system_prefix is not None:
+            return self._cached_system_prefix
+        rendered = self._build_system_prefix(workspace, tools)
+        self._cached_key = key
+        self._cached_system_prefix = rendered
+        return rendered
+
+    def _system_prefix_cache_key(self, workspace, tools: Sequence[ToolSpec]) -> str:
+        """Deterministic cache key that invalidates on file/tool changes."""
+        global_path = Path(workspace.global_system_prompt_path)
+        soul_path = Path(workspace.soul_path)
+        global_mtime = global_path.stat().st_mtime_ns if global_path.exists() else 0
+        soul_mtime = soul_path.stat().st_mtime_ns if soul_path.exists() else 0
+        tools_shape = [
+            {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.parameters,
+            }
+            for tool in sorted(tools, key=lambda t: t.name)
+        ]
+        payload = {
+            "agent_id": workspace.agent_id,
+            "global_system_prompt_path": str(global_path),
+            "global_mtime_ns": global_mtime,
+            "soul_path": str(soul_path),
+            "soul_mtime_ns": soul_mtime,
+            "tools": tools_shape,
+        }
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def _build_system_prefix(self, workspace, tools: Sequence[ToolSpec]) -> str:
         """Assemble the static system prefix: global + soul + tool definitions."""

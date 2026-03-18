@@ -306,6 +306,46 @@ class OpenAIClient:
         decision.payload["tool_calls"] = tool_calls
         return decision
 
+    def _supports_reasoning_controls(self) -> bool:
+        """Return True when the selected model supports reasoning controls."""
+        normalized_model = self.model.strip().lower()
+        reasoning_model_prefixes = (
+            "gpt-5",
+            "o1",
+            "o3",
+            "o4",
+        )
+        return normalized_model.startswith(reasoning_model_prefixes)
+
+    def _build_response_create_kwargs(
+        self,
+        input_items: list[dict[str, Any]],
+        response_tools: list[dict[str, Any]],
+        system: str | None,
+        *,
+        stream: bool,
+        session_id: str | None,
+    ) -> tuple[dict[str, Any], str]:
+        """Build shared kwargs for Responses API create calls."""
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "input": input_items,
+        }
+        if stream:
+            kwargs["stream"] = True
+        if self._supports_reasoning_controls():
+            # Keep effort low for reasoning-capable models unless overridden.
+            kwargs["reasoning"] = {"effort": "minimal"}
+        if system:
+            kwargs["instructions"] = system
+        if response_tools:
+            kwargs["tools"] = response_tools
+            kwargs["tool_choice"] = "auto"
+        prompt_cache_key = self._build_prompt_cache_key(
+            input_items, response_tools, system, session_id=session_id)
+        kwargs["prompt_cache_key"] = prompt_cache_key
+        return kwargs, prompt_cache_key
+
     async def generate(
         self,
         messages: Sequence[Message],
@@ -320,20 +360,13 @@ class OpenAIClient:
         response_tools = (self._convert_tools(tools) if tools else [
         ]) + self._convert_agents_to_tools(agents)
 
-        kwargs: dict[str, Any] = {
-            "model": self.model,
-            "input": input_items,
-            # Use the lowest supported reasoning effort for GPT-5 mini.
-            "reasoning": {"effort": "minimal"},
-        }
-        if system:
-            kwargs["instructions"] = system
-        if response_tools:
-            kwargs["tools"] = response_tools
-            kwargs["tool_choice"] = "auto"
-        prompt_cache_key = self._build_prompt_cache_key(
-            input_items, response_tools, system, session_id=session_id)
-        kwargs["prompt_cache_key"] = prompt_cache_key
+        kwargs, prompt_cache_key = self._build_response_create_kwargs(
+            input_items=input_items,
+            response_tools=response_tools,
+            system=system,
+            stream=False,
+            session_id=session_id,
+        )
 
         response = await self.client.responses.create(**kwargs)
         usage = self._build_usage(getattr(response, "usage", None))
@@ -381,21 +414,13 @@ class OpenAIClient:
         response_tools = (self._convert_tools(tools) if tools else [
         ]) + self._convert_agents_to_tools(agents)
 
-        kwargs: dict[str, Any] = {
-            "model": self.model,
-            "input": input_items,
-            "stream": True,
-            # Use the lowest supported reasoning effort for GPT-5 mini.
-            "reasoning": {"effort": "minimal"},
-        }
-        if system:
-            kwargs["instructions"] = system
-        if response_tools:
-            kwargs["tools"] = response_tools
-            kwargs["tool_choice"] = "auto"
-        prompt_cache_key = self._build_prompt_cache_key(
-            input_items, response_tools, system, session_id=session_id)
-        kwargs["prompt_cache_key"] = prompt_cache_key
+        kwargs, prompt_cache_key = self._build_response_create_kwargs(
+            input_items=input_items,
+            response_tools=response_tools,
+            system=system,
+            stream=True,
+            session_id=session_id,
+        )
 
         stream = await self.client.responses.create(**kwargs)
         content_parts: list[str] = []

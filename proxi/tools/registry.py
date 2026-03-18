@@ -43,6 +43,11 @@ class ToolRegistry:
         tool_specs = [ToolSpec(**tool.to_spec()) for tool in self._tools.values()]
         return tool_specs + self._raw_specs
 
+    def is_parallel_safe(self, name: str) -> bool:
+        """Whether a tool is marked safe to execute in parallel."""
+        tool = self.get(name)
+        return bool(getattr(tool, "parallel_safe", False)) if tool is not None else False
+
     async def execute(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a tool."""
         tool = self.get(name)

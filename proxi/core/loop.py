@@ -1,6 +1,8 @@
 """Main agent loop implementation."""
 
 import json
+import os
+import asyncio
 import time
 from typing import Any, Protocol
 
@@ -11,6 +13,7 @@ from proxi.core.state import AgentState, AgentStatus, Message, TurnState, TurnSt
 from proxi.llm.base import LLMClient
 from proxi.llm.schemas import DecisionType, ModelDecision, ToolCall
 from proxi.observability.logging import get_logger
+from proxi.observability.perf import elapsed_ms, emit_perf, now_ns
 from proxi.observability.tracing import TraceContext
 from proxi.tools.registry import ToolRegistry
 
@@ -104,8 +107,16 @@ class AgentLoop:
     async def _run_loop(self, state: AgentState) -> AgentState:
         """Inner loop: run until completion or failure."""
         try:
+            turn_budget_ms = float(os.getenv("PROXI_BUDGET_TURN_MS", "30000"))
+            decide_budget_ms = float(os.getenv("PROXI_BUDGET_DECIDE_MS", "20000"))
+            act_budget_ms = float(os.getenv("PROXI_BUDGET_ACT_MS", "15000"))
             with TraceContext("agent_loop"):
                 while state.can_continue():
+                    turn_start_ns = now_ns()
+                    decide_ms = 0.0
+                    act_ms = 0.0
+                    observe_ms = 0.0
+                    reflect_ms = 0.0
                     state.current_turn += 1
                     turn = TurnState(
                         turn_number=state.current_turn,
@@ -119,7 +130,9 @@ class AgentLoop:
                     try:
                         # REASON → DECIDE
                         turn.status = TurnStatus.DECIDING
+                        decide_start_ns = now_ns()
                         decision, usage = await self._decide(state, emit_stream=self.emitter is not None)
+                        decide_ms = elapsed_ms(decide_start_ns)
 
                         # Accumulate token usage
                         state.total_tokens += usage.get("total_tokens", 0)
@@ -156,22 +169,27 @@ class AgentLoop:
                                     )
                                 )
 
-                                # Execute all tool calls
-                                action_results = []
+                                # Execute all tool calls, optionally in parallel for safe tools.
+                                parsed_calls: list[tuple[str, str, dict[str, Any]]] = []
                                 for tool_call in tool_calls:
-                                    tool_call_id = tool_call.get("id")
-                                    tool_name = tool_call.get(
-                                        "function", {}).get("name")
-                                    tool_args_str = tool_call.get(
-                                        "function", {}).get("arguments", "{}")
-                                    # Parse JSON arguments
+                                    tool_call_id = tool_call.get("id", "")
+                                    tool_name = tool_call.get("function", {}).get("name", "")
+                                    tool_args_str = tool_call.get("function", {}).get("arguments", "{}")
                                     try:
-                                        tool_args = json.loads(tool_args_str) if isinstance(
-                                            tool_args_str, str) else tool_args_str
+                                        tool_args = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
                                     except json.JSONDecodeError:
                                         tool_args = {}
+                                    parsed_calls.append((tool_call_id, tool_name, tool_args))
 
-                                    # Create a temporary decision for this tool call
+                                parallel_limit = max(1, int(os.getenv("PROXI_TOOL_PARALLELISM", "1")))
+                                can_parallelize = (
+                                    parallel_limit > 1
+                                    and all(self.tool_registry.is_parallel_safe(name) for _, name, _ in parsed_calls)
+                                )
+
+                                async def exec_one(
+                                    tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
+                                ) -> dict[str, Any]:
                                     temp_decision = ModelDecision.tool_call(
                                         ToolCall(
                                             id=tool_call_id,
@@ -180,16 +198,38 @@ class AgentLoop:
                                         ),
                                         reasoning=None,
                                     )
-
-                                    # Execute the tool
+                                    tool_start_ns = now_ns()
                                     result = await self._act(state, temp_decision, turn)
-                                    action_results.append({
+                                    return {
                                         "tool_call_id": tool_call_id,
                                         "name": tool_name,
                                         "result": result,
-                                    })
+                                        "elapsed_ms": elapsed_ms(tool_start_ns),
+                                    }
+
+                                action_results = []
+                                if can_parallelize:
+                                    semaphore = asyncio.Semaphore(parallel_limit)
+
+                                    async def run_with_limit(
+                                        tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
+                                    ) -> dict[str, Any]:
+                                        async with semaphore:
+                                            return await exec_one(tool_call_id, tool_name, tool_args)
+
+                                    tasks = [
+                                        asyncio.create_task(run_with_limit(tool_call_id, tool_name, tool_args))
+                                        for tool_call_id, tool_name, tool_args in parsed_calls
+                                    ]
+                                    action_results = await asyncio.gather(*tasks)
+                                else:
+                                    for tool_call_id, tool_name, tool_args in parsed_calls:
+                                        action_results.append(await exec_one(tool_call_id, tool_name, tool_args))
+
+                                act_ms += sum(float(r.get("elapsed_ms", 0.0)) for r in action_results)
 
                                 # Add all tool response messages
+                                observe_start_ns = now_ns()
                                 for action_result in action_results:
                                     observation = self._observe(
                                         action_result["result"])
@@ -208,6 +248,7 @@ class AgentLoop:
                                     "type": "multiple_tool_calls", "results": action_results}
                                 turn.observation = "\n".join(
                                     [self._observe(r["result"]) for r in action_results])
+                                observe_ms += elapsed_ms(observe_start_ns)
                             else:
                                 # Single tool call - original behavior
                                 state.add_message(
@@ -218,12 +259,16 @@ class AgentLoop:
                                     )
                                 )
 
+                                act_start_ns = now_ns()
                                 action_result = await self._act(state, decision, turn)
+                                act_ms += elapsed_ms(act_start_ns)
 
                                 # OBSERVE
                                 turn.status = TurnStatus.OBSERVING
                                 turn.action_result = action_result
+                                observe_start_ns = now_ns()
                                 observation = self._observe(action_result)
+                                observe_ms += elapsed_ms(observe_start_ns)
                                 turn.observation = observation
 
                                 # Add tool response
@@ -238,12 +283,16 @@ class AgentLoop:
                                 )
                         else:
                             # Not a tool call, proceed normally
+                            act_start_ns = now_ns()
                             action_result = await self._act(state, decision, turn)
+                            act_ms += elapsed_ms(act_start_ns)
 
                             # OBSERVE
                             turn.status = TurnStatus.OBSERVING
                             turn.action_result = action_result
+                            observe_start_ns = now_ns()
                             observation = self._observe(action_result)
+                            observe_ms += elapsed_ms(observe_start_ns)
                             turn.observation = observation
 
                             # Add message for non-tool decisions
@@ -257,7 +306,9 @@ class AgentLoop:
 
                         # REFLECT
                         turn.status = TurnStatus.REFLECTING
+                        reflect_start_ns = now_ns()
                         reflection = await self.reflector.reflect(state, turn)
+                        reflect_ms = elapsed_ms(reflect_start_ns)
                         if reflection:
                             turn.reflection = reflection
                             self.logger.debug(
@@ -273,6 +324,10 @@ class AgentLoop:
                                 Message(role="assistant", content=final_content))
                             break
 
+                    except asyncio.CancelledError:
+                        turn.status = TurnStatus.ERROR
+                        turn.error = "Turn cancelled"
+                        raise
                     except Exception as e:
                         turn.status = TurnStatus.ERROR
                         turn.error = str(e)
@@ -285,7 +340,52 @@ class AgentLoop:
 
                     finally:
                         turn.end_time = time.time()
+                        turn_total_ms = elapsed_ms(turn_start_ns)
+                        emit_perf(
+                            "perf_turn",
+                            turn=turn.turn_number,
+                            status=turn.status.value,
+                            decision_type=(
+                                turn.decision.get("type")
+                                if isinstance(turn.decision, dict)
+                                else None
+                            ),
+                            total_ms=round(turn_total_ms, 3),
+                            decide_ms=round(decide_ms, 3),
+                            act_ms=round(act_ms, 3),
+                            observe_ms=round(observe_ms, 3),
+                            reflect_ms=round(reflect_ms, 3),
+                            history_len=len(state.history),
+                        )
+                        if turn_total_ms > turn_budget_ms:
+                            emit_perf(
+                                "perf_budget_exceeded",
+                                component="agent_loop",
+                                budget="turn_total_ms",
+                                value_ms=round(turn_total_ms, 3),
+                                threshold_ms=turn_budget_ms,
+                            )
+                        if decide_ms > decide_budget_ms:
+                            emit_perf(
+                                "perf_budget_exceeded",
+                                component="agent_loop",
+                                budget="decide_ms",
+                                value_ms=round(decide_ms, 3),
+                                threshold_ms=decide_budget_ms,
+                            )
+                        if act_ms > act_budget_ms:
+                            emit_perf(
+                                "perf_budget_exceeded",
+                                component="agent_loop",
+                                budget="act_ms",
+                                value_ms=round(act_ms, 3),
+                                threshold_ms=act_budget_ms,
+                            )
 
+        except asyncio.CancelledError:
+            state.status = AgentStatus.CANCELLED
+            self.logger.info("agent_loop_cancelled")
+            raise
         except Exception as e:
             self.logger.error("agent_loop_error", error=str(e))
             state.status = AgentStatus.FAILED
@@ -352,7 +452,16 @@ class AgentLoop:
                     "status": "running",
                 })
 
+            tool_exec_start_ns = now_ns()
             result = await self.tool_registry.execute(tool_name, arguments)
+            tool_exec_ms = elapsed_ms(tool_exec_start_ns)
+            emit_perf(
+                "perf_tool_exec",
+                turn=turn.turn_number,
+                tool=tool_name,
+                success=result.success,
+                elapsed_ms=round(tool_exec_ms, 3),
+            )
 
             if self.emitter:
                 if result.output:
@@ -430,12 +539,20 @@ class AgentLoop:
                     "status": "running",
                 })
 
+            subagent_start_ns = now_ns()
             result = await self.sub_agent_manager.run(
                 agent_name=agent_name,
                 context=context,
                 max_turns=10,  # Default budgets for sub-agents
                 max_tokens=2000,
                 max_time=30.0,
+            )
+            emit_perf(
+                "perf_subagent_exec",
+                turn=turn.turn_number,
+                agent=agent_name,
+                success=result.success,
+                elapsed_ms=round(elapsed_ms(subagent_start_ns), 3),
             )
 
             if self.emitter:

@@ -3,13 +3,16 @@ Headless bridge for the proxi agent: JSON-RPC over stdin/stdout for TUI clients.
 """
 
 import asyncio
+import hashlib
 import json
 import os
+import queue
 import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
-from proxi.cli.main import create_llm_client, setup_mcp, setup_sub_agents, setup_tools
 from proxi.interaction.tool import get_show_collaborative_form_spec
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.cli.main import (
@@ -22,6 +25,7 @@ from proxi.cli.main import (
 from proxi.core.loop import AgentLoop
 from proxi.core.state import AgentState
 from proxi.observability.logging import get_logger, init_log_manager
+from proxi.observability.perf import elapsed_ms, emit_perf, now_ns, perf_enabled
 from proxi.workspace import WorkspaceManager
 
 logger = get_logger(__name__)
@@ -32,16 +36,120 @@ class StdioEmitter:
 
     def __init__(self) -> None:
         self._closed = False
+        self._last_status: tuple[str, str] | None = None
+        self._max_emit_bytes = int(os.getenv("PROXI_BRIDGE_MAX_EMIT_BYTES", "0"))
+        self._queue_maxsize = max(100, int(os.getenv("PROXI_BRIDGE_OUTBOUND_MAX_QUEUE", "2000")))
+        self._queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=self._queue_maxsize)
+        self._worker = threading.Thread(target=self._drain_loop, name="proxi-bridge-emitter", daemon=True)
+        self._worker.start()
+
+    def _emit_perf_safe(self, event: str, **fields: Any) -> None:
+        # Keep test stdout pure when monkeypatched to an in-memory stream.
+        if not perf_enabled():
+            return
+        if hasattr(sys.stdout, "getvalue"):
+            return
+        emit_perf(event, **fields)
+
+    def _direct_emit(self, msg: dict[str, Any]) -> None:
+        emit_start_ns = now_ns()
+        line = json.dumps(msg, separators=(",", ":")) + "\n"
+        if self._max_emit_bytes > 0 and len(line.encode("utf-8")) > self._max_emit_bytes:
+            self._emit_perf_safe(
+                "perf_bridge_emit_dropped",
+                reason="oversize",
+                msg_type=msg.get("type"),
+                bytes=len(line.encode("utf-8")),
+            )
+            return
+        sys.stdout.write(line)
+        sys.stdout.flush()
+        self._emit_perf_safe(
+            "perf_bridge_emit",
+            msg_type=msg.get("type"),
+            bytes=len(line.encode("utf-8")),
+            elapsed_ms=round(elapsed_ms(emit_start_ns), 3),
+            queue_depth=self._queue.qsize(),
+        )
+
+    def _drain_loop(self) -> None:
+        while not self._closed:
+            try:
+                msg = self._queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            if msg.get("type") == "__close__":
+                return
+            try:
+                self._direct_emit(msg)
+            except (BrokenPipeError, OSError):
+                self._closed = True
+                return
 
     def emit(self, msg: dict[str, Any]) -> None:
         if self._closed:
             return
+        if os.getenv("PROXI_BRIDGE_EMIT_SYNC", "0").strip().lower() in {"1", "true", "yes"}:
+            try:
+                self._direct_emit(msg)
+            except (BrokenPipeError, OSError):
+                self._closed = True
+            return
+        if msg.get("type") in {"ready"}:
+            try:
+                self._direct_emit(msg)
+            except (BrokenPipeError, OSError):
+                self._closed = True
+            return
+        if msg.get("type") == "status_update":
+            status_key = (str(msg.get("label", "")), str(msg.get("status", "")))
+            if self._last_status == status_key:
+                self._emit_perf_safe("perf_bridge_emit_dropped", reason="duplicate_status")
+                return
+            self._last_status = status_key
         try:
-            line = json.dumps(msg) + "\n"
-            sys.stdout.write(line)
-            sys.stdout.flush()
-        except (BrokenPipeError, OSError):
-            self._closed = True
+            self._queue.put_nowait(msg)
+            depth = self._queue.qsize()
+            high_watermark = int(os.getenv("PROXI_BRIDGE_QUEUE_HIGH_WATERMARK", "1500"))
+            if depth >= high_watermark:
+                self._emit_perf_safe(
+                    "perf_budget_exceeded",
+                    component="bridge_emitter",
+                    budget="queue_depth",
+                    value=depth,
+                    threshold=high_watermark,
+                )
+        except queue.Full:
+            # Backpressure policy: drop low-priority status/text stream messages first.
+            if msg.get("type") in {"status_update", "text_stream", "tool_log"}:
+                self._emit_perf_safe(
+                    "perf_bridge_emit_dropped",
+                    reason="queue_full_low_priority",
+                    msg_type=msg.get("type"),
+                    queue_depth=self._queue.qsize(),
+                )
+                return
+            # High-priority event fallback: direct best-effort emit.
+            self._emit_perf_safe(
+                "perf_bridge_emit_backpressure",
+                reason="queue_full_fallback_direct",
+                msg_type=msg.get("type"),
+                queue_depth=self._queue.qsize(),
+            )
+            try:
+                self._direct_emit(msg)
+            except (BrokenPipeError, OSError):
+                self._closed = True
+
+    def close(self) -> None:
+        """Close emitter worker and stop future emits."""
+        self._closed = True
+        try:
+            self._queue.put_nowait({"type": "__close__"})
+        except queue.Full:
+            pass
+        if self._worker.is_alive():
+            self._worker.join(timeout=0.5)
 
 
 async def run_bridge(agent_id: str | None = None) -> None:
@@ -91,9 +199,9 @@ async def run_bridge(agent_id: str | None = None) -> None:
     workspace_manager.ensure_global_system_prompt()
 
     # Queues for command messages, user_input (bootstrap), and form responses
-    command_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-    user_input_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-    form_response_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    command_queue: asyncio.Queue[tuple[float, dict[str, Any] | None]] = asyncio.Queue()
+    user_input_queue: asyncio.Queue[tuple[float, dict[str, Any] | None]] = asyncio.Queue()
+    form_response_queue: asyncio.Queue[tuple[float, dict[str, Any] | None]] = asyncio.Queue()
     main_loop = asyncio.get_running_loop()
 
     def stdin_reader() -> None:
@@ -106,18 +214,18 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 msg_type = obj.get("type")
                 if msg_type == "user_input":
                     main_loop.call_soon_threadsafe(
-                        user_input_queue.put_nowait, obj)
+                        user_input_queue.put_nowait, (time.monotonic(), obj))
                 elif msg_type == "user_input_response":
                     main_loop.call_soon_threadsafe(
-                        form_response_queue.put_nowait, obj)
+                        form_response_queue.put_nowait, (time.monotonic(), obj))
                 else:
                     main_loop.call_soon_threadsafe(
-                        command_queue.put_nowait, obj)
+                        command_queue.put_nowait, (time.monotonic(), obj))
             except json.JSONDecodeError:
                 continue
-        main_loop.call_soon_threadsafe(command_queue.put_nowait, None)
-        main_loop.call_soon_threadsafe(user_input_queue.put_nowait, None)
-        main_loop.call_soon_threadsafe(form_response_queue.put_nowait, None)
+        main_loop.call_soon_threadsafe(command_queue.put_nowait, (time.monotonic(), None))
+        main_loop.call_soon_threadsafe(user_input_queue.put_nowait, (time.monotonic(), None))
+        main_loop.call_soon_threadsafe(form_response_queue.put_nowait, (time.monotonic(), None))
 
     async def run_reader() -> None:
         await asyncio.to_thread(stdin_reader)
@@ -141,7 +249,13 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 },
             })
             while True:
-                msg = await form_response_queue.get()
+                queued_at, msg = await form_response_queue.get()
+                emit_perf(
+                    "perf_bridge_queue_wait",
+                    queue="form_response",
+                    wait_ms=round((time.monotonic() - queued_at) * 1000.0, 3),
+                    depth=form_response_queue.qsize(),
+                )
                 if msg is None:
                     raise asyncio.CancelledError("Input stream closed")
                 payload = msg.get("payload", msg)
@@ -166,6 +280,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
     emitter.emit({"type": "ready"})
 
     mcp_adapters = []
+    last_mcp_signature: str | None = None
     
     # Auto-load configured MCP servers unless explicitly disabled
     no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
@@ -195,9 +310,25 @@ async def run_bridge(agent_id: str | None = None) -> None:
     async def refresh_mcp_tools() -> None:
         """Reload MCP tools from currently enabled MCPs without restarting bridge."""
         nonlocal mcp_adapters
+        nonlocal last_mcp_signature
+        from proxi.cli.main import load_mcp_config
+        from proxi.security.key_store import get_enabled_mcps
+
         no_mcp_local = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
         if no_mcp_local:
             return
+        signature_payload = {
+            "enabled": sorted(get_enabled_mcps()),
+            "config": load_mcp_config(),
+            "explicit_server": mcp_server,
+        }
+        signature = hashlib.sha256(
+            json.dumps(signature_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        if signature == last_mcp_signature:
+            emit_perf("perf_mcp_refresh_skipped", reason="unchanged_config")
+            return
+        last_mcp_signature = signature
 
         # Remove previously registered MCP tools, then re-load and re-register.
         removed = tool_registry.unregister_by_prefix("mcp_")
@@ -247,7 +378,13 @@ async def run_bridge(agent_id: str | None = None) -> None:
             }
         )
         while True:
-            cmd = await user_input_queue.get()
+            queued_at, cmd = await user_input_queue.get()
+            emit_perf(
+                "perf_bridge_queue_wait",
+                queue="user_input",
+                wait_ms=round((time.monotonic() - queued_at) * 1000.0, 3),
+                depth=user_input_queue.qsize(),
+            )
             if cmd is None:
                 raise asyncio.CancelledError("Input stream closed")
             if cmd.get("type") == "user_input":
@@ -359,7 +496,13 @@ async def run_bridge(agent_id: str | None = None) -> None:
     # Main command loop
     try:
         while True:
-            cmd = await command_queue.get()
+            queued_at, cmd = await command_queue.get()
+            emit_perf(
+                "perf_bridge_queue_wait",
+                queue="command",
+                wait_ms=round((time.monotonic() - queued_at) * 1000.0, 3),
+                depth=command_queue.qsize(),
+            )
             if cmd is None:
                 break
             msg_type = cmd.get("type")
@@ -446,7 +589,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
                         {"type": "status_update", "label": "Done", "status": "done"}
                     )
                 else:
-                    cmd = next_cmd_task.result()
+                    _, cmd = next_cmd_task.result()
                     logger.info("request_aborted", task=task[:100])
                     agent_task.cancel()
                     try:
@@ -463,11 +606,11 @@ async def run_bridge(agent_id: str | None = None) -> None:
                         }
                     )
                     if cmd is not None and cmd.get("type") != "abort":
-                        main_loop.call_soon_threadsafe(command_queue.put_nowait, cmd)
+                        main_loop.call_soon_threadsafe(command_queue.put_nowait, (time.monotonic(), cmd))
     except asyncio.CancelledError:
         pass
     finally:
-        emitter._closed = True
+        emitter.close()
         for adapter in mcp_adapters:
             try:
                 await adapter.close()

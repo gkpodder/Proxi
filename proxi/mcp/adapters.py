@@ -37,6 +37,7 @@ class MCPToolAdapter(BaseTool):
         super().__init__(
             name=f"mcp_{name}",
             description=f"[MCP] {description}",
+            parallel_safe=False,
             parameters_schema=parameters,
         )
         self.mcp_client = mcp_client

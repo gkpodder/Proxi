@@ -8,6 +8,7 @@ from proxi.observability.logging import (
     LogManager,
 )
 from proxi.observability.api_logger import OpenAIAPILogger
+from proxi.observability.perf import emit_perf, perf_enabled
 
 __all__ = [
     "get_logger",
@@ -16,4 +17,6 @@ __all__ = [
     "get_log_manager",
     "LogManager",
     "OpenAIAPILogger",
+    "emit_perf",
+    "perf_enabled",
 ]
