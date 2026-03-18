@@ -1,10 +1,13 @@
 """Google Calendar API tools for MCP server."""
 
+import difflib
 import json
 import os
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, available_timezones
 
 from dotenv import load_dotenv
 from google.auth.transport.requests import Request
@@ -99,6 +102,119 @@ class CalendarTools:
         normalized = value.replace("Z", "+00:00")
         return datetime.fromisoformat(normalized)
 
+    @staticmethod
+    def _normalize_timezone(raw_timezone: str) -> str | None:
+        """Resolve user-friendly timezone input to a valid IANA timezone name."""
+        if not raw_timezone or not raw_timezone.strip():
+            return None
+
+        aliases = {
+            "est": "America/New_York",
+            "edt": "America/New_York",
+            "eastern": "America/New_York",
+            "eastern time": "America/New_York",
+            "cst": "America/Chicago",
+            "cdt": "America/Chicago",
+            "central": "America/Chicago",
+            "central time": "America/Chicago",
+            "mst": "America/Denver",
+            "mdt": "America/Denver",
+            "mountain": "America/Denver",
+            "mountain time": "America/Denver",
+            "pst": "America/Los_Angeles",
+            "pdt": "America/Los_Angeles",
+            "pacific": "America/Los_Angeles",
+            "pacific time": "America/Los_Angeles",
+            "utc": "UTC",
+            "gmt": "UTC",
+        }
+
+        raw = raw_timezone.strip()
+        lowered = raw.lower()
+        if lowered in aliases:
+            return aliases[lowered]
+
+        all_tzs = available_timezones()
+        if raw in all_tzs:
+            return raw
+
+        # Normalize separators and case: "america/net york" -> "America/Net_York".
+        normalized = raw.replace("\\", "/").replace("-", "_").strip()
+        normalized = re.sub(r"\s+", "_", normalized)
+        normalized = "/".join(part.capitalize() for part in normalized.split("/"))
+        if normalized in all_tzs:
+            return normalized
+
+        # Fuzzy matching for common typos.
+        tz_by_lower = {tz.lower(): tz for tz in all_tzs}
+        fuzzy_target = normalized.lower()
+        match = difflib.get_close_matches(
+            fuzzy_target,
+            list(tz_by_lower.keys()),
+            n=1,
+            cutoff=0.78,
+        )
+        if match:
+            return tz_by_lower[match[0]]
+        return None
+
+    @staticmethod
+    def _coerce_datetime_input(raw_value: str, timezone_name: str, fallback_date: datetime | None = None) -> str | None:
+        """Convert RFC3339 or simple natural-time input to RFC3339."""
+        value = (raw_value or "").strip()
+        if not value:
+            return None
+
+        # Already RFC3339-ish
+        try:
+            parsed = CalendarTools._parse_rfc3339(value)
+            return parsed.isoformat()
+        except ValueError:
+            pass
+
+        tz = ZoneInfo(timezone_name)
+        now_local = datetime.now(tz)
+        date_hint = now_local.date()
+        lower = value.lower()
+
+        if "tomorrow" in lower or "tmr" in lower:
+            date_hint = (now_local + timedelta(days=1)).date()
+        elif fallback_date is not None:
+            date_hint = fallback_date.astimezone(tz).date()
+
+        # Accept inputs like "1030am", "10:30 am", "7pm", "17:00", "tomorrow at 5pm".
+        match = re.search(r"(\d{1,2})(?::?(\d{2}))?\s*(am|pm)?", lower)
+        if not match:
+            return None
+
+        hour = int(match.group(1))
+        minute = int(match.group(2) or "0")
+        ampm = (match.group(3) or "").lower()
+
+        if minute > 59:
+            return None
+
+        if ampm:
+            if hour < 1 or hour > 12:
+                return None
+            if ampm == "am":
+                hour = 0 if hour == 12 else hour
+            else:
+                hour = 12 if hour == 12 else hour + 12
+        else:
+            if hour > 23:
+                return None
+
+        parsed_local = datetime(
+            year=date_hint.year,
+            month=date_hint.month,
+            day=date_hint.day,
+            hour=hour,
+            minute=minute,
+            tzinfo=tz,
+        )
+        return parsed_local.isoformat()
+
     async def list_events(
         self,
         max_results: int = 10,
@@ -166,14 +282,41 @@ class CalendarTools:
             if not self.service:
                 return {"error": "Calendar service not initialized"}
 
+            resolved_timezone = self._normalize_timezone(timezone_name)
+            if not resolved_timezone:
+                return {
+                    "needs_clarification": True,
+                    "invalid_fields": ["timezone"],
+                    "message": (
+                        "Timezone is invalid. Use a city-based timezone like "
+                        "America/New_York or America/Toronto."
+                    ),
+                }
+
+            normalized_start = self._coerce_datetime_input(start_time, resolved_timezone)
+            start_dt: datetime | None = None
+            if normalized_start is not None:
+                start_dt = self._parse_rfc3339(normalized_start)
+
+            normalized_end = self._coerce_datetime_input(
+                end_time,
+                resolved_timezone,
+                fallback_date=start_dt,
+            )
+
             try:
-                start_dt = self._parse_rfc3339(start_time)
-                end_dt = self._parse_rfc3339(end_time)
+                if normalized_start is None or normalized_end is None:
+                    raise ValueError("missing normalized datetime")
+                start_dt = self._parse_rfc3339(normalized_start)
+                end_dt = self._parse_rfc3339(normalized_end)
             except ValueError:
                 return {
                     "needs_clarification": True,
                     "invalid_fields": ["start_time", "end_time"],
-                    "message": "Start and end times must be valid RFC3339 datetime values.",
+                    "message": (
+                        "Please provide recognizable start/end times. Examples: "
+                        "'tomorrow 10:30am' and '11:00am'."
+                    ),
                 }
 
             if end_dt <= start_dt:
@@ -185,8 +328,8 @@ class CalendarTools:
 
             event: dict[str, Any] = {
                 "summary": summary,
-                "start": {"dateTime": start_time, "timeZone": timezone_name},
-                "end": {"dateTime": end_time, "timeZone": timezone_name},
+                "start": {"dateTime": normalized_start, "timeZone": resolved_timezone},
+                "end": {"dateTime": normalized_end, "timeZone": resolved_timezone},
             }
             if attendees:
                 event["attendees"] = [{"email": email} for email in attendees if email]

@@ -126,11 +126,13 @@ class PromptBuilder:
 ## show_collaborative_form — When and How to Use
 
 Call `show_collaborative_form` when:
+- The task is calendar/event scheduling and missing details would cause a wrong event action
 - You need specific information from the user not present in the conversation history
 - The missing information would materially change your approach or the output you produce
 - You cannot make a reasonable assumption and proceeding without it risks a wrong result
 
 Do NOT call `show_collaborative_form` when:
+- The task is not calendar-related (e.g., Obsidian, files, search, notes, code help)
 - You can make a reasonable assumption and state it in your response
 - The information is already present in the conversation
 - You need minor clarification — use RESPOND to ask conversationally instead
