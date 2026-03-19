@@ -187,7 +187,7 @@ When building the questions array:
         ordered_fields: list[tuple[str, str]] = [
             ("name", "Name"),
             ("location", "Location"),
-            ("timezone", "Timezone"),
+            ("timezone", "Timezone (IANA format: e.g., America/Toronto)"),
             ("age", "Age"),
             ("occupation", "Occupation"),
             ("email", "Email"),
@@ -209,10 +209,12 @@ When building the questions array:
         if not lines:
             return ""
 
-        return (
+        result = (
             "USER PROFILE CONTEXT:\n"
             + "\n".join(lines)
             + "\nUse this profile only when relevant to the user request "
-            "(for example email drafts, signatures, or timezone-aware suggestions)."
+            "(for example email drafts, signatures, or timezone-aware suggestions). "
+            "Timezone is in IANA format (e.g., America/Toronto) — use directly with calendar and weather operations."
         )
+        return result
 

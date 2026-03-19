@@ -80,7 +80,7 @@ class CombinedMCPServer:
             "summary": "What is the exact event title?",
             "start_time": "What is the start time? Use RFC3339 (for example: 2026-03-19T14:00:00-04:00).",
             "end_time": "What is the end time? Use RFC3339 (for example: 2026-03-19T15:00:00-04:00).",
-            "timezone": "What timezone should be used (IANA name, for example: America/Toronto)?",
+            "timezone": "What timezone should be used? Use IANA format (e.g., America/Toronto) — this is required for Google Calendar compatibility.",
             "attendees": "Who else should be invited? Provide a list of emails, or [] if no attendees.",
         }
 
@@ -119,7 +119,13 @@ class CombinedMCPServer:
             "tools": [
                 {
                     "name": "read_emails",
-                    "description": "Read emails from Gmail inbox",
+                    "description": (
+                        "Read emails from Gmail inbox. For requests like 'read my last email', 'check my latest email', or 'my emails': "
+                        "(1) Call this tool directly with max_results=1 (or as needed by user intent) without asking pre-check confirmation questions. "
+                        "(2) Assume the connected Gmail account and inbox by default. "
+                        "(3) Ask a follow-up only when needed after the attempt: authentication failed, result is empty, or user explicitly requested specific account/query. "
+                        "(4) When successful, return results immediately with optional follow-up suggestion."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -137,7 +143,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "send_email",
-                    "description": "Send an email via Gmail",
+                    "description": (
+                        "Send an email via Gmail. When user wants to send mail: "
+                        "(1) Call this directly with required fields (to, subject, body). "
+                        "(2) Ask for missing required fields before attempting. "
+                        "(3) Optional cc/bcc can be inferred from user context or asked if ambiguous. "
+                        "(4) Report result (sent or failed) immediately."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -152,7 +164,12 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "get_email",
-                    "description": "Get details of a specific email",
+                    "description": (
+                        "Get details of a specific email by ID. When user references a specific email: "
+                        "(1) Extract or ask for the email_id (usually from prior read_emails call). "
+                        "(2) Call this directly once email_id is known. "
+                        "(3) Return full message details immediately."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -166,7 +183,16 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "calendar_list_events",
-                    "description": "List upcoming Google Calendar events",
+                    "description": (
+                        "List upcoming Google Calendar events. For read-only requests like 'my google calendar', 'list my calendar events', 'what's on my calendar', or 'check tomorrow': "
+                        "(1) Call this directly without asking pre-check consent or option menus. "
+                        "(2) Default to calendar_id='primary' when user did not specify one. "
+                        "(3) If user says 'tomorrow', compute time_min/time_max for tomorrow in their timezone when known. "
+                        "(4) If no date provided, list upcoming events. "
+                        "(5) Ask follow-up only after failed attempt if: auth/credentials missing/invalid, calendar access denied, or truly ambiguous timezone. "
+                        "(6) When successful, return results immediately in concise form. "
+                        "Note: Use timezone from user profile (IANA format: e.g., America/Toronto) when available."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -197,8 +223,11 @@ class CombinedMCPServer:
                 {
                     "name": "calendar_create_event",
                     "description": (
-                        "Create a Google Calendar event. Do not invent defaults: "
-                        "request explicit time, timezone, and attendees from the user if missing."
+                        "Create a Google Calendar event. When user wants to schedule: "
+                        "(1) Require all fields: summary, start_time, end_time, timezone, attendees ([] if none). "
+                        "(2) Do NOT invent defaults for times or timezone. "
+                        "(3) Ask explicitly for missing required fields with examples. "
+                        "(4) Return success/failure and event details."
                     ),
                     "inputSchema": {
                         "type": "object",
@@ -214,7 +243,7 @@ class CombinedMCPServer:
                             },
                             "timezone": {
                                 "type": "string",
-                                "description": "IANA timezone name (for example: America/Toronto)",
+                                "description": "IANA timezone name (Google Calendar format, e.g.: America/Toronto). Use user profile timezone when available.",
                             },
                             "calendar_id": {
                                 "type": "string",
@@ -233,7 +262,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "calendar_get_event",
-                    "description": "Get details of a specific Google Calendar event",
+                    "description": (
+                        "Get details of a specific Google Calendar event. When user references a specific event: "
+                        "(1) Extract or ask for the event_id (from prior list_events or user input). "
+                        "(2) Call this directly once event_id is known. "
+                        "(3) Default to primary calendar if not specified. "
+                        "(4) Return full event details immediately."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -251,7 +286,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "calendar_update_event",
-                    "description": "Update fields of an existing Google Calendar event",
+                    "description": (
+                        "Update fields of an existing Google Calendar event. When user wants to modify an event: "
+                        "(1) Require event_id (ask for it if not known). "
+                        "(2) Ask which fields to update (summary, start_time, end_time, timezone, attendees, description, location). "
+                        "(3) Call this only with the fields user explicitly wants to change. "
+                        "(4) Return confirmation of changes."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -274,7 +315,7 @@ class CombinedMCPServer:
                             },
                             "timezone": {
                                 "type": "string",
-                                "description": "IANA timezone name (for example: America/Toronto)",
+                                "description": "IANA timezone name (Google Calendar format, e.g.: America/Toronto). Use user profile timezone when available.",
                             },
                             "attendees": {
                                 "type": "array",
@@ -289,7 +330,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "calendar_delete_event",
-                    "description": "Delete a Google Calendar event",
+                    "description": (
+                        "Delete a Google Calendar event. When user wants to remove an event: "
+                        "(1) Ask for explicit confirmation before deleting (destructive action). "
+                        "(2) Require event_id. "
+                        "(3) Call this only after user confirms. "
+                        "(4) Report deletion success/failure."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -307,7 +354,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "notion_list_children",
-                    "description": "List child pages/databases under the configured parent page",
+                    "description": (
+                        "List child pages/databases under the configured parent page. For read requests like 'show my Notion pages': "
+                        "(1) Call this directly; respects configured parent page automatically. "
+                        "(2) Use max_results to limit output (default: 10). "
+                        "(3) Return list of child items immediately. "
+                        "(4) Ask follow-up only if Notion access fails."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -321,7 +374,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "notion_create_page",
-                    "description": "Create a new Notion page under the configured parent page",
+                    "description": (
+                        "Create a new Notion page under the configured parent page. When user wants to add a page: "
+                        "(1) Require title (ask if missing). "
+                        "(2) Optional content can be added or left empty. "
+                        "(3) Call this directly once title is provided. "
+                        "(4) Return the new page ID and confirmation."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -333,7 +392,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "notion_append_to_page",
-                    "description": "Append a paragraph to an existing Notion page",
+                    "description": (
+                        "Append a paragraph to an existing Notion page. When user wants to add content to a page: "
+                        "(1) Require page_id (extract from prior list or ask user). "
+                        "(2) Require content to append. "
+                        "(3) Call this directly once both are provided. "
+                        "(4) Report success/failure."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -345,7 +410,12 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "notion_get_page",
-                    "description": "Get details for a Notion page",
+                    "description": (
+                        "Get details for a Notion page. When user references a specific page: "
+                        "(1) Require page_id (extract from prior list or ask for it). "
+                        "(2) Call this directly once page_id is known. "
+                        "(3) Return full page content and metadata immediately."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -356,17 +426,24 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "weather_get_current",
-                    "description": "Get current weather for a location",
+                    "description": (
+                        "Get current weather for a location. Default for generic weather requests. "
+                        "Use unit=celsius unless user asks for Fahrenheit. If lookup fails, retry once with a more explicit "
+                        "location string (for example include full region/country) before asking the user."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "location": {
                                 "type": "string",
-                                "description": "City or place name (e.g., Toronto)",
+                                "description": (
+                                    "City or place name. Prefer explicit locations when needed "
+                                    "(e.g., 'Hamilton, Ontario, Canada' instead of ambiguous abbreviations)."
+                                ),
                             },
                             "unit": {
                                 "type": "string",
-                                "description": "Temperature unit: celsius or fahrenheit",
+                                "description": "Temperature unit: celsius or fahrenheit (default: celsius)",
                             },
                         },
                         "required": ["location"],
@@ -374,21 +451,27 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "weather_get_forecast",
-                    "description": "Get weather forecast for a location",
+                    "description": (
+                        "Get weather forecast for a location when user asks for upcoming days/range. "
+                        "If location lookup fails, retry once with a more explicit location string before follow-up questions."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "location": {
                                 "type": "string",
-                                "description": "City or place name (e.g., Toronto)",
+                                "description": (
+                                    "City or place name. Prefer explicit locations when needed "
+                                    "(e.g., 'Hamilton, Ontario, Canada')."
+                                ),
                             },
                             "days": {
                                 "type": "integer",
-                                "description": "Number of forecast days (1-7)",
+                                "description": "Number of forecast days (1-7, default: 3)",
                             },
                             "unit": {
                                 "type": "string",
-                                "description": "Temperature unit: celsius or fahrenheit",
+                                "description": "Temperature unit: celsius or fahrenheit (default: celsius)",
                             },
                         },
                         "required": ["location"],
@@ -396,7 +479,12 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "obsidian_list_vaults",
-                    "description": "List discovered Obsidian vaults",
+                    "description": (
+                        "List discovered Obsidian vaults. For vault discovery requests: "
+                        "(1) Call this directly; no parameters needed. "
+                        "(2) Returns all available vaults automatically discovered. "
+                        "(3) Use vault names or paths from result for other vault operations."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {},
@@ -405,7 +493,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "obsidian_list_notes",
-                    "description": "List markdown notes in an Obsidian vault",
+                    "description": (
+                        "List markdown notes in an Obsidian vault. For read requests like 'list my notes' or 'show vault contents': "
+                        "(1) Call this directly; can auto-detect vault if only one exists. "
+                        "(2) Specify vault_name or vault_path if user has multiple vaults. "
+                        "(3) Use max_results to limit output (default: 200). "
+                        "(4) Return list of note paths immediately."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -427,7 +521,12 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "obsidian_read_note",
-                    "description": "Read a note from an Obsidian vault",
+                    "description": (
+                        "Read a note from an Obsidian vault. When user wants to read a specific note: "
+                        "(1) Call this directly with note_path (from prior list_notes or user input). "
+                        "(2) Auto-detect vault if only one exists; specify vault_name/vault_path if ambiguous. "
+                        "(3) Return full note content immediately."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -449,7 +548,14 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "obsidian_create_note",
-                    "description": "Create a note in an Obsidian vault",
+                    "description": (
+                        "Create a note in an Obsidian vault. When user wants to create a new note: "
+                        "(1) Require note_path and content. "
+                        "(2) Auto-detect vault if only one exists; ask user to specify if ambiguous. "
+                        "(3) By default, do NOT overwrite existing notes (set overwrite=false). "
+                        "(4) Ask before overwriting if note_path already exists. "
+                        "(5) Return creation success/failure."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -479,7 +585,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "obsidian_update_note",
-                    "description": "Update or append to an existing Obsidian note",
+                    "description": (
+                        "Update or append to an existing Obsidian note. When user wants to modify a note: "
+                        "(1) Require note_path and content. "
+                        "(2) Default append=false (replace content); set append=true only if user explicitly asks to add to the end. "
+                        "(3) Auto-detect vault if only one exists; ask user to specify if ambiguous. "
+                        "(4) Return update success/failure."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -509,7 +621,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "obsidian_search_notes",
-                    "description": "Search notes in an Obsidian vault",
+                    "description": (
+                        "Search notes in an Obsidian vault. For search requests like 'find notes about X': "
+                        "(1) Require search query. "
+                        "(2) Auto-detect vault if only one exists; ask user to specify if ambiguous. "
+                        "(3) Use max_results to limit matches (default: 25). "
+                        "(4) Return matching note paths immediately."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -535,7 +653,13 @@ class CombinedMCPServer:
                 },
                 {
                     "name": "obsidian_get_note_metadata",
-                    "description": "Get metadata and frontmatter for an Obsidian note",
+                    "description": (
+                        "Get metadata and frontmatter for an Obsidian note. When user wants metadata/frontmatter: "
+                        "(1) Require note_path. "
+                        "(2) Auto-detect vault if only one exists; ask user to specify if ambiguous. "
+                        "(3) Call this directly once note_path is known. "
+                        "(4) Return metadata and frontmatter immediately."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
