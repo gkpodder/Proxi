@@ -112,10 +112,42 @@ def get_user_profile(db_path: str | Path | None = None) -> UserProfileRecord | N
     return UserProfileRecord(profile=parsed, updated_at=row["updated_at"])
 
 
+def validate_timezone(timezone_str: str | None) -> str | None:
+    """Validate and normalize timezone to IANA format compatible with Google Calendar.
+    
+    Args:
+        timezone_str: User input or profile timezone string.
+        
+    Returns:
+        Normalized IANA timezone name (e.g., 'America/Toronto') if valid, None otherwise.
+    """
+    if not timezone_str or not isinstance(timezone_str, str):
+        return None
+    
+    try:
+        from proxi.mcp.servers.calendar_tools import CalendarTools
+        normalized = CalendarTools._normalize_timezone(timezone_str)
+        return normalized
+    except Exception:
+        return None
+
+
 def upsert_user_profile(profile: dict[str, Any], db_path: str | Path | None = None) -> None:
-    """Insert or update the single user profile record."""
+    """Insert or update the single user profile record.
+    
+    Validates and normalizes timezone field to IANA format if present.
+    """
     if not isinstance(profile, dict):
         raise ValueError("Profile must be a JSON object")
+    
+    # Validate and normalize timezone to Google Calendar format
+    if "timezone" in profile and profile["timezone"]:
+        normalized_tz = validate_timezone(profile["timezone"])
+        if normalized_tz:
+            profile["timezone"] = normalized_tz
+        else:
+            # If provided timezone is invalid, remove it rather than store invalid value
+            profile.pop("timezone", None)
 
     now = datetime.now(UTC).isoformat()
     payload = json.dumps(profile, ensure_ascii=True)

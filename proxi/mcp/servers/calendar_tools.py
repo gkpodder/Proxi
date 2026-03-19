@@ -134,28 +134,84 @@ class CalendarTools:
         if lowered in aliases:
             return aliases[lowered]
 
-        all_tzs = available_timezones()
-        if raw in all_tzs:
+        # Try direct validation with ZoneInfo first (works on most systems)
+        try:
+            ZoneInfo(raw)
+            return raw
+        except Exception:
+            pass
+
+        # Fallback: check against static list of common IANA timezones (Windows compatibility)
+        common_timezones = {
+            "UTC",
+            "America/New_York",
+            "America/Chicago",
+            "America/Denver",
+            "America/Los_Angeles",
+            "America/Anchorage",
+            "Pacific/Honolulu",
+            "America/Toronto",
+            "America/Mexico_City",
+            "America/Bogota",
+            "America/Lima",
+            "America/Caracas",
+            "America/Argentina/Buenos_Aires",
+            "America/Sao_Paulo",
+            "America/Godthab",
+            "Atlantic/Azores",
+            "Atlantic/Cape_Verde",
+            "Europe/London",
+            "Europe/Dublin",
+            "Europe/Paris",
+            "Europe/Berlin",
+            "Europe/Amsterdam",
+            "Europe/Brussels",
+            "Europe/Vienna",
+            "Europe/Prague",
+            "Europe/Warsaw",
+            "Europe/Athens",
+            "Europe/Helsinki",
+            "Europe/Istanbul",
+            "Europe/Moscow",
+            "Asia/Dubai",
+            "Asia/Kolkata",
+            "Asia/Bangkok",
+            "Asia/Hong_Kong",
+            "Asia/Tokyo",
+            "Asia/Seoul",
+            "Asia/Shanghai",
+            "Australia/Sydney",
+            "Australia/Melbourne",
+            "Pacific/Auckland",
+        }
+
+        if raw in common_timezones:
             return raw
 
         # Normalize separators and case: "america/net york" -> "America/Net_York".
         normalized = raw.replace("\\", "/").replace("-", "_").strip()
         normalized = re.sub(r"\s+", "_", normalized)
         normalized = "/".join(part.capitalize() for part in normalized.split("/"))
-        if normalized in all_tzs:
+        if normalized in common_timezones:
             return normalized
 
-        # Fuzzy matching for common typos.
-        tz_by_lower = {tz.lower(): tz for tz in all_tzs}
-        fuzzy_target = normalized.lower()
-        match = difflib.get_close_matches(
-            fuzzy_target,
-            list(tz_by_lower.keys()),
-            n=1,
-            cutoff=0.78,
-        )
-        if match:
-            return tz_by_lower[match[0]]
+        # Try fuzzy matching only if available_timezones() returns results
+        try:
+            all_tzs = available_timezones()
+            if all_tzs:  # Only attempt if we have timezone data
+                tz_by_lower = {tz.lower(): tz for tz in all_tzs}
+                fuzzy_target = normalized.lower()
+                match = difflib.get_close_matches(
+                    fuzzy_target,
+                    list(tz_by_lower.keys()),
+                    n=1,
+                    cutoff=0.78,
+                )
+                if match:
+                    return tz_by_lower[match[0]]
+        except Exception:
+            pass
+
         return None
 
     @staticmethod

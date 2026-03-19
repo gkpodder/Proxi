@@ -1,6 +1,6 @@
 """Datetime tool for providing current date and time."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone as dt_timezone
 
 from proxi.tools.base import BaseTool, ToolResult
 
@@ -12,14 +12,14 @@ class DateTimeTool(BaseTool):
         """Initialize the datetime tool."""
         super().__init__(
             name="get_datetime",
-            description="Get the current date and time. Use this when you need to know today's date, the current time, or temporal context (e.g. for scheduling, relative dates, or time-sensitive tasks).",
+            description="Get the current date and time. Use this when you need to know today's date, the current time, or temporal context (e.g. for scheduling, relative dates, or time-sensitive tasks). Supports IANA timezone names (e.g. 'America/Toronto') and common aliases (e.g. 'EST', 'PST').",
             parallel_safe=True,
             parameters_schema={
                 "type": "object",
                 "properties": {
                     "timezone": {
                         "type": "string",
-                        "description": "Optional IANA timezone name (e.g. 'America/New_York'). If omitted, returns UTC.",
+                        "description": "Optional IANA timezone name (e.g. 'America/New_York', 'America/Toronto') or alias (e.g. 'EST', 'PST'). If omitted, returns UTC.",
                     },
                 },
                 "required": [],
@@ -35,16 +35,34 @@ class DateTimeTool(BaseTool):
                 try:
                     from zoneinfo import ZoneInfo
 
-                    tz = ZoneInfo(tz_name)
+                    # Try to normalize the timezone (handles aliases like EST, PST, etc.)
+                    from proxi.mcp.servers.calendar_tools import CalendarTools
+
+                    normalized_tz = CalendarTools._normalize_timezone(tz_name)
+                    if not normalized_tz:
+                        return ToolResult(
+                            success=False,
+                            output="",
+                            error=f"Timezone '{tz_name}' not recognized. Use IANA format (e.g. America/Toronto) or an alias (EST, PST, etc.).",
+                        )
+
+                    tz = ZoneInfo(normalized_tz)
                     now = datetime.now(tz)
+                except ImportError:
+                    # Fallback if ZoneInfo not available
+                    return ToolResult(
+                        success=False,
+                        output="",
+                        error="Timezone support not available. Please try again.",
+                    )
                 except Exception as e:
                     return ToolResult(
                         success=False,
                         output="",
-                        error=f"Invalid timezone '{tz_name}': {e}",
+                        error=f"Error with timezone '{tz_name}': {str(e)}",
                     )
             else:
-                now = datetime.now(timezone.utc)
+                now = datetime.now(dt_timezone.utc)
 
             # Human-readable and ISO format for the agent
             iso = now.isoformat()
