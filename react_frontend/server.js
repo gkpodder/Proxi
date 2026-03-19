@@ -94,6 +94,32 @@ async function toggleMcp(mcpName, enabled) {
   return JSON.parse(raw || "{}");
 }
 
+async function getUserProfile() {
+  const raw = await runPython(["-m", "proxi.security.key_store", "get-profile"]);
+  const payload = JSON.parse(raw || "{}");
+  return {
+    profile: payload.profile || null,
+    updatedAt: payload.updated_at || null,
+  };
+}
+
+async function upsertUserProfile(profile) {
+  const encoded = Buffer.from(JSON.stringify(profile || {}), "utf-8").toString("base64");
+  const raw = await runPython([
+    "-m",
+    "proxi.security.key_store",
+    "upsert-profile",
+    "--json-base64",
+    encoded,
+  ]);
+  return JSON.parse(raw || "{}");
+}
+
+async function deleteUserProfile() {
+  const raw = await runPython(["-m", "proxi.security.key_store", "delete-profile"]);
+  return JSON.parse(raw || "{}");
+}
+
 async function loadEnvFromKeyStore() {
   const raw = await runPython(["-m", "proxi.security.key_store", "export-env"]);
   const payload = JSON.parse(raw || "{}");
@@ -184,6 +210,43 @@ const server = createServer(async (req, res) => {
       await toggleMcp(mcpName, enabled);
       broadcastBridgeCommand({ type: "refresh_mcps" });
       sendJson(res, 200, { ok: true, mcpName, enabled });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/profile" && method === "GET") {
+    try {
+      const { profile, updatedAt } = await getUserProfile();
+      sendJson(res, 200, { profile, updatedAt });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/profile" && method === "PUT") {
+    try {
+      const body = await readJsonBody(req);
+      const profile = body?.profile;
+      if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+        sendJson(res, 400, { error: "Profile must be a JSON object" });
+        return;
+      }
+
+      await upsertUserProfile(profile);
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/profile" && method === "DELETE") {
+    try {
+      await deleteUserProfile();
+      sendJson(res, 200, { ok: true });
     } catch (error) {
       sendJson(res, 500, { error: String(error) });
     }

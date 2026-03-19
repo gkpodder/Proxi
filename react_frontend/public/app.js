@@ -32,6 +32,19 @@ function getOptionsWithOther(question) {
   return [];
 }
 
+const TIMEZONE_OPTIONS = [
+  "America/Toronto",
+  "America/Vancouver",
+  "America/New_York",
+  "America/Los_Angeles",
+  "Europe/London",
+  "Europe/Berlin",
+  "Asia/Kolkata",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "UTC",
+];
+
 function App() {
   const [currentPage, setCurrentPage] = useState("chat");
   const [socketState, setSocketState] = useState("connecting");
@@ -55,6 +68,19 @@ function App() {
   const [mcpsLoading, setMcpsLoading] = useState(false);
   const [mcpsSaving, setMcpsSaving] = useState(false);
   const [mcpFeedback, setMcpFeedback] = useState("");
+  const [profile, setProfile] = useState({
+    name: "",
+    location: "",
+    timezone: "",
+    age: "",
+    occupation: "",
+    email: "",
+    email_signature: "",
+    demographics: "",
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileFeedback, setProfileFeedback] = useState("");
 
   const hasSelectedAgent = !!bootInfo;
   const isPromptActive = !!bootstrapInput || !!formUi;
@@ -121,7 +147,118 @@ function App() {
     if (currentPage !== "settings") return;
     loadApiKeys();
     loadMcps();
+    loadUserProfile();
   }, [currentPage]);
+
+  async function loadUserProfile() {
+    setProfileLoading(true);
+    setProfileFeedback("");
+    try {
+      const response = await fetch("/api/profile");
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to load profile");
+      }
+
+      const saved = payload.profile || {};
+      setProfile({
+        name: String(saved.name || ""),
+        location: String(saved.location || ""),
+        timezone: String(saved.timezone || ""),
+        age: saved.age === 0 || saved.age ? String(saved.age) : "",
+        occupation: String(saved.occupation || ""),
+        email: String(saved.email || ""),
+        email_signature: String(saved.email_signature || ""),
+        demographics: String(saved.demographics || ""),
+      });
+    } catch (error) {
+      setProfileFeedback(`Error: ${String(error)}`);
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
+  async function saveUserProfile() {
+    const trimmedProfile = {
+      name: profile.name.trim(),
+      location: profile.location.trim(),
+      timezone: profile.timezone.trim(),
+      age: profile.age.trim(),
+      occupation: profile.occupation.trim(),
+      email: profile.email.trim(),
+      email_signature: profile.email_signature.trim(),
+      demographics: profile.demographics.trim(),
+    };
+
+    const ageNumber = trimmedProfile.age ? Number.parseInt(trimmedProfile.age, 10) : null;
+    if (trimmedProfile.age && (!Number.isFinite(ageNumber) || ageNumber <= 0)) {
+      setProfileFeedback("Error: age must be a positive whole number.");
+      return;
+    }
+
+    const payloadProfile = {
+      ...trimmedProfile,
+      age: ageNumber,
+    };
+
+    setProfileSaving(true);
+    setProfileFeedback("");
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile: payloadProfile }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to save profile");
+      }
+
+      setProfileFeedback("Profile saved. New responses will use this context.");
+      await loadUserProfile();
+    } catch (error) {
+      setProfileFeedback(`Error: ${String(error)}`);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  async function clearUserProfile() {
+    const confirmed = window.confirm("Delete all saved profile information?");
+    if (!confirmed) return;
+
+    setProfileSaving(true);
+    setProfileFeedback("");
+    try {
+      const response = await fetch("/api/profile", { method: "DELETE" });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to delete profile");
+      }
+
+      setProfile({
+        name: "",
+        location: "",
+        timezone: "",
+        age: "",
+        occupation: "",
+        email: "",
+        email_signature: "",
+        demographics: "",
+      });
+      setProfileFeedback(
+        "Profile deleted from DB. Deletion takes effect from the next session, and current context may still include previously loaded profile info."
+      );
+    } catch (error) {
+      setProfileFeedback(`Error: ${String(error)}`);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  function updateProfileField(field, value) {
+    setProfile((prev) => ({ ...prev, [field]: value }));
+  }
 
   async function loadApiKeys() {
     setKeysLoading(true);
@@ -656,6 +793,112 @@ function App() {
                 disabled={socketState !== "connected" || isPromptActive}
               >
                 Switch Agent
+              </button>
+            </div>
+          </div>
+
+          <div className="settingsCard">
+            <h2 className="settingsTitle">Profile</h2>
+            <div className="settingsHint">
+              Used to personalize replies like email signatures and timezone-aware suggestions.
+            </div>
+            <div className="settingsHint">
+              If you delete your profile, deletion takes effect from the next session; current context may still include already loaded profile info.
+            </div>
+
+            {profileLoading ? (
+              <div className="formHint">Loading profile...</div>
+            ) : (
+              <div className="profileGrid">
+                <label className="profileField">
+                  <span>Name</span>
+                  <input
+                    type="text"
+                    value={profile.name}
+                    onChange={(e) => updateProfileField("name", e.target.value)}
+                    placeholder="Your full name"
+                  />
+                </label>
+                <label className="profileField">
+                  <span>Location</span>
+                  <input
+                    type="text"
+                    value={profile.location}
+                    onChange={(e) => updateProfileField("location", e.target.value)}
+                    placeholder="City, Country"
+                  />
+                </label>
+                <label className="profileField">
+                  <span>Timezone</span>
+                  <select
+                    className="profileSelect"
+                    value={profile.timezone}
+                    onChange={(e) => updateProfileField("timezone", e.target.value)}
+                  >
+                    <option value="">Select timezone</option>
+                    {TIMEZONE_OPTIONS.map((tz) => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="profileField">
+                  <span>Age</span>
+                  <input
+                    type="text"
+                    value={profile.age}
+                    onChange={(e) => updateProfileField("age", e.target.value)}
+                    placeholder="21"
+                  />
+                </label>
+                <label className="profileField">
+                  <span>Occupation</span>
+                  <input
+                    type="text"
+                    value={profile.occupation}
+                    onChange={(e) => updateProfileField("occupation", e.target.value)}
+                    placeholder="Student, Engineer, Designer..."
+                  />
+                </label>
+                <label className="profileField">
+                  <span>Email</span>
+                  <input
+                    type="text"
+                    value={profile.email}
+                    onChange={(e) => updateProfileField("email", e.target.value)}
+                    placeholder="you@example.com"
+                  />
+                </label>
+                <label className="profileField profileFieldFull">
+                  <span>Preferred Email Signature</span>
+                  <input
+                    type="text"
+                    value={profile.email_signature}
+                    onChange={(e) => updateProfileField("email_signature", e.target.value)}
+                    placeholder="Best regards, Name"
+                  />
+                </label>
+                <label className="profileField profileFieldFull">
+                  <span>Additional Demographics</span>
+                  <textarea
+                    className="formTextarea"
+                    value={profile.demographics}
+                    onChange={(e) => updateProfileField("demographics", e.target.value)}
+                    placeholder="Share any context you want Proxi to consider (optional)."
+                  />
+                </label>
+              </div>
+            )}
+
+            {profileFeedback && <div className="formHint">{profileFeedback}</div>}
+            <div className="formActions">
+              <button className="primaryBtn" onClick={saveUserProfile} disabled={profileLoading || profileSaving}>
+                Save Profile
+              </button>
+              <button onClick={clearUserProfile} disabled={profileLoading || profileSaving}>
+                Clear Profile
+              </button>
+              <button onClick={() => loadUserProfile()} disabled={profileLoading || profileSaving}>
+                Refresh
               </button>
             </div>
           </div>

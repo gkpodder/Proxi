@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from proxi.mcp.catalog import known_mcp_categories
 
@@ -75,8 +77,69 @@ def init_db(db_path: str | Path | None = None) -> Path:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_profile (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                profile_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
     return db_file
+
+
+def get_user_profile(db_path: str | Path | None = None) -> UserProfileRecord | None:
+    """Retrieve the persisted user profile if present."""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        row = conn.execute(
+            "SELECT profile_json, updated_at FROM user_profile WHERE id = 1"
+        ).fetchone()
+
+    if not row:
+        return None
+
+    try:
+        parsed = json.loads(row["profile_json"])
+    except json.JSONDecodeError as exc:
+        raise ValueError("Stored user profile is invalid JSON") from exc
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Stored user profile must be a JSON object")
+
+    return UserProfileRecord(profile=parsed, updated_at=row["updated_at"])
+
+
+def upsert_user_profile(profile: dict[str, Any], db_path: str | Path | None = None) -> None:
+    """Insert or update the single user profile record."""
+    if not isinstance(profile, dict):
+        raise ValueError("Profile must be a JSON object")
+
+    now = datetime.now(UTC).isoformat()
+    payload = json.dumps(profile, ensure_ascii=True)
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO user_profile (id, profile_json, updated_at)
+            VALUES (1, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                profile_json = excluded.profile_json,
+                updated_at = excluded.updated_at
+            """,
+            (payload, now),
+        )
+        conn.commit()
+
+
+def delete_user_profile(db_path: str | Path | None = None) -> None:
+    """Delete the persisted user profile record if it exists."""
+    init_db(db_path)
+    with get_connection(db_path) as conn:
+        conn.execute("DELETE FROM user_profile WHERE id = 1")
+        conn.commit()
 
 
 def upsert_key(key_name: str, key_value: str, db_path: str | Path | None = None) -> None:
@@ -157,6 +220,12 @@ class MCPRecord:
     mcp_name: str
     enabled: bool
     created_at: str
+
+
+@dataclass(slots=True)
+class UserProfileRecord:
+    profile: dict[str, Any]
+    updated_at: str
 
 
 def enable_mcp(mcp_name: str, enabled: bool = True, db_path: str | Path | None = None) -> None:
@@ -253,6 +322,18 @@ def _build_parser() -> argparse.ArgumentParser:
     disable_mcp_parser = subparsers.add_parser("disable-mcp", help="Disable an MCP")
     disable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, calendar, notion, weather)")
 
+    # User profile subcommands
+    subparsers.add_parser("get-profile", help="Get the saved user profile")
+
+    upsert_profile_parser = subparsers.add_parser("upsert-profile", help="Insert or update the user profile")
+    upsert_profile_parser.add_argument("--json", help="Profile payload as JSON object")
+    upsert_profile_parser.add_argument(
+        "--json-base64",
+        help="Profile payload as base64-encoded JSON object",
+    )
+
+    subparsers.add_parser("delete-profile", help="Delete the saved user profile")
+
     return parser
 
 
@@ -328,6 +409,42 @@ def main() -> int:
         if args.command == "disable-mcp":
             enable_mcp(args.mcp_name, enabled=False, db_path=db_path)
             print(json.dumps({"ok": True, "mcp_name": args.mcp_name.strip().lower(), "enabled": False}))
+            return 0
+
+        if args.command == "get-profile":
+            record = get_user_profile(db_path)
+            if not record:
+                print(json.dumps({"ok": True, "profile": None}))
+                return 0
+            print(json.dumps({"ok": True, "profile": record.profile, "updated_at": record.updated_at}))
+            return 0
+
+        if args.command == "upsert-profile":
+            if not args.json and not args.json_base64:
+                raise ValueError("Provide --json or --json-base64")
+
+            profile_payload = args.json
+            if args.json_base64:
+                try:
+                    profile_payload = base64.b64decode(args.json_base64.encode("ascii")).decode("utf-8")
+                except Exception as exc:
+                    raise ValueError("Invalid base64 profile payload") from exc
+
+            try:
+                profile = json.loads(profile_payload or "{}")
+            except json.JSONDecodeError as exc:
+                raise ValueError("Invalid profile JSON payload") from exc
+
+            if not isinstance(profile, dict):
+                raise ValueError("Profile payload must be a JSON object")
+
+            upsert_user_profile(profile, db_path)
+            print(json.dumps({"ok": True}))
+            return 0
+
+        if args.command == "delete-profile":
+            delete_user_profile(db_path)
+            print(json.dumps({"ok": True}))
             return 0
 
     except Exception as exc:
