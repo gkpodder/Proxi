@@ -14,6 +14,7 @@ class ReadFileTool(BaseTool):
         super().__init__(
             name="read_file",
             description="Read the contents of a file",
+            parallel_safe=True,
             parameters_schema={
                 "type": "object",
                 "properties": {
@@ -69,6 +70,7 @@ class WriteFileTool(BaseTool):
         super().__init__(
             name="write_file",
             description="Write content to a file",
+            parallel_safe=False,
             parameters_schema={
                 "type": "object",
                 "properties": {
@@ -125,6 +127,7 @@ class ListDirectoryTool(BaseTool):
         super().__init__(
             name="list_directory",
             description="List contents of a directory",
+            parallel_safe=True,
             parameters_schema={
                 "type": "object",
                 "properties": {

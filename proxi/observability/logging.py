@@ -3,6 +3,8 @@
 import atexit
 import json
 import logging
+import os
+import random
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -302,6 +304,11 @@ class LogManager:
 
     def log_api_call(self, method: str, request: dict[str, Any], response: dict[str, Any]) -> None:
         """Log an API call to the JSON api log file with nice formatting."""
+        sample_rate = float(os.getenv("PROXI_API_LOG_SAMPLE_RATE", "1.0"))
+        if sample_rate < 1.0 and random.random() > max(0.0, sample_rate):
+            return
+        # Keep pretty JSON as the default for human-readability.
+        pretty = os.getenv("PROXI_API_LOG_PRETTY", "1").strip().lower() in {"1", "true", "yes"}
         entry = {
             "timestamp": datetime.now().isoformat(),
             "method": method,
@@ -310,8 +317,10 @@ class LogManager:
         }
         try:
             with open(self.api_log_file, "a", encoding="utf-8") as f:
-                # Pretty-print with indentation for readability
-                f.write(json.dumps(entry, indent=2) + "\n\n")
+                if pretty:
+                    f.write(json.dumps(entry, indent=2) + "\n\n")
+                else:
+                    f.write(json.dumps(entry, separators=(",", ":")) + "\n")
         except Exception as e:
             get_logger(__name__).error("failed_to_log_api_call", error=str(e))
 

@@ -19,6 +19,13 @@ class ToolRegistry:
         """Register a tool."""
         self._tools[tool.name] = tool
 
+    def unregister_by_prefix(self, prefix: str) -> int:
+        """Unregister tools whose names start with the given prefix."""
+        to_remove = [name for name in self._tools if name.startswith(prefix)]
+        for name in to_remove:
+            self._tools.pop(name, None)
+        return len(to_remove)
+
     def register_raw_spec(self, spec: ToolSpec) -> None:
         """Register a raw tool spec (e.g. for tools that are intercepted, not executed)."""
         self._raw_specs.append(spec)
@@ -35,6 +42,11 @@ class ToolRegistry:
         """Convert all tools to specifications."""
         tool_specs = [ToolSpec(**tool.to_spec()) for tool in self._tools.values()]
         return tool_specs + self._raw_specs
+
+    def is_parallel_safe(self, name: str) -> bool:
+        """Whether a tool is marked safe to execute in parallel."""
+        tool = self.get(name)
+        return bool(getattr(tool, "parallel_safe", False)) if tool is not None else False
 
     async def execute(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a tool."""

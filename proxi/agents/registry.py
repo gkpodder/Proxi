@@ -8,6 +8,7 @@ from typing import Any
 from proxi.agents.base import AgentContext, BaseSubAgent, SubAgent, SubAgentResult
 from proxi.llm.schemas import SubAgentSpec
 from proxi.observability.logging import get_logger
+from proxi.observability.perf import elapsed_ms, emit_perf, now_ns
 
 logger = get_logger(__name__)
 
@@ -90,6 +91,7 @@ class SubAgentManager:
         )
 
         start_time = time.time()
+        start_ns = now_ns()
 
         try:
             # Run with timeout
@@ -111,6 +113,13 @@ class SubAgentManager:
                 confidence=result.confidence,
                 elapsed=elapsed,
             )
+            emit_perf(
+                "perf_subagent_manager",
+                agent=agent_name,
+                success=result.success,
+                timeout=False,
+                elapsed_ms=round(elapsed_ms(start_ns), 3),
+            )
 
             return result
 
@@ -121,6 +130,13 @@ class SubAgentManager:
                 agent=agent_name,
                 elapsed=elapsed,
                 max_time=max_time,
+            )
+            emit_perf(
+                "perf_subagent_manager",
+                agent=agent_name,
+                success=False,
+                timeout=True,
+                elapsed_ms=round(elapsed_ms(start_ns), 3),
             )
             return SubAgentResult(
                 summary=f"Sub-agent '{agent_name}' timed out after {elapsed:.2f}s",
@@ -137,6 +153,13 @@ class SubAgentManager:
                 agent=agent_name,
                 error=str(e),
                 elapsed=elapsed,
+            )
+            emit_perf(
+                "perf_subagent_manager",
+                agent=agent_name,
+                success=False,
+                timeout=False,
+                elapsed_ms=round(elapsed_ms(start_ns), 3),
             )
             return SubAgentResult(
                 summary=f"Sub-agent '{agent_name}' encountered an error",

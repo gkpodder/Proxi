@@ -16,6 +16,7 @@ class LLMClient(Protocol):
         tools: Sequence[ToolSpec] | None = None,
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
+        session_id: str | None = None,
     ) -> ModelResponse:
         """
         Generate a response from the model.
@@ -25,6 +26,7 @@ class LLMClient(Protocol):
             tools: Available tools
             agents: Available sub-agents
             system: Optional system prompt string (for providers with a top-level system field)
+            session_id: Optional session identifier for provider-specific caching optimizations
 
         Returns:
             Model response with decision and usage

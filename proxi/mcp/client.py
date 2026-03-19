@@ -3,12 +3,24 @@
 import asyncio
 import json
 import os
-import subprocess
 from typing import Any
 
 from proxi.observability.logging import get_logger
+from proxi.observability.perf import elapsed_ms, emit_perf, now_ns
 
 logger = get_logger(__name__)
+
+
+class MCPClientError(RuntimeError):
+    """Base MCP client exception."""
+
+
+class MCPTimeoutError(MCPClientError):
+    """Timeout waiting for MCP response."""
+
+
+class MCPCircuitOpenError(MCPClientError):
+    """Raised when MCP circuit breaker is open."""
 
 
 class MCPClient:
@@ -29,6 +41,14 @@ class MCPClient:
         self.logger = logger
         self._read_task: asyncio.Task | None = None
         self._stderr_task: asyncio.Task | None = None
+        self._max_inflight = max(1, int(os.getenv("PROXI_MCP_MAX_INFLIGHT", "16")))
+        self._request_semaphore = asyncio.Semaphore(self._max_inflight)
+        self._max_retries = max(0, int(os.getenv("PROXI_MCP_MAX_RETRIES", "1")))
+        self._retry_backoff_ms = max(1, int(os.getenv("PROXI_MCP_RETRY_BACKOFF_MS", "200")))
+        self._timeout_threshold = max(1, int(os.getenv("PROXI_MCP_CIRCUIT_THRESHOLD", "4")))
+        self._circuit_cooldown_s = max(1, int(os.getenv("PROXI_MCP_CIRCUIT_COOLDOWN_S", "10")))
+        self._consecutive_timeouts = 0
+        self._circuit_open_until = 0.0
 
     async def _get_next_request_id(self) -> int:
         """Get the next request ID."""
@@ -107,9 +127,63 @@ class MCPClient:
     ) -> dict[str, Any]:
         """Send a JSON-RPC request and wait for response."""
         if not self.process or not self.process.stdin:
-            raise RuntimeError("MCP client not connected")
+            raise MCPClientError("MCP client not connected")
+
+        now = asyncio.get_running_loop().time()
+        if now < self._circuit_open_until:
+            emit_perf(
+                "perf_mcp_request",
+                method=method,
+                status="circuit_open",
+                elapsed_ms=0.0,
+                pending_depth=len(self.pending_requests),
+            )
+            raise MCPCircuitOpenError(f"MCP circuit open for method={method}")
+
+        can_retry = method != "tools/call" or os.getenv("PROXI_MCP_RETRY_TOOL_CALLS", "0") in {"1", "true", "yes"}
+        attempts = self._max_retries + 1 if can_retry else 1
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return await self._send_request_once(method, params=params, timeout=timeout)
+            except MCPTimeoutError as e:
+                last_error = e
+                self._consecutive_timeouts += 1
+                if self._consecutive_timeouts >= self._timeout_threshold:
+                    self._circuit_open_until = asyncio.get_running_loop().time() + self._circuit_cooldown_s
+                    emit_perf(
+                        "perf_mcp_circuit_opened",
+                        method=method,
+                        threshold=self._timeout_threshold,
+                        cooldown_s=self._circuit_cooldown_s,
+                    )
+                if attempt >= attempts:
+                    raise
+                await asyncio.sleep((self._retry_backoff_ms * attempt) / 1000.0)
+                emit_perf("perf_mcp_retry", method=method, attempt=attempt)
+            except Exception as e:
+                last_error = e
+                if attempt >= attempts:
+                    raise
+                await asyncio.sleep((self._retry_backoff_ms * attempt) / 1000.0)
+                emit_perf("perf_mcp_retry", method=method, attempt=attempt)
+
+        if last_error is not None:
+            raise last_error
+        raise MCPClientError("MCP request failed unexpectedly")
+
+    async def _send_request_once(
+        self,
+        method: str,
+        params: dict[str, Any] | None = None,
+        timeout: float | None = None,
+    ) -> dict[str, Any]:
+        """Send one JSON-RPC request attempt and wait for response."""
+        if not self.process or not self.process.stdin:
+            raise MCPClientError("MCP client not connected")
 
         request_id = await self._get_next_request_id()
+        request_start_ns = now_ns()
         request = {
             "jsonrpc": "2.0",
             "id": request_id,
@@ -121,11 +195,17 @@ class MCPClient:
         # Create future for response
         future: asyncio.Future[dict[str, Any]] = asyncio.Future()
         self.pending_requests[request_id] = future
+        emit_perf(
+            "perf_mcp_pending_depth",
+            method=method,
+            depth=len(self.pending_requests),
+        )
 
         # Send request
         request_json = json.dumps(request) + "\n"
-        self.process.stdin.write(request_json.encode())
-        await self.process.stdin.drain()
+        async with self._request_semaphore:
+            self.process.stdin.write(request_json.encode())
+            await self.process.stdin.drain()
 
         self.logger.debug("mcp_request_sent", method=method, id=request_id)
 
@@ -133,10 +213,25 @@ class MCPClient:
         try:
             wait_timeout = 30.0 if timeout is None else timeout
             result = await asyncio.wait_for(future, timeout=wait_timeout)
+            emit_perf(
+                "perf_mcp_request",
+                method=method,
+                status="ok",
+                elapsed_ms=round(elapsed_ms(request_start_ns), 3),
+                pending_depth=len(self.pending_requests),
+            )
+            self._consecutive_timeouts = 0
             return result
         except asyncio.TimeoutError:
             self.pending_requests.pop(request_id, None)
-            raise RuntimeError(f"MCP request timeout: {method}")
+            emit_perf(
+                "perf_mcp_request",
+                method=method,
+                status="timeout",
+                elapsed_ms=round(elapsed_ms(request_start_ns), 3),
+                pending_depth=len(self.pending_requests),
+            )
+            raise MCPTimeoutError(f"MCP request timeout: {method}")
 
     async def initialize(self) -> dict[str, Any]:
         """Initialize connection to MCP server."""

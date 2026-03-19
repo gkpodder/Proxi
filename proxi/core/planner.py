@@ -47,6 +47,7 @@ class Planner:
 
         # Build prompt with static→incremental→volatile structure.
         payload = self.prompt_builder.build(state, tools=tools)
+        session_id = state.workspace.session_id if state.workspace is not None else None
 
         generate_stream = getattr(self.llm_client, "generate_stream", None)
         if stream_callback and generate_stream is not None:
@@ -56,6 +57,7 @@ class Planner:
                 tools=tools,
                 agents=agents or [],
                 system=payload.system,
+                session_id=session_id,
             ):
                 if chunk:
                     await stream_callback(chunk)
@@ -67,6 +69,7 @@ class Planner:
                     tools=tools,
                     agents=agents or [],
                     system=payload.system,
+                    session_id=session_id,
                 )
             return response.decision, response.usage
         else:
@@ -75,5 +78,6 @@ class Planner:
                 tools=tools,
                 agents=agents or [],
                 system=payload.system,
+                session_id=session_id,
             )
             return response.decision, response.usage

@@ -4,14 +4,68 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+import atexit
+import os
 from pathlib import Path
+import queue
+import threading
 from typing import Annotated, Any, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 import json
+from proxi.observability.perf import elapsed_ms, emit_perf, now_ns
 
 if TYPE_CHECKING:
     from proxi.interaction.models import FormRequest, FormResponse
+
+
+class _HistoryWriter:
+    """Background writer to keep history persistence off the event loop."""
+
+    def __init__(self) -> None:
+        self._enabled = os.getenv("PROXI_ASYNC_HISTORY_WRITE", "1").strip().lower() not in {
+            "0",
+            "false",
+            "no",
+            "off",
+        }
+        self._queue: queue.SimpleQueue[tuple[str, str]] = queue.SimpleQueue()
+        self._thread: threading.Thread | None = None
+        self._stop = False
+        if self._enabled:
+            self._thread = threading.Thread(target=self._run, name="proxi-history-writer", daemon=True)
+            self._thread.start()
+            atexit.register(self.close)
+
+    def append(self, path: Path, payload: str) -> None:
+        if not self._enabled:
+            self._write(path, payload)
+            return
+        self._queue.put((str(path), payload))
+
+    def close(self) -> None:
+        self._stop = True
+        self._queue.put(("", ""))
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=0.5)
+
+    def _run(self) -> None:
+        while not self._stop:
+            path_str, payload = self._queue.get()
+            if not path_str and not payload:
+                continue
+            self._write(Path(path_str), payload)
+
+    def _write(self, path: Path, payload: str) -> None:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as f:
+                f.write(payload)
+        except Exception:
+            return
+
+
+_history_writer = _HistoryWriter()
 
 
 class TurnStatus(str, Enum):
@@ -162,22 +216,34 @@ class AgentState(BaseModel):
 
     def _append_history_jsonl(self, message: Message) -> None:
         """Append a single message to the workspace history.jsonl file."""
+        start_ns = now_ns()
         try:
             path = Path(self.workspace.history_path)  # type: ignore[union-attr]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as f:
-                f.write(message.model_dump_json() + "\n")
+            payload = message.model_dump_json() + "\n"
+            _history_writer.append(path, payload)
+            emit_perf(
+                "perf_history_write",
+                kind="message",
+                bytes=len(payload.encode("utf-8")),
+                elapsed_ms=round(elapsed_ms(start_ns), 3),
+            )
         except Exception:
             # History persistence is best-effort; failures should not break the loop.
             return
 
     def _append_to_history_file(self, obj: dict[str, Any]) -> None:
         """Append a JSON object to the workspace history.jsonl file."""
+        start_ns = now_ns()
         try:
             path = Path(self.workspace.history_path)  # type: ignore[union-attr]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(obj) + "\n")
+            payload = json.dumps(obj) + "\n"
+            _history_writer.append(path, payload)
+            emit_perf(
+                "perf_history_write",
+                kind="interaction",
+                bytes=len(payload.encode("utf-8")),
+                elapsed_ms=round(elapsed_ms(start_ns), 3),
+            )
         except Exception:
             # History persistence is best-effort; failures should not break the loop.
             return
