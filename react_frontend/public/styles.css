@@ -487,6 +487,31 @@ input[type="text"]::placeholder {
   border-color: #3b82f6;
 }
 
+.profileSelect {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  color: #e5e5e5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.profileSelect:focus {
+  border-color: #3b82f6;
+}
+
+.app.light .profileSelect {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #1f2937;
+}
+
+.app.light .profileSelect:focus {
+  border-color: #3b82f6;
+}
+
 button {
   background: #1a1a1a;
   border: 1px solid #333;
@@ -840,6 +865,32 @@ button:disabled {
   font-weight: 600;
 }
 
+.profileGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.profileField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profileField span {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.profileFieldFull {
+  grid-column: 1 / -1;
+}
+
+.app.light .profileField span {
+  color: #6b7280;
+}
+
 .app.light .mcpRow {
   background: rgba(59, 130, 246, 0.02);
   border-color: rgba(59, 130, 246, 0.1);
@@ -897,6 +948,10 @@ button:disabled {
   }
 
   .mcpRow {
+    grid-template-columns: 1fr;
+  }
+
+  .profileGrid {
     grid-template-columns: 1fr;
   }
 

@@ -11,6 +11,16 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const publicDir = path.join(__dirname, "public");
 const port = Number(process.env.PORT || 5174);
+const activeBridges = new Set();
+
+function broadcastBridgeCommand(command) {
+  const payload = JSON.stringify(command);
+  for (const bridge of activeBridges) {
+    if (bridge?.stdin?.writable) {
+      bridge.stdin.write(`${payload}\n`);
+    }
+  }
+}
 
 function runPython(commandArgs) {
   return new Promise((resolve, reject) => {
@@ -81,6 +91,32 @@ async function listMcps() {
 async function toggleMcp(mcpName, enabled) {
   const command = enabled ? "enable-mcp" : "disable-mcp";
   const raw = await runPython(["-m", "proxi.security.key_store", command, mcpName]);
+  return JSON.parse(raw || "{}");
+}
+
+async function getUserProfile() {
+  const raw = await runPython(["-m", "proxi.security.key_store", "get-profile"]);
+  const payload = JSON.parse(raw || "{}");
+  return {
+    profile: payload.profile || null,
+    updatedAt: payload.updated_at || null,
+  };
+}
+
+async function upsertUserProfile(profile) {
+  const encoded = Buffer.from(JSON.stringify(profile || {}), "utf-8").toString("base64");
+  const raw = await runPython([
+    "-m",
+    "proxi.security.key_store",
+    "upsert-profile",
+    "--json-base64",
+    encoded,
+  ]);
+  return JSON.parse(raw || "{}");
+}
+
+async function deleteUserProfile() {
+  const raw = await runPython(["-m", "proxi.security.key_store", "delete-profile"]);
   return JSON.parse(raw || "{}");
 }
 
@@ -172,7 +208,45 @@ const server = createServer(async (req, res) => {
       const enabled = Boolean(body?.enabled);
 
       await toggleMcp(mcpName, enabled);
+      broadcastBridgeCommand({ type: "refresh_mcps" });
       sendJson(res, 200, { ok: true, mcpName, enabled });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/profile" && method === "GET") {
+    try {
+      const { profile, updatedAt } = await getUserProfile();
+      sendJson(res, 200, { profile, updatedAt });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/profile" && method === "PUT") {
+    try {
+      const body = await readJsonBody(req);
+      const profile = body?.profile;
+      if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+        sendJson(res, 400, { error: "Profile must be a JSON object" });
+        return;
+      }
+
+      await upsertUserProfile(profile);
+      sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/profile" && method === "DELETE") {
+    try {
+      await deleteUserProfile();
+      sendJson(res, 200, { ok: true });
     } catch (error) {
       sendJson(res, 500, { error: String(error) });
     }
@@ -214,6 +288,7 @@ wss.on("connection", (ws) => {
         shell: process.platform === "win32",
         stdio: ["pipe", "pipe", "pipe"],
       });
+      activeBridges.add(bridge);
 
       bridge.stdout.setEncoding("utf-8");
       bridge.stderr.setEncoding("utf-8");
@@ -239,6 +314,7 @@ wss.on("connection", (ws) => {
       });
 
       bridge.on("exit", (code, signal) => {
+        activeBridges.delete(bridge);
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify({ type: "bridge_exit", code, signal }));
           ws.close();
@@ -268,6 +344,9 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
+    if (bridge) {
+      activeBridges.delete(bridge);
+    }
     if (bridge && bridge.exitCode == null) {
       bridge.kill();
     }

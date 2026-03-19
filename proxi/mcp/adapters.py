@@ -2,21 +2,13 @@
 
 from typing import Any
 
+from proxi.mcp.catalog import tool_mcp_category
 from proxi.mcp.client import MCPClient
 from proxi.tools.base import BaseTool, ToolResult
 from proxi.observability.logging import get_logger
 from proxi.security.key_store import get_enabled_mcps
 
 logger = get_logger(__name__)
-
-
-def tool_mcp_category(tool_name: str) -> str | None:
-    """Determine which MCP category a tool belongs to (gmail, notion, etc)."""
-    if tool_name.startswith("notion_"):
-        return "notion"
-    if tool_name in ("read_emails", "send_email", "get_email"):
-        return "gmail"
-    return None
 
 
 class MCPToolAdapter(BaseTool):

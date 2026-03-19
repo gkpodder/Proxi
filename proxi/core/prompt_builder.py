@@ -21,6 +21,7 @@ from typing import Sequence
 
 from proxi.core.state import AgentState, Message
 from proxi.llm.schemas import ToolSpec
+from proxi.security.key_store import get_user_profile, resolve_db_path
 
 
 class PromptPayload:
@@ -72,8 +73,10 @@ class PromptBuilder:
         """Deterministic cache key that invalidates on file/tool changes."""
         global_path = Path(workspace.global_system_prompt_path)
         soul_path = Path(workspace.soul_path)
+        db_path = resolve_db_path()
         global_mtime = global_path.stat().st_mtime_ns if global_path.exists() else 0
         soul_mtime = soul_path.stat().st_mtime_ns if soul_path.exists() else 0
+        db_mtime = db_path.stat().st_mtime_ns if db_path.exists() else 0
         tools_shape = [
             {
                 "name": tool.name,
@@ -88,6 +91,8 @@ class PromptBuilder:
             "global_mtime_ns": global_mtime,
             "soul_path": str(soul_path),
             "soul_mtime_ns": soul_mtime,
+            "db_path": str(db_path),
+            "db_mtime_ns": db_mtime,
             "tools": tools_shape,
         }
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
@@ -126,11 +131,13 @@ class PromptBuilder:
 ## show_collaborative_form — When and How to Use
 
 Call `show_collaborative_form` when:
+- The task is calendar/event scheduling and missing details would cause a wrong event action
 - You need specific information from the user not present in the conversation history
 - The missing information would materially change your approach or the output you produce
 - You cannot make a reasonable assumption and proceeding without it risks a wrong result
 
 Do NOT call `show_collaborative_form` when:
+- The task is not calendar-related (e.g., Obsidian, files, search, notes, code help)
 - You can make a reasonable assumption and state it in your response
 - The information is already present in the conversation
 - You need minor clarification — use RESPOND to ask conversationally instead
@@ -146,6 +153,8 @@ When building the questions array:
 - Do NOT use types "number" or "file" — only "choice", "multiselect", "yesno", "text" are supported
 """
 
+        user_profile_text = self._build_user_profile_context()
+
         parts = []
         if global_text:
             parts.append(global_text.strip())
@@ -155,6 +164,55 @@ When building the questions array:
             parts.append(tools_block)
         if form_guidance:
             parts.append(form_guidance.strip())
+        if user_profile_text:
+            parts.append(user_profile_text)
 
         return "\n\n".join(parts).strip()
+
+    def _build_user_profile_context(self) -> str:
+        """Render user profile context for system prompt when configured."""
+        try:
+            record = get_user_profile()
+        except Exception:
+            return ""
+
+        if not record:
+            return ""
+
+        profile = record.profile
+        if not isinstance(profile, dict):
+            return ""
+
+        lines: list[str] = []
+        ordered_fields: list[tuple[str, str]] = [
+            ("name", "Name"),
+            ("location", "Location"),
+            ("timezone", "Timezone"),
+            ("age", "Age"),
+            ("occupation", "Occupation"),
+            ("email", "Email"),
+            ("email_signature", "Preferred Email Signature"),
+            ("demographics", "Additional Demographics"),
+        ]
+
+        for key, label in ordered_fields:
+            value = profile.get(key)
+            if value is None:
+                continue
+            if isinstance(value, str):
+                cleaned = value.strip()
+                if cleaned:
+                    lines.append(f"- {label}: {cleaned}")
+            elif isinstance(value, int):
+                lines.append(f"- {label}: {value}")
+
+        if not lines:
+            return ""
+
+        return (
+            "USER PROFILE CONTEXT:\n"
+            + "\n".join(lines)
+            + "\nUse this profile only when relevant to the user request "
+            "(for example email drafts, signatures, or timezone-aware suggestions)."
+        )
 

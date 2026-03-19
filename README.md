@@ -161,7 +161,7 @@ uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path
 **TUI features:**
 
 - **Scrollback-native layout** — conversation prints into the terminal's native scrollback buffer; only the status bar and input area are Ink-managed. Preserves native scroll, Cmd+F search, and text selection.
-- **Command palette** — type `/` to open. Commands: `/agent` (switch agent), `/clear` (clear conversation), `/plan` (view plan.md), `/todos` (view todos.md), `/help`, `/exit`.
+- **Command palette** — type `/` to open. Commands: `/agent` (switch agent), `/mcps` (enable/disable MCPs), `/clear` (clear conversation), `/plan` (view plan.md), `/todos` (view todos.md), `/help`, `/exit`.
 - **Collaborative forms** — when the agent calls `show_collaborative_form`, a form overlay appears for structured input (choice, multiselect, yesno, text). Supports `show_if` for conditional questions.
 - **Plan / Todos overlay** — `/plan` and `/todos` display the current session's `plan.md` and `todos.md` in an overlay (Esc to close).
 - **Agent bootstrap** — on first run (or when no agents exist), you're prompted to create an agent (name, persona, mission). With existing agents, you select one or create new.
