@@ -13,6 +13,7 @@ function App() {
   const [socketState, setSocketState] = useState("connecting");
   const [statusLabel, setStatusLabel] = useState("Starting...");
   const [messages, setMessages] = useState([]);
+  const [activityItems, setActivityItems] = useState([]);
   const [streaming, setStreaming] = useState("");
   const [input, setInput] = useState("");
   const [bootInfo, setBootInfo] = useState(null);
@@ -53,6 +54,7 @@ function App() {
   const wsRef = useRef(null);
   const chatRef = useRef(null);
   const recognizerRef = useRef(null);
+  const pendingMcpActivityRef = useRef({});
 
   const visibleQuestions = useMemo(() => {
     if (!formUi) return [];
@@ -299,7 +301,7 @@ function App() {
   }
 
   function addSystem(content) {
-    setMessages((prev) => [...prev, { role: "system", content }]);
+    addActivity("system", "System", content);
   }
 
   function addError(content) {
@@ -312,6 +314,32 @@ function App() {
 
   function addAssistant(content) {
     setMessages((prev) => [...prev, { role: "assistant", content }]);
+  }
+
+  function addActivity(kind, title, content = "") {
+    const item = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind,
+      title,
+      content,
+      at: new Date().toLocaleTimeString(),
+    };
+    setActivityItems((prev) => [...prev.slice(-199), item]);
+    return item.id;
+  }
+
+  function updateActivityById(activityId, updater) {
+    if (!activityId) return;
+    setActivityItems((prev) => prev.map((item) => (item.id === activityId ? updater(item) : item)));
+  }
+
+  function isMcpToolName(toolName) {
+    return typeof toolName === "string" && toolName.toLowerCase().startsWith("mcp_");
+  }
+
+  function recordThinking(content) {
+    if (!content || typeof content !== "string") return;
+    addActivity("thinking", "Model thinking", content);
   }
 
   function commitStream() {
@@ -349,6 +377,10 @@ function App() {
   }
 
   function handleMessage(msg) {
+    if (typeof msg?.reasoning === "string" && msg.reasoning.trim()) {
+      recordThinking(msg.reasoning.trim());
+    }
+
     switch (msg.type) {
       case "ready":
         setStatusLabel("Bridge ready");
@@ -364,10 +396,72 @@ function App() {
       case "status_update":
         if (msg.status === "running") {
           setStatusLabel(msg.label ? `Running: ${msg.label}` : "Running...");
+          if (msg.label && /thinking|reasoning/i.test(msg.label)) {
+            addActivity("thinking", "Thinking", msg.label);
+          }
         } else if (msg.status === "done") {
           setStatusLabel("Idle");
           commitStream();
         }
+        break;
+      case "tool_start": {
+        const toolName = msg.tool || "Unknown tool";
+        const argsText = msg.arguments ? JSON.stringify(msg.arguments) : "";
+        if (isMcpToolName(toolName)) {
+          const mcpId = addActivity("mcp", `Start: ${toolName}`, argsText || "Status: running");
+          pendingMcpActivityRef.current[toolName] = mcpId;
+        } else {
+          addActivity("tool", `Start: ${toolName}`, argsText);
+        }
+        break;
+      }
+      case "tool_log": {
+        const content = msg.content || "";
+        if (/thinking|reasoning/i.test(content)) {
+          addActivity("thinking", "Thinking", content);
+        } else {
+          addActivity("tool", "Tool log", content);
+        }
+        break;
+      }
+      case "tool_done": {
+        const toolName = msg.tool || "Unknown tool";
+        const status = msg.success ? "success" : "error";
+        if (isMcpToolName(toolName)) {
+          const pendingId = pendingMcpActivityRef.current[toolName];
+          const statusLine = `Status: ${msg.success ? "successful" : "failed"}`;
+
+          if (pendingId) {
+            updateActivityById(pendingId, (existing) => ({
+              ...existing,
+              title: `${toolName}`,
+              content: existing.content ? `${existing.content}\n${statusLine}` : statusLine,
+              at: new Date().toLocaleTimeString(),
+            }));
+            delete pendingMcpActivityRef.current[toolName];
+          } else {
+            addActivity("mcp", toolName, statusLine);
+          }
+        } else {
+          const details = msg.error || msg.output || "";
+          addActivity("tool", `Done (${status}): ${toolName}`, details);
+        }
+        break;
+      }
+      case "subagent_start":
+        addActivity("tool", `Subagent start: ${msg.agent || "unknown"}`, msg.task || "");
+        break;
+      case "subagent_done":
+        addActivity(
+          "tool",
+          `Subagent done: ${msg.agent || "unknown"}`,
+          msg.success ? "Completed successfully" : "Completed with errors"
+        );
+        break;
+      case "thinking":
+      case "reasoning":
+      case "thinking_stream":
+        recordThinking(msg.content || msg.text || "");
         break;
       case "user_input_required":
         commitStream();
@@ -647,6 +741,7 @@ function App() {
       <ChatView
         chatRef={chatRef}
         messages={messages}
+        activityItems={activityItems}
         streaming={streaming}
         renderMarkdown={renderMarkdown}
         bootInfo={bootInfo}

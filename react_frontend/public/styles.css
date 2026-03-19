@@ -24,7 +24,7 @@ body.light {
 .app {
   height: 100vh;
   display: grid;
-  grid-template-rows: 50px 1fr auto;
+  grid-template-rows: 50px 1fr;
   padding: 0;
 }
 
@@ -190,19 +190,186 @@ body.light {
 
 /* Chat */
 .chat {
-  background: #0a0a0a;
+  background: transparent;
   overflow-y: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
+  min-height: 0;
 }
 
 .app.light .chat {
+  background: transparent;
+}
+
+.mainPanels {
+  display: grid;
+  grid-template-columns: 7fr 3fr;
+  gap: 12px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.panel {
+  border: 1px solid #2a313d;
+  border-radius: 14px;
+  background: #11161d;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app.light .panel {
+  border-color: #cfd8e6;
   background: #ffffff;
+}
+
+.panelLeft {
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+
+.panelRight {
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.activityPanel {
+  padding: 10px;
+}
+
+.activityHeader {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: #d8dee9;
+  padding: 4px 4px 10px;
+}
+
+.app.light .activityHeader {
+  color: #1f2937;
+}
+
+.activityList {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+/* Minimal scrollbars for main two panes */
+.chat,
+.activityList {
+  scrollbar-width: thin;
+  scrollbar-color: #3c4758 transparent;
+}
+
+.app.light .chat,
+.app.light .activityList {
+  scrollbar-color: #c3cfdf transparent;
+}
+
+.chat::-webkit-scrollbar,
+.activityList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat::-webkit-scrollbar-track,
+.activityList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat::-webkit-scrollbar-thumb,
+.activityList::-webkit-scrollbar-thumb {
+  background-color: #3c4758;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+.chat::-webkit-scrollbar-thumb:hover,
+.activityList::-webkit-scrollbar-thumb:hover {
+  background-color: #55657d;
+}
+
+.app.light .chat::-webkit-scrollbar-thumb,
+.app.light .activityList::-webkit-scrollbar-thumb {
+  background-color: #c3cfdf;
+}
+
+.app.light .chat::-webkit-scrollbar-thumb:hover,
+.app.light .activityList::-webkit-scrollbar-thumb:hover {
+  background-color: #aab8cc;
+}
+
+.activityEmpty {
+  color: #9ca3af;
+  font-size: 12px;
+  padding: 8px;
+}
+
+.activityItem {
+  border: 1px solid #303746;
+  background: #171e27;
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app.light .activityItem {
+  border-color: #d8e0ee;
+  background: #f8fafc;
+}
+
+.activityMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.activityKind {
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #93c5fd;
+}
+
+.activityAt {
+  color: #9ca3af;
+}
+
+.activityTitle {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.activityContent {
+  font-size: 12px;
+  color: #cfd8e3;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app.light .activityContent {
+  color: #374151;
+}
+
+.activityItem.mcp .activityKind {
+  color: #34d399;
+}
+
+.activityItem.thinking .activityKind {
+  color: #fbbf24;
+}
+
+.activityItem.system .activityKind {
+  color: #a5b4fc;
 }
 
 .msg {
@@ -434,7 +601,7 @@ body.light {
 
 /* Footer */
 .footer-wrapper {
-  background: #1a1a1a;
+  background: #141b24;
   border-top: 1px solid #333;
   padding: 0;
   width: 100%;
@@ -446,8 +613,8 @@ body.light {
 }
 
 .footer {
-  max-width: 900px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
   padding: 12px 16px;
   display: flex;
@@ -1101,6 +1268,15 @@ button:disabled {
 }
 
 @media (max-width: 900px) {
+  .mainPanels {
+    grid-template-columns: 1fr;
+  }
+
+  .panelRight {
+    min-height: 240px;
+    max-height: 320px;
+  }
+
   .header {
     padding: 0 10px;
   }
