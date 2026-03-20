@@ -32,37 +32,6 @@ function inferStatusKind(label: string | null, status: string): { kind: StatusKi
   return { kind: "progress", isProgress: true };
 }
 
-function finalizeAgentSwitchLine(
-  items: ScrollbackItem[],
-  requestedAgentId: string,
-  outcome: { kind: "done"; agentId: string } | { kind: "error"; message: string }
-): ScrollbackItem[] {
-  const next = [...items];
-  for (let i = next.length - 1; i >= 0; i--) {
-    const it = next[i]!;
-    if (it.type === "agent_switch" && it.phase === "pending" && it.agentId === requestedAgentId) {
-      if (outcome.kind === "done") {
-        next[i] = {
-          type: "agent_switch",
-          agentId: outcome.agentId,
-          phase: "done",
-          isFirst: it.isFirst,
-        };
-      } else {
-        next[i] = {
-          type: "agent_switch",
-          agentId: requestedAgentId,
-          phase: "error",
-          error: outcome.message,
-          isFirst: it.isFirst,
-        };
-      }
-      break;
-    }
-  }
-  return next;
-}
-
 export default function App() {
   const { stdout } = useStdout();
   const [bridgeReady, setBridgeReady] = useState(false);
@@ -78,6 +47,9 @@ export default function App() {
   const [planTodosOverlay, setPlanTodosOverlay] = useState<"plan" | "todos" | null>(null);
   const [inputHistory, setInputHistory] = useState<string[]>([]);
   const [bootHint, setBootHint] = useState("Connecting to gateway...");
+  const [userSendPending, setUserSendPending] = useState(false);
+  const [tuiActiveDepth, setTuiActiveDepth] = useState(0);
+  const [lastTuiAbortableStatus, setLastTuiAbortableStatus] = useState(false);
 
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
@@ -92,6 +64,8 @@ export default function App() {
 
   // Resolved session_id (set from boot_complete)
   const sessionRef = useRef<string>("");
+  const handleMsgRef = useRef<(msg: BridgeMessage) => void>(() => {});
+  const onAbortRef = useRef<() => void>(() => {});
 
   useInput(
     (_, key) => {
@@ -102,6 +76,109 @@ export default function App() {
     },
     { isActive: planTodosOverlay !== null || commandPaletteOpen }
   );
+
+  const commitStreamToScrollback = useCallback(() => {
+    if (streamingRef.current) {
+      const lines = streamingRef.current.split("\n");
+      const newItems: ScrollbackItem[] = [];
+      let isFirst = true;
+      let i = 0;
+      while (i < lines.length && lines[i]!.length === 0) i++;
+      for (; i < lines.length; i++) {
+        const line = lines[i]!;
+        if (line.length === 0) newItems.push({ type: "agent_blank" });
+        else {
+          newItems.push({ type: "agent_line", content: line, isFirst });
+          isFirst = false;
+        }
+      }
+      setScrollback((s) => [...s, ...newItems]);
+      setStreamingContent("");
+      streamingRef.current = "";
+    }
+  }, []);
+
+  handleMsgRef.current = (msg: BridgeMessage) => {
+    switch (msg.type) {
+      case "ready":
+        setBridgeReady(true);
+        setError(null);
+        break;
+      case "boot_complete":
+        setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
+        sessionRef.current = `${msg.agentId}/${msg.sessionId}`;
+        setLastTuiAbortableStatus(false);
+        setTuiActiveDepth(0);
+        setUserSendPending(false);
+        break;
+      case "text_stream":
+        streamingRef.current += msg.content;
+        setStreamingContent(streamingRef.current);
+        break;
+      case "tool_start":
+        commitStreamToScrollback();
+        setScrollback((s) => [...s, { type: "tool_start", tool: msg.tool, args: msg.arguments }]);
+        break;
+      case "tool_log":
+        setScrollback((s) => [...s, { type: "tool_log", content: msg.content }]);
+        break;
+      case "tool_done":
+        setScrollback((s) => [
+          ...s,
+          { type: "tool_done", success: msg.success, error: msg.error },
+        ]);
+        break;
+      case "subagent_start":
+        commitStreamToScrollback();
+        setScrollback((s) => [...s, { type: "subagent", agent: msg.agent, status: "running" }]);
+        break;
+      case "subagent_done":
+        setScrollback((s) => {
+          const idx = [...s].reverse().findIndex(
+            (i) => i.type === "subagent" && i.status === "running" && i.agent === msg.agent
+          );
+          if (idx === -1) {
+            return [...s, { type: "subagent" as const, agent: msg.agent, status: "done" as const, success: msg.success }];
+          }
+          const ri = s.length - 1 - idx;
+          const next = [...s];
+          next[ri] = { type: "subagent", agent: msg.agent, status: "done", success: msg.success };
+          return next;
+        });
+        break;
+      case "status_update": {
+        const tab = msg.tui_abortable === true;
+        if (msg.tui_abortable !== undefined) {
+          setLastTuiAbortableStatus(tab);
+        }
+        if (tab) {
+          if (msg.status === "running") {
+            setTuiActiveDepth((d) => d + 1);
+            setUserSendPending(false);
+          } else if (msg.status === "done") {
+            const terminal = ["Done", "Aborted", "Failed"].includes(msg.label);
+            if (terminal) {
+              setTuiActiveDepth(0);
+              setUserSendPending(false);
+            } else {
+              setTuiActiveDepth((d) => Math.max(0, d - 1));
+            }
+          }
+        }
+        const { kind, isProgress: progress } = inferStatusKind(msg.label ?? null, msg.status);
+        setStatusLabel(msg.status === "done" ? null : (msg.label ?? null));
+        setStatusKind(msg.status === "done" ? null : kind);
+        setIsProgress(progress && msg.status === "running");
+        commitStreamToScrollback();
+        break;
+      }
+      case "user_input_required":
+        setHitlSpec(msg);
+        break;
+      default:
+        break;
+    }
+  };
 
   // --- SSE connection to gateway (with auto-reconnect) ---
   const connectSse = useCallback((session: string, controller: AbortController) => {
@@ -135,8 +212,8 @@ export default function App() {
             if (trimmed.startsWith(":")) continue;
             if (!trimmed.startsWith("data: ")) continue;
             const payload = trimmed.slice(6);
-            const msg = parseBridgeMessage(payload);
-            if (msg) handleMsg(msg);
+            const parsed = parseBridgeMessage(payload);
+            if (parsed) handleMsgRef.current(parsed);
           }
         }
 
@@ -246,88 +323,6 @@ export default function App() {
     };
   }, [connectSse, startAgentSwitch]);
 
-  const commitStreamToScrollback = useCallback(() => {
-    if (streamingRef.current) {
-      const lines = streamingRef.current.split("\n");
-      const newItems: ScrollbackItem[] = [];
-      let isFirst = true;
-      let i = 0;
-      while (i < lines.length && lines[i]!.length === 0) i++;
-      for (; i < lines.length; i++) {
-        const line = lines[i]!;
-        if (line.length === 0) newItems.push({ type: "agent_blank" });
-        else {
-          newItems.push({ type: "agent_line", content: line, isFirst });
-          isFirst = false;
-        }
-      }
-      setScrollback((s) => [...s, ...newItems]);
-      setStreamingContent("");
-      streamingRef.current = "";
-    }
-  }, []);
-
-  function handleMsg(msg: BridgeMessage) {
-    switch (msg.type) {
-      case "ready":
-        setBridgeReady(true);
-        setError(null);
-        break;
-      case "boot_complete":
-        setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
-        sessionRef.current = `${msg.agentId}/${msg.sessionId}`;
-        break;
-      case "text_stream":
-        streamingRef.current += msg.content;
-        setStreamingContent(streamingRef.current);
-        break;
-      case "tool_start":
-        commitStreamToScrollback();
-        setScrollback((s) => [...s, { type: "tool_start", tool: msg.tool, args: msg.arguments }]);
-        break;
-      case "tool_log":
-        setScrollback((s) => [...s, { type: "tool_log", content: msg.content }]);
-        break;
-      case "tool_done":
-        setScrollback((s) => [
-          ...s,
-          { type: "tool_done", success: msg.success, error: msg.error },
-        ]);
-        break;
-      case "subagent_start":
-        commitStreamToScrollback();
-        setScrollback((s) => [...s, { type: "subagent", agent: msg.agent, status: "running" }]);
-        break;
-      case "subagent_done":
-        setScrollback((s) => {
-          const idx = [...s].reverse().findIndex(
-            (i) => i.type === "subagent" && i.status === "running" && i.agent === msg.agent
-          );
-          if (idx === -1) {
-            return [...s, { type: "subagent" as const, agent: msg.agent, status: "done" as const, success: msg.success }];
-          }
-          const i = s.length - 1 - idx;
-          const next = [...s];
-          next[i] = { type: "subagent", agent: msg.agent, status: "done", success: msg.success };
-          return next;
-        });
-        break;
-      case "status_update": {
-        const { kind, isProgress: progress } = inferStatusKind(msg.label ?? null, msg.status);
-        setStatusLabel(msg.status === "done" ? null : (msg.label ?? null));
-        setStatusKind(msg.status === "done" ? null : kind);
-        setIsProgress(progress && msg.status === "running");
-        commitStreamToScrollback();
-        break;
-      }
-      case "user_input_required":
-        setHitlSpec(msg);
-        break;
-      default:
-        break;
-    }
-  }
-
   // --- HTTP helpers ---
   const sendToGateway = useCallback(async (body: Record<string, unknown>) => {
     try {
@@ -339,9 +334,11 @@ export default function App() {
       if (!res.ok) {
         const detail = await res.text();
         setError(`Send failed (${res.status}): ${detail || "unknown error"}`);
+        setUserSendPending(false);
       }
     } catch (err: any) {
       setError(`Send failed: ${err.message}`);
+      setUserSendPending(false);
     }
   }, []);
 
@@ -452,7 +449,6 @@ export default function App() {
       return;
     }
 
-    setScrollback((s) => [...s, { type: "agent_switch", agentId, phase: "pending", isFirst: true }]);
     setBootHint("Connecting to gateway...");
 
     try {
@@ -463,7 +459,15 @@ export default function App() {
       });
       if (!res.ok) {
         const detail = await res.text();
-        setScrollback((s) => finalizeAgentSwitchLine(s, agentId, { kind: "error", message: detail }));
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Agent switch failed: ${detail || res.statusText}`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
         return;
       }
       const result = (await res.json()) as { session_id: string; agent_id: string };
@@ -477,18 +481,23 @@ export default function App() {
       setStreamingContent("");
       streamingRef.current = "";
       bufferRef.current = "";
+      setUserSendPending(false);
+      setTuiActiveDepth(0);
+      setLastTuiAbortableStatus(false);
 
       const ac = new AbortController();
       abortRef.current = ac;
       connectSse(result.session_id, ac);
-
-      setScrollback((s) =>
-        finalizeAgentSwitchLine(s, agentId, { kind: "done", agentId: result.agent_id })
-      );
     } catch (err: any) {
-      setScrollback((s) =>
-        finalizeAgentSwitchLine(s, agentId, { kind: "error", message: err.message ?? String(err) })
-      );
+      setScrollback((s) => [
+        ...s,
+        {
+          type: "agent_line",
+          content: `Agent switch failed: ${err.message ?? String(err)}`,
+          isFirst: true,
+          isSystem: true,
+        },
+      ]);
     }
   }, [bootInfo, connectSse]);
 
@@ -508,13 +517,13 @@ export default function App() {
       const needsGap =
         last &&
         (last.type === "agent_line" ||
-          last.type === "agent_switch" ||
           last.type === "agent_blank" ||
           last.type === "tool_done" ||
           (last.type === "subagent" && last.status === "done"));
       const prefix = needsGap ? [{ type: "spacing" as const }] : [];
       return [...s, ...prefix, { type: "user", content: task }, { type: "spacing" as const }];
     });
+    setUserSendPending(true);
     sendToGateway({ message: task });
   }, [commitStreamToScrollback, sendToGateway]);
 
@@ -527,6 +536,7 @@ export default function App() {
       handleMcpSelection(value);
       return;
     }
+    setUserSendPending(true);
     sendToGateway({ message: "", form_answer: { value } });
     setHitlSpec(null);
   }, [sendToGateway, handleMcpSelection, handleAgentSelection]);
@@ -556,6 +566,7 @@ export default function App() {
 
   const onAnswerFormSubmit = useCallback(
     (result: { tool_call_id: string; answers: Record<string, unknown>; skipped: boolean }) => {
+      setUserSendPending(true);
       sendToGateway({ message: "", form_answer: result });
       setHitlSpec(null);
     },
@@ -572,6 +583,32 @@ export default function App() {
       // Best-effort
     }
   }, [commitStreamToScrollback]);
+  onAbortRef.current = onAbort;
+
+  useInput(
+    (_, key) => {
+      if (!key.escape) return;
+      if (
+        !bootInfo ||
+        hitlSpec !== null ||
+        planTodosOverlay !== null ||
+        commandPaletteOpen ||
+        tuiActiveDepth <= 0
+      ) {
+        return;
+      }
+      void onAbortRef.current();
+    },
+    {
+      isActive: Boolean(
+        bootInfo &&
+          hitlSpec === null &&
+          planTodosOverlay === null &&
+          !commandPaletteOpen &&
+          tuiActiveDepth > 0
+      ),
+    }
+  );
 
   const onCommand = useCallback(
     (cmdId: string) => {
@@ -593,6 +630,9 @@ export default function App() {
           setStatusLabel(null);
           setStatusKind(null);
           setIsProgress(false);
+          setUserSendPending(false);
+          setTuiActiveDepth(0);
+          setLastTuiAbortableStatus(false);
           setError(null);
           void fetch(
             `${GATEWAY}/v1/sessions/${encodeURIComponent(sessionRef.current)}/clear-history`,
@@ -627,6 +667,11 @@ export default function App() {
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
 
+  const showStatusSpinner =
+    userSendPending ||
+    tuiActiveDepth > 0 ||
+    (isProgress && lastTuiAbortableStatus);
+
   return (
     <Box flexDirection="column" paddingX={1} minHeight={minHeight}>
       <ScrollbackArea items={scrollback} streamingContent={streamingContent} />
@@ -640,6 +685,8 @@ export default function App() {
           statusLabel={statusLabel}
           statusKind={statusKind}
           isProgress={isProgress}
+          showSpinner={showStatusSpinner}
+          showAbortHint={tuiActiveDepth > 0 && !hitlSpec}
           agentId={bootInfo?.agentId}
           sessionId={bootInfo?.sessionId}
           isWaitingForInput={!!hitlSpec}
@@ -677,12 +724,10 @@ export default function App() {
           <InputArea
             onSubmit={onSubmit}
             onCommitStreaming={commitStreaming}
-            disabled={isProgress}
+            disabled={!bridgeReady}
             bridgeReady={bridgeReady}
             onSwitchAgent={onSwitchAgent}
-            onAbort={onAbort}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
-            isRunning={isProgress}
             inputHistory={inputHistory}
           />
         )}

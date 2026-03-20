@@ -16,6 +16,8 @@ export const StatusUpdateSchema = z.object({
   type: z.literal("status_update"),
   label: z.string(),
   status: z.enum(["running", "done"]),
+  /** Present for gateway SSE: true when this event comes from a TUI ``sources.tui`` dispatch. */
+  tui_abortable: z.boolean().optional(),
 });
 export type StatusUpdate = z.infer<typeof StatusUpdateSchema>;
 

@@ -19,12 +19,16 @@ logger = get_logger(__name__)
 class _SseEmitter:
     """Bridge emitter that forwards messages to an ``HttpSseReplyChannel``."""
 
-    def __init__(self, channel: Any) -> None:
+    def __init__(self, channel: Any, *, tui_abortable: bool = False) -> None:
         self._channel = channel
+        self._tui_abortable = tui_abortable
 
     def emit(self, msg: dict[str, Any]) -> None:
         try:
-            self._channel._queue.put_nowait(msg)
+            payload = dict(msg)
+            if payload.get("type") == "status_update":
+                payload["tui_abortable"] = self._tui_abortable
+            self._channel._queue.put_nowait(payload)
         except Exception:
             pass
 
@@ -50,6 +54,7 @@ class AgentLane:
     _sse_channel: Any = field(default=None, repr=False)
     _form_bridge: Any = field(default=None, repr=False)
     _running_task: asyncio.Task[str | None] | None = field(default=None, repr=False)
+    _dispatch_tui_abortable: bool = field(default=False, repr=False)
 
     async def start(self) -> None:
         self._state = AgentState.load(self.history_path)
@@ -87,7 +92,12 @@ class AgentLane:
         if self._sse_channel is not None:
             try:
                 await self._sse_channel.send_event(
-                    {"type": "status_update", "label": "Aborted", "status": "done"}
+                    {
+                        "type": "status_update",
+                        "label": "Aborted",
+                        "status": "done",
+                        "tui_abortable": self._dispatch_tui_abortable,
+                    }
                 )
             except Exception:
                 pass
@@ -186,7 +196,12 @@ class AgentLane:
                             }
                         )
                         await self._sse_channel.send_event(
-                            {"type": "status_update", "label": "Failed", "status": "done"}
+                            {
+                                "type": "status_update",
+                                "label": "Failed",
+                                "status": "done",
+                                "tui_abortable": self._dispatch_tui_abortable,
+                            }
                         )
                     except Exception:
                         pass
@@ -201,9 +216,14 @@ class AgentLane:
             else:
                 raise RuntimeError("AgentLane._create_loop factory not set")
 
+        tui_abortable = event.source_id == "tui"
+        self._dispatch_tui_abortable = tui_abortable
+
         # Attach SSE emitter + form bridge when an SSE listener is connected
         if self._sse_channel is not None:
-            self._loop.emitter = _SseEmitter(self._sse_channel)
+            self._loop.emitter = _SseEmitter(
+                self._sse_channel, tui_abortable=tui_abortable
+            )
             if self._form_bridge is not None:
                 self._loop.form_bridge = self._form_bridge
 
@@ -226,7 +246,12 @@ class AgentLane:
         if self._sse_channel is not None:
             try:
                 await self._sse_channel.send_event(
-                    {"type": "status_update", "label": "Done", "status": "done"}
+                    {
+                        "type": "status_update",
+                        "label": "Done",
+                        "status": "done",
+                        "tui_abortable": tui_abortable,
+                    }
                 )
             except Exception:
                 pass

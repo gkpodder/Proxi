@@ -10,9 +10,7 @@ type Props = {
   bridgeReady: boolean;
   inputAllowedOverride?: boolean;
   onSwitchAgent?: () => void;
-  onAbort?: () => void;
   onOpenCommandPalette?: () => void;
-  isRunning?: boolean;
   inputHistory?: string[];
 };
 
@@ -23,9 +21,7 @@ export function InputArea({
   bridgeReady,
   inputAllowedOverride = false,
   onSwitchAgent,
-  onAbort,
   onOpenCommandPalette,
-  isRunning = false,
   inputHistory = [],
 }: Props) {
   const [value, setValue] = useState("");
@@ -50,10 +46,7 @@ export function InputArea({
   const canInput = (bridgeReady || inputAllowedOverride) && !disabled;
 
   useInput((input, key) => {
-    if (key.escape) {
-      if (isRunning && onAbort) onAbort();
-      return;
-    }
+    if (key.escape) return;
     if (!canInput) return;
     if (value === "" && input === "/" && onOpenCommandPalette) {
       onOpenCommandPalette();
@@ -100,16 +93,7 @@ export function InputArea({
             showCursor
           />
         ) : (
-          <Box gap={1}>
-            <Text dimColor>
-              {!bridgeReady ? "Connecting to gateway..." : "Waiting for response..."}
-            </Text>
-            {isRunning && onAbort && (
-              <Text color="red" bold>
-                [Esc: Abort]
-              </Text>
-            )}
-          </Box>
+          <Text dimColor>{!bridgeReady ? "Connecting to gateway..." : "Waiting…"}</Text>
         )}
       </Box>
     </Box>

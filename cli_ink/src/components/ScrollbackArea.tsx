@@ -33,7 +33,7 @@ function needsBlockSpacingBefore(item: ScrollbackItem, prevItem: ScrollbackItem 
   if (!prevItem) return false;
   if (!isBlockEnder(prevItem)) return false;
   return (
-    item.type === "tool_start" || item.type === "subagent" || item.type === "agent_line" || item.type === "agent_switch"
+    item.type === "tool_start" || item.type === "subagent" || item.type === "agent_line"
   );
 }
 
@@ -59,35 +59,6 @@ function renderItem(item: ScrollbackItem, index: number, prevItem: ScrollbackIte
         <Box key={index}>
           <Text color={c}>  {item.isFirst ? "⏺" : " "} </Text>
           <Text color={c}>{item.content}</Text>
-        </Box>
-      );
-    }
-    case "agent_switch": {
-      if (item.phase === "error") {
-        return (
-          <Box key={index}>
-            <Text color={theme.rose}>  ✗ </Text>
-            <Text color={theme.rose}>
-              Switch failed{item.error ? `: ${item.error}` : ""}
-            </Text>
-          </Box>
-        );
-      }
-      if (item.phase === "done") {
-        return (
-          <Box key={index}>
-            <Text color={theme.mint}>  ✓ </Text>
-            <Text color={theme.mint}>Switched to agent &apos;{item.agentId}&apos;.</Text>
-          </Box>
-        );
-      }
-      return (
-        <Box key={index}>
-          <Text color={theme.white}>  {item.isFirst ? "⏺" : " "} </Text>
-          <Text color={theme.white}>Switching to agent &apos;{item.agentId}&apos;… </Text>
-          <Text color={theme.purpleDim}>
-            <Spinner type="line" />
-          </Text>
         </Box>
       );
     }
