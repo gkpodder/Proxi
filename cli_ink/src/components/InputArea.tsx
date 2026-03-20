@@ -83,7 +83,7 @@ export function InputArea({
 
   const placeholder =
     inputAllowedOverride && !bridgeReady
-      ? "Bridge may not be ready – type a task and press Enter"
+      ? "Gateway may not be ready \u2013 type a task and press Enter"
       : "Describe your task...";
 
   return (
@@ -102,7 +102,7 @@ export function InputArea({
         ) : (
           <Box gap={1}>
             <Text dimColor>
-              {!bridgeReady ? "Starting bridge..." : "Waiting for response..."}
+              {!bridgeReady ? "Connecting to gateway..." : "Waiting for response..."}
             </Text>
             {isRunning && onAbort && (
               <Text color="red" bold>

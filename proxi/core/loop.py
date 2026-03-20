@@ -97,6 +97,8 @@ class AgentLoop:
         Returns:
             Updated agent state
         """
+        if state.workspace is None and self.workspace is not None:
+            state.workspace = self.workspace
         state.add_message(Message(role="user", content=user_message))
         state.status = AgentStatus.RUNNING
         if state.end_time is not None:

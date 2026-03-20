@@ -338,7 +338,9 @@ async def run_bridge(agent_id: str | None = None) -> None:
 
         for adapter in mcp_adapters:
             try:
-                await adapter.close()
+                await asyncio.wait_for(adapter.close(), timeout=5.0)
+            except asyncio.TimeoutError:
+                logger.warning("mcp_close_timeout")
             except Exception as e:
                 logger.warning("mcp_close_error", error=str(e))
         mcp_adapters = []
@@ -695,11 +697,25 @@ async def run_bridge(agent_id: str | None = None) -> None:
 
 
 def main() -> None:
-    """Entry point for proxi-bridge."""
+    """Entry point for proxi-bridge.
+
+    .. deprecated::
+        The bridge is superseded by the gateway HTTP/SSE transport.
+        Use ``proxi-gateway`` instead.  This entry point remains for
+        backward compatibility during the transition period.
+    """
     import argparse
+    import warnings
+
+    warnings.warn(
+        "proxi-bridge is deprecated. The TUI now connects to the gateway over SSE. "
+        "Use `proxi-gateway` or `proxi-gateway-ctl start` instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     parser = argparse.ArgumentParser(
-        description="Proxi bridge for TUI clients")
+        description="Proxi bridge for TUI clients (DEPRECATED — use gateway)")
     parser.add_argument(
         "--agent-id",
         type=str,

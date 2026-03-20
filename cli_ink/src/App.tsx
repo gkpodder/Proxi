@@ -1,15 +1,12 @@
 /**
  * Claude Code-style TUI for proxi agent.
  * - Scrollable chat, token streaming, dynamic status bar, HITL forms.
- * - Communicates with Python bridge via JSON-RPC over stdin/stdout.
+ * - Communicates with the gateway daemon via SSE + HTTP POST.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
-import { spawn, ChildProcess } from "node:child_process";
-import path from "node:path";
 import {
   parseBridgeMessage,
-  serializeTuiMessage,
   type BridgeMessage,
   type UserInputRequired,
   isCollaborativeFormRequired,
@@ -25,11 +22,45 @@ import { PlanTodosOverlay } from "./components/PlanTodosOverlay.js";
 
 type StatusKind = "tool" | "subagent" | "progress" | null;
 
+// Gateway URL from env, fallback to localhost:8765
+const GATEWAY = process.env.PROXI_GATEWAY_URL || "http://localhost:8765";
+
 function inferStatusKind(label: string | null, status: string): { kind: StatusKind; isProgress: boolean } {
   if (!label || status === "done") return { kind: null, isProgress: false };
   if (label.startsWith("Tool:")) return { kind: "tool", isProgress: true };
   if (label.includes("Subagent")) return { kind: "subagent", isProgress: true };
   return { kind: "progress", isProgress: true };
+}
+
+function finalizeAgentSwitchLine(
+  items: ScrollbackItem[],
+  requestedAgentId: string,
+  outcome: { kind: "done"; agentId: string } | { kind: "error"; message: string }
+): ScrollbackItem[] {
+  const next = [...items];
+  for (let i = next.length - 1; i >= 0; i--) {
+    const it = next[i]!;
+    if (it.type === "agent_switch" && it.phase === "pending" && it.agentId === requestedAgentId) {
+      if (outcome.kind === "done") {
+        next[i] = {
+          type: "agent_switch",
+          agentId: outcome.agentId,
+          phase: "done",
+          isFirst: it.isFirst,
+        };
+      } else {
+        next[i] = {
+          type: "agent_switch",
+          agentId: requestedAgentId,
+          phase: "error",
+          error: outcome.message,
+          isFirst: it.isFirst,
+        };
+      }
+      break;
+    }
+  }
+  return next;
 }
 
 export default function App() {
@@ -47,11 +78,14 @@ export default function App() {
   const [planTodosOverlay, setPlanTodosOverlay] = useState<"plan" | "todos" | null>(null);
   const [inputHistory, setInputHistory] = useState<string[]>([]);
 
-  const childRef = useRef<ChildProcess | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const bufferRef = useRef("");
   const streamingRef = useRef("");
   const overlayRef = useRef({ planTodosOverlay, commandPaletteOpen });
   overlayRef.current = { planTodosOverlay, commandPaletteOpen };
+
+  // Resolved session_id (set from boot_complete)
+  const sessionRef = useRef<string>("");
 
   useInput(
     (_, key) => {
@@ -63,86 +97,79 @@ export default function App() {
     { isActive: planTodosOverlay !== null || commandPaletteOpen }
   );
 
-  useEffect(() => {
-    const projectRoot = path.resolve(process.cwd(), "..");
-    const env = {
-      ...process.env,
-      PYTHONUNBUFFERED: "1",
-      PYTHONPATH: projectRoot,
-    };
+  // --- SSE connection to gateway (with auto-reconnect) ---
+  const connectSse = useCallback((session: string, controller: AbortController) => {
+    let retryDelay = 1000;
+    const MAX_RETRY = 15000;
 
-    const proc = spawn("uv run proxi-bridge", [], {
-      stdio: ["pipe", "pipe", "pipe"],
-      shell: true,
-      cwd: projectRoot,
-      env,
-    });
-    childRef.current = proc;
+    const connect = async () => {
+      try {
+        const res = await fetch(`${GATEWAY}/v1/sessions/${session}/stream`, {
+          signal: controller.signal,
+          headers: { Accept: "text/event-stream" },
+        });
+        if (!res.ok || !res.body) {
+          setError(`Gateway error: ${res.status}`);
+          return;
+        }
+        retryDelay = 1000;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
 
-    proc.stdout?.setEncoding("utf8");
-    proc.stderr?.setEncoding("utf8");
-
-    proc.stdout?.on("data", (chunk: string) => {
-      bufferRef.current += chunk;
-      const lines = bufferRef.current.split("\n");
-      bufferRef.current = lines.pop() ?? "";
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        const msg = parseBridgeMessage(trimmed);
-        if (!msg) continue;
-        handleMsg(msg);
-      }
-    });
-
-    proc.stderr?.on("data", (data: string) => {
-      const text = data.trim();
-      if (text) setError((e) => e || text.slice(0, 150));
-    });
-
-    proc.on("error", (err) => {
-      setError(`Bridge failed to start: ${err.message}`);
-    });
-
-    proc.on("exit", (code, signal) => {
-      childRef.current = null;
-      if (streamingRef.current) {
-        const lines = streamingRef.current.split("\n");
-        const newItems: ScrollbackItem[] = [];
-        let isFirst = true;
-        for (const line of lines) {
-          if (line.length === 0) newItems.push({ type: "agent_blank" });
-          else {
-            newItems.push({ type: "agent_line", content: line, isFirst });
-            isFirst = false;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bufferRef.current += decoder.decode(value, { stream: true });
+          const lines = bufferRef.current.split("\n");
+          bufferRef.current = lines.pop() ?? "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            // SSE comment (keepalive) — ignore
+            if (trimmed.startsWith(":")) continue;
+            if (!trimmed.startsWith("data: ")) continue;
+            const payload = trimmed.slice(6);
+            const msg = parseBridgeMessage(payload);
+            if (msg) handleMsg(msg);
           }
         }
-        setScrollback((s) => [...s, ...newItems]);
-        setStreamingContent("");
-        streamingRef.current = "";
-      }
-      if (code !== 0 && code !== null) {
-        setError((e) => e || `Bridge exited with code ${code}. Set OPENAI_API_KEY and try again.`);
-      }
-      if (signal) setError((e) => e || `Bridge killed (${signal})`);
-      setBridgeReady(false);
-      setStatusLabel(null);
-      setStatusKind(null);
-      setIsProgress(false);
-    });
 
-    return () => {
-      proc.kill();
-      childRef.current = null;
+        // Stream ended cleanly — reconnect unless aborted
+        if (!controller.signal.aborted) {
+          bufferRef.current = "";
+          setTimeout(connect, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, MAX_RETRY);
+        }
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
+        setError(null); // clear stale error while reconnecting
+        setBridgeReady(false);
+        if (!controller.signal.aborted) {
+          bufferRef.current = "";
+          setTimeout(connect, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, MAX_RETRY);
+        }
+      }
     };
+
+    connect();
   }, []);
+
+  useEffect(() => {
+    const defaultSession = process.env.PROXI_SESSION_ID || "work/main";
+    sessionRef.current = defaultSession;
+
+    const ac = new AbortController();
+    abortRef.current = ac;
+    connectSse(defaultSession, ac);
+    return () => { ac.abort(); };
+  }, [connectSse]);
 
   const commitStreamToScrollback = useCallback(() => {
     if (streamingRef.current) {
       const lines = streamingRef.current.split("\n");
       const newItems: ScrollbackItem[] = [];
       let isFirst = true;
-      // Skip leading empty lines to reduce prompt-to-response spacing
       let i = 0;
       while (i < lines.length && lines[i]!.length === 0) i++;
       for (; i < lines.length; i++) {
@@ -167,6 +194,7 @@ export default function App() {
         break;
       case "boot_complete":
         setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
+        sessionRef.current = `${msg.agentId}/${msg.sessionId}`;
         break;
       case "text_stream":
         streamingRef.current += msg.content;
@@ -219,17 +247,217 @@ export default function App() {
     }
   }
 
+  // --- HTTP helpers ---
+  const sendToGateway = useCallback(async (body: Record<string, unknown>) => {
+    try {
+      const res = await fetch(`${GATEWAY}/v1/sessions/${sessionRef.current}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        setError(`Send failed (${res.status}): ${detail || "unknown error"}`);
+      }
+    } catch (err: any) {
+      setError(`Send failed: ${err.message}`);
+    }
+  }, []);
+
   const commitStreaming = useCallback(() => {
     commitStreamToScrollback();
   }, [commitStreamToScrollback]);
 
-  const onSwitchAgent = useCallback(() => {
-    const proc = childRef.current;
-    if (proc?.stdin?.writable) {
-      proc.stdin.write(serializeTuiMessage({ type: "switch_agent" as const }));
+  // --- MCP management state ---
+  const mcpModeRef = useRef(false);
+
+  const startMcpManagement = useCallback(async () => {
+    mcpModeRef.current = true;
+    const showMcpList = async () => {
+      try {
+        const res = await fetch(`${GATEWAY}/v1/mcps`);
+        if (!res.ok) {
+          setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `MCP fetch failed: ${res.status}`, isFirst: true, isSystem: true },
+        ]);
+          mcpModeRef.current = false;
+          return;
+        }
+        const data = (await res.json()) as { mcps?: { name: string; enabled: boolean }[] };
+        const mcps = data.mcps ?? [];
+        const doneLabel = "[Done]";
+        const options = mcps.map(
+          (m) => `${m.name} [${m.enabled ? "Enabled" : "Disabled"}] → ${m.enabled ? "Disable" : "Enable"}`
+        );
+        options.push(doneLabel);
+        setHitlSpec({
+          type: "user_input_required" as const,
+          method: "select" as const,
+          prompt: "MCP Settings: choose an MCP to toggle, or select [Done]",
+          options,
+        });
+      } catch (err: any) {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `MCP error: ${err.message}`, isFirst: true, isSystem: true },
+        ]);
+        mcpModeRef.current = false;
+      }
+    };
+    await showMcpList();
+  }, []);
+
+  const handleMcpSelection = useCallback(async (value: string | boolean | number) => {
+    const choice = String(value);
+    if (choice === "[Done]" || choice === "false") {
+      mcpModeRef.current = false;
+      setHitlSpec(null);
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: "MCP settings updated.", isFirst: true, isSystem: true },
+      ]);
+      return;
     }
-    commitStreamToScrollback();
-  }, [commitStreamToScrollback]);
+    // Extract MCP name from option string: "name [Enabled] → Disable"
+    const mcpName = choice.split(" ")[0];
+    if (!mcpName) {
+      mcpModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    try {
+      const res = await fetch(`${GATEWAY}/v1/mcps/${encodeURIComponent(mcpName)}/toggle`, { method: "POST" });
+      if (res.ok) {
+        const result = (await res.json()) as { enabled?: boolean };
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `MCP '${mcpName}' ${result.enabled ? "enabled" : "disabled"}.`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+      }
+    } catch (err: any) {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Toggle failed: ${err.message}`, isFirst: true, isSystem: true },
+      ]);
+    }
+    // Re-show the list only if the user is still in MCP settings. If they hit [Done] or Esc
+    // while the toggle request was in flight, mcpModeRef is false — do not reopen the picker
+    // (would steal focus from chat and strand in-flight replies).
+    if (mcpModeRef.current) {
+      await startMcpManagement();
+    }
+  }, [startMcpManagement]);
+
+  // --- Agent switching state ---
+  const agentModeRef = useRef(false);
+
+  const startAgentSwitch = useCallback(async () => {
+    agentModeRef.current = true;
+    try {
+      const res = await fetch(`${GATEWAY}/v1/agents`);
+      if (!res.ok) {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `Agent fetch failed: ${res.status}`, isFirst: true, isSystem: true },
+        ]);
+        agentModeRef.current = false;
+        return;
+      }
+      const data = (await res.json()) as { agents?: { agent_id: string; default_session: string }[] };
+      const agents = data.agents ?? [];
+      if (agents.length === 0) {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: "No agents configured in gateway.yml.", isFirst: true, isSystem: true },
+        ]);
+        agentModeRef.current = false;
+        return;
+      }
+      const cancelLabel = "[Cancel]";
+      const options = agents.map((a) => {
+        const isCurrent = bootInfo && a.agent_id === bootInfo.agentId;
+        return `${a.agent_id}${isCurrent ? " (current)" : ""}`;
+      });
+      options.push(cancelLabel);
+      setHitlSpec({
+        type: "user_input_required" as const,
+        method: "select" as const,
+        prompt: "Switch agent — select an agent workspace:",
+        options,
+      });
+    } catch (err: any) {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Agent switch error: ${err.message}`, isFirst: true, isSystem: true },
+      ]);
+      agentModeRef.current = false;
+    }
+  }, [bootInfo]);
+
+  const handleAgentSelection = useCallback(async (value: string | boolean | number) => {
+    const choice = String(value);
+    agentModeRef.current = false;
+    setHitlSpec(null);
+
+    if (choice === "[Cancel]" || choice === "false") return;
+
+    const agentId = choice.replace(/ \(current\)$/, "");
+    if (bootInfo && agentId === bootInfo.agentId) {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Already using agent '${agentId}'.`, isFirst: true, isSystem: true },
+      ]);
+      return;
+    }
+
+    setScrollback((s) => [...s, { type: "agent_switch", agentId, phase: "pending", isFirst: true }]);
+
+    try {
+      const res = await fetch(`${GATEWAY}/v1/sessions/switch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_id: agentId }),
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        setScrollback((s) => finalizeAgentSwitchLine(s, agentId, { kind: "error", message: detail }));
+        return;
+      }
+      const result = (await res.json()) as { session_id: string; agent_id: string };
+
+      // Abort existing SSE connection and reconnect to the new session
+      if (abortRef.current) abortRef.current.abort();
+
+      sessionRef.current = result.session_id;
+      setBootInfo(null);
+      setBridgeReady(false);
+      setStreamingContent("");
+      streamingRef.current = "";
+      bufferRef.current = "";
+
+      const ac = new AbortController();
+      abortRef.current = ac;
+      connectSse(result.session_id, ac);
+
+      setScrollback((s) =>
+        finalizeAgentSwitchLine(s, agentId, { kind: "done", agentId: result.agent_id })
+      );
+    } catch (err: any) {
+      setScrollback((s) =>
+        finalizeAgentSwitchLine(s, agentId, { kind: "error", message: err.message ?? String(err) })
+      );
+    }
+  }, [bootInfo]);
+
+  const onSwitchAgent = useCallback(() => {
+    startAgentSwitch();
+  }, [startAgentSwitch]);
 
   const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
     if (!task.trim()) return;
@@ -243,56 +471,61 @@ export default function App() {
       const needsGap =
         last &&
         (last.type === "agent_line" ||
+          last.type === "agent_switch" ||
           last.type === "agent_blank" ||
           last.type === "tool_done" ||
           (last.type === "subagent" && last.status === "done"));
       const prefix = needsGap ? [{ type: "spacing" as const }] : [];
       return [...s, ...prefix, { type: "user", content: task }, { type: "spacing" as const }];
     });
-    const proc = childRef.current;
-    if (proc?.stdin?.writable) {
-      proc.stdin.write(serializeTuiMessage({ type: "start", task }));
-    }
-  }, [commitStreamToScrollback]);
+    sendToGateway({ message: task });
+  }, [commitStreamToScrollback, sendToGateway]);
 
   const onHitlSubmit = useCallback((value: string | boolean | number) => {
-    const proc = childRef.current;
-    if (proc?.stdin?.writable) {
-      proc.stdin.write(serializeTuiMessage({ type: "user_input", value }));
+    if (agentModeRef.current) {
+      handleAgentSelection(value);
+      return;
     }
+    if (mcpModeRef.current) {
+      handleMcpSelection(value);
+      return;
+    }
+    sendToGateway({ message: "", form_answer: { value } });
     setHitlSpec(null);
-  }, []);
+  }, [sendToGateway, handleMcpSelection, handleAgentSelection]);
 
   const onHitlCancel = useCallback(() => {
-    const proc = childRef.current;
-    if (proc?.stdin?.writable) {
-      proc.stdin.write(serializeTuiMessage({ type: "user_input", value: false }));
+    if (agentModeRef.current) {
+      agentModeRef.current = false;
+      setHitlSpec(null);
+      return;
     }
+    if (mcpModeRef.current) {
+      mcpModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    sendToGateway({ message: "", form_answer: { value: false } });
     setHitlSpec(null);
-  }, []);
+  }, [sendToGateway]);
 
   const onAnswerFormSubmit = useCallback(
     (result: { tool_call_id: string; answers: Record<string, unknown>; skipped: boolean }) => {
-      const proc = childRef.current;
-      if (proc?.stdin?.writable) {
-        proc.stdin.write(
-          serializeTuiMessage({
-            type: "user_input_response",
-            payload: result,
-          })
-        );
-      }
+      sendToGateway({ message: "", form_answer: result });
       setHitlSpec(null);
     },
-    []
+    [sendToGateway]
   );
 
-  const onAbort = useCallback(() => {
-    const proc = childRef.current;
-    if (proc?.stdin?.writable) {
-      proc.stdin.write(serializeTuiMessage({ type: "abort" as const }));
-    }
+  const onAbort = useCallback(async () => {
     commitStreamToScrollback();
+    try {
+      await fetch(`${GATEWAY}/v1/sessions/${sessionRef.current}/abort`, {
+        method: "POST",
+      });
+    } catch {
+      // Best-effort
+    }
   }, [commitStreamToScrollback]);
 
   const onCommand = useCallback(
@@ -301,15 +534,25 @@ export default function App() {
         case "agent":
           onSwitchAgent();
           break;
-        case "mcps": {
-          const proc = childRef.current;
-          if (proc?.stdin?.writable) {
-            proc.stdin.write(serializeTuiMessage({ type: "manage_mcps" }));
-          }
+        case "mcps":
+          startMcpManagement();
           break;
-        }
         case "clear":
           setScrollback([]);
+          setStreamingContent("");
+          streamingRef.current = "";
+          bufferRef.current = "";
+          setHitlSpec(null);
+          agentModeRef.current = false;
+          mcpModeRef.current = false;
+          setStatusLabel(null);
+          setStatusKind(null);
+          setIsProgress(false);
+          setError(null);
+          void fetch(
+            `${GATEWAY}/v1/sessions/${encodeURIComponent(sessionRef.current)}/clear-history`,
+            { method: "POST" }
+          ).catch(() => {});
           break;
         case "plan":
           setPlanTodosOverlay("plan");
@@ -320,13 +563,13 @@ export default function App() {
         case "help":
           setScrollback((s) => [
             ...s,
-            { type: "agent_line", content: "/agent - Switch active agent", isFirst: true },
-            { type: "agent_line", content: "/mcps - Enable/disable MCPs", isFirst: false },
-            { type: "agent_line", content: "/clear - Clear conversation", isFirst: false },
-            { type: "agent_line", content: "/plan - View current plan", isFirst: false },
-            { type: "agent_line", content: "/todos - View open todos", isFirst: false },
-            { type: "agent_line", content: "/help - Show all commands", isFirst: false },
-            { type: "agent_line", content: "/exit - Exit Proxi", isFirst: false },
+            { type: "agent_line", content: "/agent - Switch agent workspace", isFirst: true, isSystem: true },
+            { type: "agent_line", content: "/mcps  - Enable/disable MCPs", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/clear - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/plan  - View current plan", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/todos - View open todos", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/help  - Show all commands", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/exit  - Exit Proxi", isFirst: false, isSystem: true },
           ]);
           break;
         case "exit":
@@ -334,7 +577,7 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent]
+    [onSwitchAgent, startMcpManagement]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
@@ -371,7 +614,7 @@ export default function App() {
           )
         ) : !bootInfo ? (
           <Box paddingX={1} flexShrink={0}>
-            <Text dimColor>Connecting…</Text>
+            <Text dimColor>Connecting to gateway...</Text>
           </Box>
         ) : commandPaletteOpen ? (
           <CommandPalette
