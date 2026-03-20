@@ -77,8 +77,14 @@ export default function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [planTodosOverlay, setPlanTodosOverlay] = useState<"plan" | "todos" | null>(null);
   const [inputHistory, setInputHistory] = useState<string[]>([]);
+  const [bootHint, setBootHint] = useState("Connecting to gateway...");
+
+  const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
+  bootInfoRef.current = bootInfo;
 
   const abortRef = useRef<AbortController | null>(null);
+  const agentModeRef = useRef(false);
+  const initialAgentPickRef = useRef(false);
   const bufferRef = useRef("");
   const streamingRef = useRef("");
   const overlayRef = useRef({ planTodosOverlay, commandPaletteOpen });
@@ -155,15 +161,90 @@ export default function App() {
     connect();
   }, []);
 
-  useEffect(() => {
-    const defaultSession = process.env.PROXI_SESSION_ID || "work/main";
-    sessionRef.current = defaultSession;
+  const startAgentSwitch = useCallback(async (isInitialPick = false) => {
+    agentModeRef.current = true;
+    initialAgentPickRef.current = isInitialPick;
+    if (isInitialPick) {
+      setBootHint("Loading agents...");
+    }
+    try {
+      const res = await fetch(`${GATEWAY}/v1/agents`);
+      if (!res.ok) {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `Agent fetch failed: ${res.status}`, isFirst: true, isSystem: true },
+        ]);
+        if (isInitialPick) {
+          setBootHint("Could not load agents. Is the gateway running? Try again after fixing the connection.");
+        }
+        agentModeRef.current = false;
+        initialAgentPickRef.current = false;
+        return;
+      }
+      const data = (await res.json()) as { agents?: { agent_id: string; default_session: string }[] };
+      const agents = data.agents ?? [];
+      if (agents.length === 0) {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: "No agents configured in gateway.yml.", isFirst: true, isSystem: true },
+        ]);
+        if (isInitialPick) {
+          setBootHint("No agents found. Add agents to gateway.yml, then restart.");
+        }
+        agentModeRef.current = false;
+        initialAgentPickRef.current = false;
+        return;
+      }
+      const cancelLabel = "[Cancel]";
+      const options = agents.map((a) => {
+        const cur = bootInfoRef.current;
+        const isCurrent = cur !== null && a.agent_id === cur.agentId;
+        return `${a.agent_id}${isCurrent ? " (current)" : ""}`;
+      });
+      if (!isInitialPick) {
+        options.push(cancelLabel);
+      }
+      setHitlSpec({
+        type: "user_input_required" as const,
+        method: "select" as const,
+        prompt: isInitialPick
+          ? "Select an agent workspace to begin:"
+          : "Switch agent — select an agent workspace:",
+        options,
+      });
+      if (isInitialPick) {
+        setBootHint("Choose an agent below.");
+      }
+    } catch (err: any) {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Agent switch error: ${err.message}`, isFirst: true, isSystem: true },
+      ]);
+      if (isInitialPick) {
+        setBootHint(`Could not reach gateway: ${err.message ?? err}`);
+      }
+      agentModeRef.current = false;
+      initialAgentPickRef.current = false;
+    }
+  }, []);
 
+  useEffect(() => {
+    const envSession = process.env.PROXI_SESSION_ID?.trim();
     const ac = new AbortController();
     abortRef.current = ac;
-    connectSse(defaultSession, ac);
-    return () => { ac.abort(); };
-  }, [connectSse]);
+
+    if (envSession) {
+      sessionRef.current = envSession;
+      setBootHint("Connecting to gateway...");
+      connectSse(envSession, ac);
+    } else {
+      sessionRef.current = "";
+      void startAgentSwitch(true);
+    }
+    return () => {
+      ac.abort();
+    };
+  }, [connectSse, startAgentSwitch]);
 
   const commitStreamToScrollback = useCallback(() => {
     if (streamingRef.current) {
@@ -354,55 +435,10 @@ export default function App() {
     }
   }, [startMcpManagement]);
 
-  // --- Agent switching state ---
-  const agentModeRef = useRef(false);
-
-  const startAgentSwitch = useCallback(async () => {
-    agentModeRef.current = true;
-    try {
-      const res = await fetch(`${GATEWAY}/v1/agents`);
-      if (!res.ok) {
-        setScrollback((s) => [
-          ...s,
-          { type: "agent_line", content: `Agent fetch failed: ${res.status}`, isFirst: true, isSystem: true },
-        ]);
-        agentModeRef.current = false;
-        return;
-      }
-      const data = (await res.json()) as { agents?: { agent_id: string; default_session: string }[] };
-      const agents = data.agents ?? [];
-      if (agents.length === 0) {
-        setScrollback((s) => [
-          ...s,
-          { type: "agent_line", content: "No agents configured in gateway.yml.", isFirst: true, isSystem: true },
-        ]);
-        agentModeRef.current = false;
-        return;
-      }
-      const cancelLabel = "[Cancel]";
-      const options = agents.map((a) => {
-        const isCurrent = bootInfo && a.agent_id === bootInfo.agentId;
-        return `${a.agent_id}${isCurrent ? " (current)" : ""}`;
-      });
-      options.push(cancelLabel);
-      setHitlSpec({
-        type: "user_input_required" as const,
-        method: "select" as const,
-        prompt: "Switch agent — select an agent workspace:",
-        options,
-      });
-    } catch (err: any) {
-      setScrollback((s) => [
-        ...s,
-        { type: "agent_line", content: `Agent switch error: ${err.message}`, isFirst: true, isSystem: true },
-      ]);
-      agentModeRef.current = false;
-    }
-  }, [bootInfo]);
-
   const handleAgentSelection = useCallback(async (value: string | boolean | number) => {
     const choice = String(value);
     agentModeRef.current = false;
+    initialAgentPickRef.current = false;
     setHitlSpec(null);
 
     if (choice === "[Cancel]" || choice === "false") return;
@@ -417,6 +453,7 @@ export default function App() {
     }
 
     setScrollback((s) => [...s, { type: "agent_switch", agentId, phase: "pending", isFirst: true }]);
+    setBootHint("Connecting to gateway...");
 
     try {
       const res = await fetch(`${GATEWAY}/v1/sessions/switch`, {
@@ -453,7 +490,7 @@ export default function App() {
         finalizeAgentSwitchLine(s, agentId, { kind: "error", message: err.message ?? String(err) })
       );
     }
-  }, [bootInfo]);
+  }, [bootInfo, connectSse]);
 
   const onSwitchAgent = useCallback(() => {
     startAgentSwitch();
@@ -496,7 +533,15 @@ export default function App() {
 
   const onHitlCancel = useCallback(() => {
     if (agentModeRef.current) {
+      if (initialAgentPickRef.current) {
+        initialAgentPickRef.current = false;
+        agentModeRef.current = false;
+        setHitlSpec(null);
+        process.exit(0);
+        return;
+      }
       agentModeRef.current = false;
+      initialAgentPickRef.current = false;
       setHitlSpec(null);
       return;
     }
@@ -614,7 +659,7 @@ export default function App() {
           )
         ) : !bootInfo ? (
           <Box paddingX={1} flexShrink={0}>
-            <Text dimColor>Connecting to gateway...</Text>
+            <Text dimColor>{bootHint}</Text>
           </Box>
         ) : commandPaletteOpen ? (
           <CommandPalette

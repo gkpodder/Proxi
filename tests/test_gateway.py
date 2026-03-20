@@ -147,6 +147,20 @@ class TestGatewayConfig:
         assert src.priority == 0
         assert src.target_session == ""
         assert src.schedule == ""
+        assert src.pick_agent_at_startup is True
+
+    def test_tui_pick_agent_at_startup_from_yaml(self, tmp_path: Path) -> None:
+        config = _make_config(
+            tmp_path,
+            sources={
+                "tui": {
+                    "type": "http",
+                    "target_agent": "work",
+                    "pick_agent_at_startup": False,
+                },
+            },
+        )
+        assert config.sources["tui"].pick_agent_at_startup is False
 
     def test_malformed_yaml_raises(self, tmp_path: Path) -> None:
         (tmp_path / "gateway.yml").write_text("not_a_mapping", encoding="utf-8")

@@ -25,6 +25,8 @@ class SourceConfig:
     source_id: str
     source_type: str  # "channel" | "http" | "cron" | "heartbeat" | "webhook"
     target_agent: str
+    # If False and target_agent is set, the TUI launcher exports PROXI_SESSION_ID (auto-connect).
+    pick_agent_at_startup: bool = True
     target_session: str = ""
     priority: int = 0
     # cron
@@ -69,6 +71,7 @@ class GatewayConfig:
         for sid, cfg in (raw.get("sources") or {}).items():
             known_keys = {
                 "type", "target_agent", "target_session", "priority",
+                "pick_agent_at_startup",
                 "schedule", "prompt", "interval", "deadline_s",
                 "secret_env", "prompt_template",
             }
@@ -77,6 +80,7 @@ class GatewayConfig:
                 source_id=sid,
                 source_type=cfg.get("type", ""),
                 target_agent=cfg.get("target_agent", ""),
+                pick_agent_at_startup=cfg.get("pick_agent_at_startup", True),
                 target_session=cfg.get("target_session", ""),
                 priority=cfg.get("priority", 0),
                 schedule=cfg.get("schedule", ""),
