@@ -175,7 +175,7 @@ class AgentLane:
                 logger.warning(
                     "lane_budget_exceeded",
                     session=self.session_id,
-                    event=event.event_id,
+                    event_id=event.event_id,
                     detail=str(exc),
                 )
                 if event.reply_channel:
