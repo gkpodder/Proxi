@@ -17,7 +17,7 @@ export type CommandDef = {
 const COMMANDS: Omit<CommandDef, "handler">[] = [
   { id: "agent", name: "/agent", description: "Switch active agent" },
   { id: "mcps", name: "/mcps", description: "Enable or disable MCPs" },
-  { id: "clear", name: "/clear", description: "Clear conversation" },
+  { id: "clear", name: "/clear", description: "Clear UI + disk history (fresh session)" },
   { id: "plan", name: "/plan", description: "View current plan" },
   { id: "todos", name: "/todos", description: "View open todos" },
   { id: "help", name: "/help", description: "Show all commands" },

@@ -9,6 +9,10 @@ type Props = {
   statusLabel: string | null;
   statusKind: StatusKind;
   isProgress: boolean;
+  /** When set, shows the dots spinner (e.g. TUI user turn or tui_abortable work). */
+  showSpinner?: boolean;
+  /** Show Esc-abort hint for in-flight TUI turns (not background cron/heartbeat). */
+  showAbortHint?: boolean;
   agentId?: string;
   sessionId?: string;
   isWaitingForInput?: boolean;
@@ -18,6 +22,8 @@ export function StatusBar({
   statusLabel,
   statusKind,
   isProgress,
+  showSpinner,
+  showAbortHint,
   agentId,
   sessionId,
   isWaitingForInput,
@@ -51,7 +57,7 @@ export function StatusBar({
       <Text color={theme.mist}>session {sessionId ?? "—"}</Text>
       <Text color={theme.purpleDim}>  ·  </Text>
       <Text color={statusColor}>{statusWord}</Text>
-      {(showTool || showSubagent || showProgress) && isProgress && (
+      {(showSpinner ?? ((showTool || showSubagent || showProgress) && isProgress)) && (
         <>
           <Text> </Text>
           <Spinner type="dots" />
@@ -64,6 +70,14 @@ export function StatusBar({
     <Box paddingX={1} paddingY={0} height={1} flexShrink={0} justifyContent="space-between">
       <Box>{leftContent}</Box>
       <Box>
+        {showAbortHint && (
+          <>
+            <Text color="red" bold>
+              Esc abort
+            </Text>
+            <Text color={theme.purpleDim}> · </Text>
+          </>
+        )}
         <Text color={theme.mist}>↑↓ scroll  /  commands</Text>
       </Box>
     </Box>

@@ -97,6 +97,8 @@ class AgentLoop:
         Returns:
             Updated agent state
         """
+        if state.workspace is None and self.workspace is not None:
+            state.workspace = self.workspace
         state.add_message(Message(role="user", content=user_message))
         state.status = AgentStatus.RUNNING
         if state.end_time is not None:
@@ -131,7 +133,25 @@ class AgentLoop:
                         # REASON → DECIDE
                         turn.status = TurnStatus.DECIDING
                         decide_start_ns = now_ns()
-                        decision, usage = await self._decide(state, emit_stream=self.emitter is not None)
+                        if self.emitter:
+                            self.emitter.emit(
+                                {
+                                    "type": "status_update",
+                                    "label": "Thinking...",
+                                    "status": "running",
+                                }
+                            )
+                        decision, usage = await self._decide(
+                            state, emit_stream=self.emitter is not None
+                        )
+                        if self.emitter:
+                            self.emitter.emit(
+                                {
+                                    "type": "status_update",
+                                    "label": "Thinking...",
+                                    "status": "done",
+                                }
+                            )
                         decide_ms = elapsed_ms(decide_start_ns)
 
                         # Accumulate token usage
