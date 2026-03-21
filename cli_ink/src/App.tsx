@@ -182,7 +182,6 @@ export default function App() {
           const needsGap =
             last &&
             (last.type === "agent_line" ||
-              last.type === "agent_switch" ||
               last.type === "agent_blank" ||
               last.type === "tool_done" ||
               (last.type === "subagent" && last.status === "done"));

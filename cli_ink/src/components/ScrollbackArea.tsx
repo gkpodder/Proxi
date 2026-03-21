@@ -65,18 +65,37 @@ function renderItem(item: ScrollbackItem, index: number, prevItem: ScrollbackIte
       );
     case "inbound_turn_header": {
       const label = prettyInboundSourceType(item.sourceType);
-      const tag = item.sourceId ? `${label} · ${item.sourceId}` : label;
       return (
-        <React.Fragment key={index}>
-          <Box paddingX={1}>
-            <Text color={theme.mist}>  [{tag}]</Text>
+        <Box key={index} marginLeft={1} marginRight={1}>
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor={theme.purpleDim}
+            paddingX={1}
+            paddingY={0}
+          >
+            <Box flexDirection="row" flexWrap="wrap" alignItems="center">
+              <Text color={theme.purpleDim}>⏱ </Text>
+              <Text color={theme.lavender} bold>
+                {label}
+              </Text>
+              {item.sourceId ? (
+                <>
+                  <Text color={theme.mist}> · </Text>
+                  <Text color={theme.purpleDim}>{item.sourceId}</Text>
+                </>
+              ) : null}
+            </Box>
+            <Box marginTop={1}>
+              <Text backgroundColor={theme.purpleFaint} color={theme.purple}>
+                {"  > "}
+              </Text>
+              <Text backgroundColor={theme.purpleFaint} color={theme.lavender}>
+                {item.prompt}
+              </Text>
+            </Box>
           </Box>
-          <Box paddingX={1}>
-            <Text backgroundColor={theme.purpleFaint} color={theme.purple}>
-              {"  > "}{item.prompt}
-            </Text>
-          </Box>
-        </React.Fragment>
+        </Box>
       );
     }
     case "spacing":
