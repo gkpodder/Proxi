@@ -16,6 +16,18 @@ from proxi.observability.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _should_emit_inbound_turn_header(event: GatewayEvent) -> bool:
+    """Non-TUI sources (heartbeat, cron, webhooks, …) should show a synthetic prompt in the TUI."""
+    st = event.source_type
+    if st in ("heartbeat", "cron", "webhook"):
+        return True
+    if st in ("telegram", "whatsapp", "discord"):
+        return True
+    if st == "http":
+        return event.source_id not in ("tui", "http")
+    return False
+
+
 class _SseEmitter:
     """Bridge emitter that forwards messages to an ``HttpSseReplyChannel``."""
 
@@ -233,6 +245,22 @@ class AgentLane:
             self._state.workspace = self.workspace_config
 
         text = event.payload.get("text", "")
+
+        if (
+            self._sse_channel is not None
+            and _should_emit_inbound_turn_header(event)
+        ):
+            try:
+                await self._sse_channel.send_event(
+                    {
+                        "type": "inbound_turn",
+                        "source_type": event.source_type,
+                        "source_id": event.source_id,
+                        "prompt": text,
+                    }
+                )
+            except Exception:
+                pass
 
         if self._state is not None and self._state.history:
             result_state = await self._loop.run_continue(self._state, text)

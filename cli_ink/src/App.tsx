@@ -175,6 +175,31 @@ export default function App() {
       case "user_input_required":
         setHitlSpec(msg);
         break;
+      case "inbound_turn":
+        commitStreamToScrollback();
+        setScrollback((s) => {
+          const last = s[s.length - 1];
+          const needsGap =
+            last &&
+            (last.type === "agent_line" ||
+              last.type === "agent_switch" ||
+              last.type === "agent_blank" ||
+              last.type === "tool_done" ||
+              (last.type === "subagent" && last.status === "done"));
+          const prefix = needsGap ? [{ type: "spacing" as const }] : [];
+          return [
+            ...s,
+            ...prefix,
+            {
+              type: "inbound_turn_header" as const,
+              sourceType: msg.source_type,
+              sourceId: msg.source_id,
+              prompt: msg.prompt,
+            },
+            { type: "spacing" as const },
+          ];
+        });
+        break;
       default:
         break;
     }

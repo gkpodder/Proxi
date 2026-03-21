@@ -119,6 +119,15 @@ export const BootCompleteSchema = z.object({
 });
 export type BootComplete = z.infer<typeof BootCompleteSchema>;
 
+/** Gateway: scheduled or external inbound prompt (heartbeat, cron, webhook, …). */
+export const InboundTurnSchema = z.object({
+  type: z.literal("inbound_turn"),
+  source_type: z.string(),
+  source_id: z.string(),
+  prompt: z.string(),
+});
+export type InboundTurn = z.infer<typeof InboundTurnSchema>;
+
 export const BridgeMessageSchema = z.union([
   TextStreamSchema,
   StatusUpdateSchema,
@@ -131,6 +140,7 @@ export const BridgeMessageSchema = z.union([
   UserInputRequiredFormSchema,
   ReadySchema,
   BootCompleteSchema,
+  InboundTurnSchema,
 ]);
 export type BridgeMessage = z.infer<typeof BridgeMessageSchema>;
 
