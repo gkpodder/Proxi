@@ -138,6 +138,52 @@ class Message(BaseModel):
     tool_calls: Annotated[list[dict[str, Any]] | None, Field(default=None, description="Tool calls for assistant messages")]
 
 
+def _inject_missing_tool_outputs(messages: list[Message]) -> list[Message]:
+    """Ensure each assistant tool_call has a following tool message (OpenAI API requirement).
+
+    Older sessions only persisted user/assistant lines; on reload the model saw
+    function_call items without outputs. Synthesize placeholder outputs for any
+    missing call_ids so the conversation can continue.
+    """
+    out: list[Message] = []
+    i = 0
+    n = len(messages)
+    while i < n:
+        m = messages[i]
+        out.append(m)
+        if m.role == "assistant" and m.tool_calls:
+            needed: list[str] = []
+            for tc in m.tool_calls:
+                if isinstance(tc, dict):
+                    tid = tc.get("id")
+                    if isinstance(tid, str) and tid:
+                        needed.append(tid)
+            have: set[str] = set()
+            i += 1
+            while i < n and messages[i].role == "tool":
+                tm = messages[i]
+                out.append(tm)
+                if tm.tool_call_id:
+                    have.add(tm.tool_call_id)
+                i += 1
+            for tid in needed:
+                if tid not in have:
+                    out.append(
+                        Message(
+                            role="tool",
+                            content=(
+                                "[Tool result was missing from saved session history; "
+                                "retry the tool if you still need it.]"
+                            ),
+                            tool_call_id=tid,
+                            name=None,
+                        )
+                    )
+            continue
+        i += 1
+    return out
+
+
 class AgentState(BaseModel):
     """Overall state of the agent."""
 
@@ -161,11 +207,12 @@ class AgentState(BaseModel):
         """Add a message to the history and append to history.jsonl if configured."""
         self.history.append(message)
 
-        # Persist only user/assistant messages into history.jsonl so that
-        # chat history can be reconstructed later without tool/system noise.
+        # Persist user/assistant/tool messages. Tool outputs must be stored next to
+        # assistant tool_calls so sessions reloaded from disk (e.g. gateway lanes)
+        # satisfy OpenAI Responses API input (every function_call needs output).
         if (
             self.workspace is not None
-            and message.role in ("user", "assistant")
+            and message.role in ("user", "assistant", "tool")
             and self.workspace.history_path
         ):
             self._append_history_jsonl(message)
@@ -190,6 +237,43 @@ class AgentState(BaseModel):
             not self.is_done()
             and self.current_turn < self.max_turns
             and self.status == AgentStatus.RUNNING
+        )
+
+    # --- Class-level loaders -----------------------------------------------
+
+    @classmethod
+    def load(cls, history_path: Path) -> "AgentState | None":
+        """Reconstruct an AgentState from a persisted history.jsonl file.
+
+        Returns None if the file does not exist or is empty.
+        User, assistant, and tool messages are stored in history.jsonl so tool
+        call/result pairs stay aligned when continuing via
+        ``AgentLoop.run_continue()``.
+        """
+        if not history_path.exists():
+            return None
+        messages: list[Message] = []
+        try:
+            with history_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if "role" in obj:
+                        messages.append(Message(**obj))
+        except OSError:
+            return None
+        if not messages:
+            return None
+        messages = _inject_missing_tool_outputs(messages)
+        return cls(
+            status=AgentStatus.IDLE,
+            history=messages,
+            current_turn=0,
         )
 
     # --- Internal helpers -------------------------------------------------

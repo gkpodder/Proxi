@@ -318,7 +318,6 @@ async def main():
                 agent_info = workspace_manager.create_agent(
                     name=agent_id,
                     persona="General-purpose CLI agent.",
-                    mission="Execute one-shot CLI tasks for the user.",
                     agent_id=agent_id,
                 )
         else:
@@ -326,7 +325,6 @@ async def main():
                 agent_info = workspace_manager.create_agent(
                     name="default",
                     persona="General-purpose CLI agent.",
-                    mission="Execute one-shot CLI tasks for the user.",
                     agent_id="default",
                 )
             elif len(agents) == 1:
