@@ -164,6 +164,18 @@ class AgentLane:
         for tool in mcp_tools:
             reg.register(tool)
 
+    def _sync_state_if_history_cleared(self) -> None:
+        """Align memory with disk when history.jsonl is empty (e.g. /clear raced ahead of _state reset)."""
+        try:
+            if self.history_path.exists() and self.history_path.stat().st_size > 0:
+                return
+        except OSError:
+            return
+        if self._state is not None and self._state.history:
+            self._state = None
+            self.budget.reset()
+            self._loop = None
+
     async def clear_session_history(self) -> None:
         """Stop work, wipe ``history.jsonl``, reset in-memory state (fresh chat; prompts unchanged)."""
         await self.abort()
@@ -171,6 +183,7 @@ class AgentLane:
         self.history_path.write_text("", encoding="utf-8")
         self._state = None
         self.budget.reset()
+        self._loop = None
 
     async def _drain(self) -> None:
         """Core loop — processes events one at a time, serialising within the session."""
@@ -222,6 +235,7 @@ class AgentLane:
                 self.queue.task_done()
 
     async def _dispatch(self, event: GatewayEvent) -> str | None:
+        self._sync_state_if_history_cleared()
         if self._loop is None:
             if self._create_loop is not None:
                 self._loop = self._create_loop(self.workspace_config)

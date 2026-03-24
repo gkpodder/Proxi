@@ -71,6 +71,8 @@ export default function App() {
 
   // Resolved session_id (set from boot_complete)
   const sessionRef = useRef<string>("");
+  /** In-flight POST /clear-history; sendToGateway awaits this to avoid racing the server. */
+  const clearSessionPromiseRef = useRef<Promise<void> | null>(null);
   const handleMsgRef = useRef<(msg: BridgeMessage) => void>(() => {});
   const onAbortRef = useRef<() => void>(() => {});
 
@@ -418,6 +420,14 @@ export default function App() {
 
   // --- HTTP helpers ---
   const sendToGateway = useCallback(async (body: Record<string, unknown>) => {
+    const pendingClear = clearSessionPromiseRef.current;
+    if (pendingClear) {
+      try {
+        await pendingClear;
+      } catch {
+        // clear-history is best-effort; continue with send
+      }
+    }
     try {
       const res = await fetch(`${GATEWAY}/v1/sessions/${sessionRef.current}/send`, {
         method: "POST",
@@ -898,10 +908,20 @@ export default function App() {
           setTuiActiveDepth(0);
           setLastTuiAbortableStatus(false);
           setError(null);
-          void fetch(
-            `${GATEWAY}/v1/sessions/${encodeURIComponent(sessionRef.current)}/clear-history`,
-            { method: "POST" }
-          ).catch(() => {});
+          {
+            const p = fetch(
+              `${GATEWAY}/v1/sessions/${encodeURIComponent(sessionRef.current)}/clear-history`,
+              { method: "POST" }
+            )
+              .then(() => undefined)
+              .catch(() => undefined)
+              .finally(() => {
+                if (clearSessionPromiseRef.current === p) {
+                  clearSessionPromiseRef.current = null;
+                }
+              });
+            clearSessionPromiseRef.current = p;
+          }
           break;
         case "plan":
           setPlanTodosOverlay("plan");

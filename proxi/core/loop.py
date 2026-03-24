@@ -99,6 +99,8 @@ class AgentLoop:
         """
         if state.workspace is None and self.workspace is not None:
             state.workspace = self.workspace
+        # Loaded / legacy state may omit max_turns (Pydantic default); loop config is authoritative.
+        state.max_turns = self.max_turns
         state.add_message(Message(role="user", content=user_message))
         state.status = AgentStatus.RUNNING
         if state.end_time is not None:
@@ -110,7 +112,8 @@ class AgentLoop:
         """Inner loop: run until completion or failure."""
         try:
             turn_budget_ms = float(os.getenv("PROXI_BUDGET_TURN_MS", "30000"))
-            decide_budget_ms = float(os.getenv("PROXI_BUDGET_DECIDE_MS", "20000"))
+            decide_budget_ms = float(
+                os.getenv("PROXI_BUDGET_DECIDE_MS", "20000"))
             act_budget_ms = float(os.getenv("PROXI_BUDGET_ACT_MS", "15000"))
             with TraceContext("agent_loop"):
                 while state.can_continue():
@@ -190,18 +193,24 @@ class AgentLoop:
                                 )
 
                                 # Execute all tool calls, optionally in parallel for safe tools.
-                                parsed_calls: list[tuple[str, str, dict[str, Any]]] = []
+                                parsed_calls: list[tuple[str,
+                                                         str, dict[str, Any]]] = []
                                 for tool_call in tool_calls:
                                     tool_call_id = tool_call.get("id", "")
-                                    tool_name = tool_call.get("function", {}).get("name", "")
-                                    tool_args_str = tool_call.get("function", {}).get("arguments", "{}")
+                                    tool_name = tool_call.get(
+                                        "function", {}).get("name", "")
+                                    tool_args_str = tool_call.get(
+                                        "function", {}).get("arguments", "{}")
                                     try:
-                                        tool_args = json.loads(tool_args_str) if isinstance(tool_args_str, str) else tool_args_str
+                                        tool_args = json.loads(tool_args_str) if isinstance(
+                                            tool_args_str, str) else tool_args_str
                                     except json.JSONDecodeError:
                                         tool_args = {}
-                                    parsed_calls.append((tool_call_id, tool_name, tool_args))
+                                    parsed_calls.append(
+                                        (tool_call_id, tool_name, tool_args))
 
-                                parallel_limit = max(1, int(os.getenv("PROXI_TOOL_PARALLELISM", "1")))
+                                parallel_limit = max(
+                                    1, int(os.getenv("PROXI_TOOL_PARALLELISM", "1")))
                                 can_parallelize = (
                                     parallel_limit > 1
                                     and all(self.tool_registry.is_parallel_safe(name) for _, name, _ in parsed_calls)
@@ -229,7 +238,8 @@ class AgentLoop:
 
                                 action_results = []
                                 if can_parallelize:
-                                    semaphore = asyncio.Semaphore(parallel_limit)
+                                    semaphore = asyncio.Semaphore(
+                                        parallel_limit)
 
                                     async def run_with_limit(
                                         tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
@@ -238,7 +248,8 @@ class AgentLoop:
                                             return await exec_one(tool_call_id, tool_name, tool_args)
 
                                     tasks = [
-                                        asyncio.create_task(run_with_limit(tool_call_id, tool_name, tool_args))
+                                        asyncio.create_task(run_with_limit(
+                                            tool_call_id, tool_name, tool_args))
                                         for tool_call_id, tool_name, tool_args in parsed_calls
                                     ]
                                     action_results = await asyncio.gather(*tasks)
@@ -246,7 +257,8 @@ class AgentLoop:
                                     for tool_call_id, tool_name, tool_args in parsed_calls:
                                         action_results.append(await exec_one(tool_call_id, tool_name, tool_args))
 
-                                act_ms += sum(float(r.get("elapsed_ms", 0.0)) for r in action_results)
+                                act_ms += sum(float(r.get("elapsed_ms", 0.0))
+                                              for r in action_results)
 
                                 # Add all tool response messages
                                 observe_start_ns = now_ns()

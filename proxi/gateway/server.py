@@ -106,7 +106,8 @@ async def _refresh_mcp_tools() -> None:
             "config": load_mcp_config(),
         }
         sig = hashlib.sha256(
-            json.dumps(sig_payload, sort_keys=True, separators=(",", ":")).encode()
+            json.dumps(sig_payload, sort_keys=True,
+                       separators=(",", ":")).encode()
         ).hexdigest()
         if sig == _last_mcp_signature:
             return
@@ -130,7 +131,8 @@ async def _refresh_mcp_tools() -> None:
                 auto_load_mcp_servers(tmp_registry), timeout=30.0
             )
             _mcp_tools[:] = list(tmp_registry._tools.values())
-            logger.info("mcp_refreshed", adapters=len(_mcp_adapters), tools=len(_mcp_tools))
+            logger.info("mcp_refreshed", adapters=len(
+                _mcp_adapters), tools=len(_mcp_tools))
         except Exception as exc:
             logger.warning("mcp_refresh_error", error=str(exc))
 
@@ -165,7 +167,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     )
     sub_agent_manager = None if no_sub_agents else setup_sub_agents(llm_client)
 
-    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "20"))
+    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "100"))
     return AgentLoop(
         llm_client=llm_client,
         tool_registry=tool_registry,
@@ -212,7 +214,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
                 )
                 session_id = router.resolve(ghost)
                 lane_manager._get_or_create(session_id)
-                logger.info("http_lane_prewarmed", source=source_id, session=session_id)
+                logger.info("http_lane_prewarmed",
+                            source=source_id, session=session_id)
             except Exception:
                 logger.warning("http_lane_prewarm_failed", source=source_id)
 
@@ -281,7 +284,8 @@ async def whatsapp_verify(
 ) -> int | dict[str, str]:
     expected = os.environ.get("WA_VERIFY_TOKEN", "")
     if hub_verify_token != expected:
-        raise HTTPException(status_code=403, detail="Verification token mismatch")
+        raise HTTPException(
+            status_code=403, detail="Verification token mismatch")
     return int(hub_challenge)
 
 
@@ -551,7 +555,8 @@ async def create_agent_endpoint(body: CreateAgentRequest) -> dict[str, Any]:
     try:
         info = wm.create_agent(
             name=name,
-            persona=(body.persona or "").strip() or "Helpful, patient, and clear.",
+            persona=(body.persona or "").strip(
+            ) or "Helpful, patient, and clear.",
             agent_id=aid,
             sync_gateway=True,
             default_session=(body.default_session or "").strip() or "main",
@@ -600,7 +605,8 @@ async def switch_agent_endpoint(body: SwitchAgentRequest) -> dict[str, Any]:
     """
     agent = config.agents.get(body.agent_id)
     if agent is None:
-        raise HTTPException(status_code=404, detail=f"Unknown agent: {body.agent_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Unknown agent: {body.agent_id}")
     new_session_id = f"{agent.agent_id}/{agent.default_session}"
     lane_manager._get_or_create(new_session_id)
     return {"session_id": new_session_id, "agent_id": agent.agent_id}
