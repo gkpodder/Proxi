@@ -57,6 +57,13 @@ export default function App() {
   const abortRef = useRef<AbortController | null>(null);
   const agentModeRef = useRef(false);
   const initialAgentPickRef = useRef(false);
+  const createAgentFlowRef = useRef<
+    | null
+    | {
+        step: "name" | "persona";
+        draft: Partial<{ name: string; persona: string }>;
+      }
+  >(null);
   const bufferRef = useRef("");
   const streamingRef = useRef("");
   const overlayRef = useRef({ planTodosOverlay, commandPaletteOpen });
@@ -285,15 +292,18 @@ export default function App() {
       const data = (await res.json()) as { agents?: { agent_id: string; default_session: string }[] };
       const agents = data.agents ?? [];
       if (agents.length === 0) {
-        setScrollback((s) => [
-          ...s,
-          { type: "agent_line", content: "No agents configured in gateway.yml.", isFirst: true, isSystem: true },
-        ]);
+        createAgentFlowRef.current = { step: "name", draft: {} };
+        setHitlSpec({
+          type: "user_input_required" as const,
+          method: "text" as const,
+          prompt: isInitialPick
+            ? "No agents yet — create one. Display name:"
+            : "Create new agent — display name:",
+        });
         if (isInitialPick) {
-          setBootHint("No agents found. Add agents to gateway.yml, then restart.");
+          setBootHint("Type a name for your first agent.");
         }
         agentModeRef.current = false;
-        initialAgentPickRef.current = false;
         return;
       }
       const cancelLabel = "[Cancel]";
@@ -302,6 +312,7 @@ export default function App() {
         const isCurrent = cur !== null && a.agent_id === cur.agentId;
         return `${a.agent_id}${isCurrent ? " (current)" : ""}`;
       });
+      options.push("[+] Create new agent");
       if (!isInitialPick) {
         options.push(cancelLabel);
       }
@@ -328,6 +339,64 @@ export default function App() {
       initialAgentPickRef.current = false;
     }
   }, []);
+
+  const performDeleteAgent = useCallback(async () => {
+    const agentId = bootInfoRef.current?.agentId;
+    if (!agentId) return;
+    setBootHint("Deleting agent...");
+    try {
+      const res = await fetch(`${GATEWAY}/v1/agents/${encodeURIComponent(agentId)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Delete failed: ${detail || res.status}`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+        setBootHint("");
+        return;
+      }
+      setScrollback((s) => [
+        ...s,
+        {
+          type: "agent_line",
+          content: `Agent '${agentId}' deleted.`,
+          isFirst: true,
+          isSystem: true,
+        },
+      ]);
+      if (abortRef.current) abortRef.current.abort();
+      setBootInfo(null);
+      setBridgeReady(false);
+      setStreamingContent("");
+      streamingRef.current = "";
+      bufferRef.current = "";
+      setUserSendPending(false);
+      setTuiActiveDepth(0);
+      setLastTuiAbortableStatus(false);
+      setError(null);
+      sessionRef.current = "";
+      setBootHint("Choose an agent below.");
+      void startAgentSwitch(true);
+    } catch (err: any) {
+      setScrollback((s) => [
+        ...s,
+        {
+          type: "agent_line",
+          content: `Delete failed: ${err.message ?? String(err)}`,
+          isFirst: true,
+          isSystem: true,
+        },
+      ]);
+      setBootHint("");
+    }
+  }, [startAgentSwitch]);
 
   useEffect(() => {
     const envSession = process.env.PROXI_SESSION_ID?.trim();
@@ -372,6 +441,7 @@ export default function App() {
 
   // --- MCP management state ---
   const mcpModeRef = useRef(false);
+  const deleteModeRef = useRef(false);
 
   const startMcpManagement = useCallback(async () => {
     mcpModeRef.current = true;
@@ -456,8 +526,129 @@ export default function App() {
     }
   }, [startMcpManagement]);
 
+  const handleCreateAgentFlowSubmit = useCallback(
+    async (value: string | boolean | number) => {
+      const flow = createAgentFlowRef.current;
+      if (!flow) return;
+      const v = String(value).trim();
+      if (flow.step === "name") {
+        if (!v) {
+          setScrollback((s) => [
+            ...s,
+            {
+              type: "agent_line",
+              content: "Display name cannot be empty.",
+              isFirst: true,
+              isSystem: true,
+            },
+          ]);
+          return;
+        }
+        flow.draft.name = v;
+        flow.step = "persona";
+        setHitlSpec({
+          type: "user_input_required" as const,
+          method: "text" as const,
+          prompt: "Persona:",
+        });
+        return;
+      }
+      if (flow.step === "persona") {
+        const draft = {
+          name: flow.draft.name ?? "",
+          persona: v || "Helpful, patient, and clear.",
+        };
+        createAgentFlowRef.current = null;
+        setHitlSpec(null);
+
+        try {
+          const res = await fetch(`${GATEWAY}/v1/agents`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: draft.name,
+              persona: draft.persona,
+            }),
+          });
+          if (!res.ok) {
+            const detail = await res.text();
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: `Create agent failed: ${detail || res.status}`,
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+            if (initialAgentPickRef.current) {
+              setBootHint("Create failed. Check gateway logs or gateway.yml.");
+            }
+            return;
+          }
+          const data = (await res.json()) as { agent_id: string };
+          setBootHint("Connecting to gateway...");
+          if (abortRef.current) abortRef.current.abort();
+          const switchRes = await fetch(`${GATEWAY}/v1/sessions/switch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ agent_id: data.agent_id }),
+          });
+          if (!switchRes.ok) {
+            const detail = await switchRes.text();
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: `Switch to new agent failed: ${detail || switchRes.status}`,
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+            return;
+          }
+          const result = (await switchRes.json()) as { session_id: string; agent_id: string };
+          sessionRef.current = result.session_id;
+          setBootInfo(null);
+          setBridgeReady(false);
+          setStreamingContent("");
+          streamingRef.current = "";
+          bufferRef.current = "";
+          setUserSendPending(false);
+          setTuiActiveDepth(0);
+          setLastTuiAbortableStatus(false);
+          initialAgentPickRef.current = false;
+          const ac = new AbortController();
+          abortRef.current = ac;
+          connectSse(result.session_id, ac);
+        } catch (err: any) {
+          setScrollback((s) => [
+            ...s,
+            {
+              type: "agent_line",
+              content: `Create agent failed: ${err.message ?? String(err)}`,
+              isFirst: true,
+              isSystem: true,
+            },
+          ]);
+        }
+      }
+    },
+    [connectSse]
+  );
+
   const handleAgentSelection = useCallback(async (value: string | boolean | number) => {
     const choice = String(value);
+    if (choice === "[+] Create new agent") {
+      createAgentFlowRef.current = { step: "name", draft: {} };
+      setHitlSpec({
+        type: "user_input_required" as const,
+        method: "text" as const,
+        prompt: "New agent — display name:",
+      });
+      agentModeRef.current = false;
+      return;
+    }
     agentModeRef.current = false;
     initialAgentPickRef.current = false;
     setHitlSpec(null);
@@ -551,21 +742,49 @@ export default function App() {
     sendToGateway({ message: task });
   }, [commitStreamToScrollback, sendToGateway]);
 
-  const onHitlSubmit = useCallback((value: string | boolean | number) => {
-    if (agentModeRef.current) {
-      handleAgentSelection(value);
-      return;
-    }
-    if (mcpModeRef.current) {
-      handleMcpSelection(value);
-      return;
-    }
-    setUserSendPending(true);
-    sendToGateway({ message: "", form_answer: { value } });
-    setHitlSpec(null);
-  }, [sendToGateway, handleMcpSelection, handleAgentSelection]);
+  const onHitlSubmit = useCallback(
+    (value: string | boolean | number) => {
+      if (createAgentFlowRef.current) {
+        void handleCreateAgentFlowSubmit(value);
+        return;
+      }
+      if (deleteModeRef.current) {
+        deleteModeRef.current = false;
+        setHitlSpec(null);
+        if (value === true) {
+          void performDeleteAgent();
+        }
+        return;
+      }
+      if (agentModeRef.current) {
+        void handleAgentSelection(value);
+        return;
+      }
+      if (mcpModeRef.current) {
+        handleMcpSelection(value);
+        return;
+      }
+      setUserSendPending(true);
+      sendToGateway({ message: "", form_answer: { value } });
+      setHitlSpec(null);
+    },
+    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent]
+  );
 
   const onHitlCancel = useCallback(() => {
+    if (createAgentFlowRef.current) {
+      createAgentFlowRef.current = null;
+      setHitlSpec(null);
+      if (initialAgentPickRef.current) {
+        process.exit(0);
+      }
+      return;
+    }
+    if (deleteModeRef.current) {
+      deleteModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
     if (agentModeRef.current) {
       if (initialAgentPickRef.current) {
         initialAgentPickRef.current = false;
@@ -640,6 +859,26 @@ export default function App() {
         case "agent":
           onSwitchAgent();
           break;
+        case "delete":
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: "Connect to an agent first, then use /delete.",
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+            break;
+          }
+          deleteModeRef.current = true;
+          setHitlSpec({
+            type: "user_input_required" as const,
+            method: "confirm" as const,
+            prompt: `Delete agent '${bootInfo.agentId}' and all sessions? This cannot be undone.`,
+          });
+          break;
         case "mcps":
           startMcpManagement();
           break;
@@ -651,6 +890,7 @@ export default function App() {
           setHitlSpec(null);
           agentModeRef.current = false;
           mcpModeRef.current = false;
+          deleteModeRef.current = false;
           setStatusLabel(null);
           setStatusKind(null);
           setIsProgress(false);
@@ -672,7 +912,8 @@ export default function App() {
         case "help":
           setScrollback((s) => [
             ...s,
-            { type: "agent_line", content: "/agent - Switch agent workspace", isFirst: true, isSystem: true },
+            { type: "agent_line", content: "/agent - Switch agent or create [+] Create new agent", isFirst: true, isSystem: true },
+            { type: "agent_line", content: "/delete - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/mcps  - Enable/disable MCPs", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/clear - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/plan  - View current plan", isFirst: false, isSystem: true },
@@ -686,7 +927,7 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent, startMcpManagement]
+    [onSwitchAgent, startMcpManagement, bootInfo]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);

@@ -51,7 +51,7 @@ from proxi.interaction.tool import get_show_collaborative_form_spec
 from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_user_profile
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
-from proxi.workspace import WorkspaceManager
+from proxi.workspace import WorkspaceError, WorkspaceManager
 
 logger = get_logger(__name__)
 
@@ -77,6 +77,16 @@ def _workspace_root() -> Path:
     if env:
         return Path(env).expanduser().resolve()
     return Path.home() / ".proxi"
+
+
+def _reload_gateway_config() -> None:
+    """Reload ``gateway.yml`` and sync in-memory router + lane manager."""
+    global config, router
+    root = _workspace_root()
+    config = GatewayConfig.load(root)
+    router = EventRouter(config)
+    if lane_manager is not None:
+        lane_manager.update_config(config)
 
 
 async def _refresh_mcp_tools() -> None:
@@ -519,6 +529,63 @@ async def list_agents_endpoint() -> dict[str, Any]:
         for a in config.agents.values()
     ]
     return {"agents": agents}
+
+
+class CreateAgentRequest(BaseModel):
+    name: str
+    persona: str = "Helpful, patient, and clear."
+    agent_id: str | None = None
+    default_session: str = "main"
+
+
+@app.post("/v1/agents")
+async def create_agent_endpoint(body: CreateAgentRequest) -> dict[str, Any]:
+    """Create agent directories, Soul.md, and register the agent in ``gateway.yml``."""
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    wm = WorkspaceManager(root=_workspace_root())
+    wm.ensure_global_system_prompt()
+    aid = body.agent_id.strip() if body.agent_id else None
+    try:
+        info = wm.create_agent(
+            name=name,
+            persona=(body.persona or "").strip() or "Helpful, patient, and clear.",
+            agent_id=aid,
+            sync_gateway=True,
+            default_session=(body.default_session or "").strip() or "main",
+        )
+    except WorkspaceError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    _reload_gateway_config()
+    logger.info("agent_created_via_api", agent_id=info.agent_id)
+    return {
+        "agent_id": info.agent_id,
+        "soul_path": str((info.path / "Soul.md").resolve()),
+    }
+
+
+@app.delete("/v1/agents/{agent_id}")
+async def delete_agent_endpoint(agent_id: str) -> dict[str, Any]:
+    """Remove an agent from ``gateway.yml``, delete ``agents/<id>/``, and stop its lanes."""
+    if lane_manager is None:
+        raise HTTPException(status_code=503, detail="Gateway not ready")
+    aid = agent_id.strip()
+    if not aid:
+        raise HTTPException(status_code=400, detail="agent_id required")
+
+    wm = WorkspaceManager(root=_workspace_root())
+    try:
+        await lane_manager.remove_lanes_for_agent(aid)
+        wm.delete_agent(aid)
+    except WorkspaceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    _reload_gateway_config()
+    logger.info("agent_deleted_via_api", agent_id=aid)
+    return {"status": "deleted", "agent_id": aid}
 
 
 class SwitchAgentRequest(BaseModel):

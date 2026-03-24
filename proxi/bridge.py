@@ -460,14 +460,9 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 "text",
                 "Briefly describe this agent's persona/voice:",
             )
-            mission = await request_user_input(
-                "text",
-                "What is this agent's primary mission?",
-            )
             return workspace_manager.create_agent(
                 name=str(name or "Proxi"),
                 persona=str(persona or "Helpful, patient, and clear."),
-                mission=str(mission or "Assist the user with their tasks."),
             )
 
         # Discover existing agents
@@ -484,7 +479,6 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 agent_info = workspace_manager.create_agent(
                     name=agent_id,
                     persona="General-purpose TUI agent.",
-                    mission="Assist the user with interactive tasks.",
                     agent_id=agent_id,
                 )
         else:

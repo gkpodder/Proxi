@@ -20,6 +20,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+import yaml
+
 from proxi.core.state import WorkspaceConfig
 
 
@@ -164,12 +168,69 @@ class WorkspaceManager:
                 agents.append(AgentInfo(agent_id=child.name, path=child))
         return agents
 
+    def register_agent_in_gateway(
+        self,
+        agent_id: str,
+        *,
+        default_session: str = "main",
+    ) -> None:
+        """Add or idempotently confirm this agent in ``gateway.yml``.
+
+        Creates a minimal ``gateway.yml`` if missing (``agents`` + ``sources``).
+        Paths under ``agents:`` are relative to the workspace root.
+        """
+        rel_soul = f"agents/{agent_id}/Soul.md"
+        soul_abs = (self.root / rel_soul).resolve()
+        if not soul_abs.exists():
+            raise WorkspaceError(
+                f"Cannot register {agent_id!r}: missing {rel_soul} under {self.root}"
+            )
+
+        path = self.root / "gateway.yml"
+        if path.exists():
+            raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        else:
+            raw = {"agents": {}, "sources": {}}
+        if not isinstance(raw, dict):
+            raise WorkspaceError("gateway.yml must be a YAML mapping")
+
+        agents: dict[str, Any] = raw.get("agents") or {}
+        if not isinstance(agents, dict):
+            agents = {}
+        existing = agents.get(agent_id)
+        if isinstance(existing, dict):
+            if (
+                existing.get("soul") == rel_soul
+                and existing.get("default_session", "main") == default_session
+            ):
+                return
+            raise WorkspaceError(
+                f"Agent {agent_id!r} already registered in gateway.yml with different settings"
+            )
+
+        agents[agent_id] = {"soul": rel_soul, "default_session": default_session}
+        raw["agents"] = agents
+        if "sources" not in raw:
+            raw["sources"] = {}
+
+        path.write_text(
+            yaml.safe_dump(
+                raw,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
     def create_agent(
         self,
         name: str,
         persona: str,
-        mission: str,
         agent_id: str | None = None,
+        *,
+        sync_gateway: bool = True,
+        default_session: str = "main",
     ) -> AgentInfo:
         """Create a new agent directory and Soul.md."""
         self.ensure_base_dirs()
@@ -181,17 +242,71 @@ class WorkspaceManager:
 
         soul_path = agent_dir / "Soul.md"
         if not soul_path.exists():
-            soul_content = (
-                f"Name: {name}\n"
-                f"Persona: {persona}\n"
-                f"Mission: {mission}\n"
-            )
+            soul_content = f"Name: {name}\nPersona: {persona}\n"
             soul_path.write_text(soul_content, encoding="utf-8")
 
         # Placeholder for future config.yaml support
         (agent_dir / "config.yaml").touch(exist_ok=True)
 
+        if sync_gateway:
+            self.register_agent_in_gateway(agent_id, default_session=default_session)
+
         return AgentInfo(agent_id=agent_id, path=agent_dir)
+
+    def delete_agent(self, agent_id: str) -> None:
+        """Remove an agent from ``gateway.yml`` and delete ``agents/<agent_id>/``.
+
+        Sources that pointed at this agent are rewired to another remaining agent.
+        Cannot delete the last registered agent (create another first).
+        """
+        import shutil
+
+        self._validate_agent_id(agent_id)
+        self.ensure_base_dirs()
+
+        path = self.root / "gateway.yml"
+        if not path.exists():
+            raise WorkspaceError("gateway.yml not found")
+
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if not isinstance(raw, dict):
+            raise WorkspaceError("gateway.yml must be a YAML mapping")
+
+        agents: dict[str, Any] = raw.get("agents") or {}
+        if not isinstance(agents, dict):
+            agents = {}
+        if agent_id not in agents:
+            raise WorkspaceError(f"Agent {agent_id!r} is not registered in gateway.yml")
+        if len(agents) <= 1:
+            raise WorkspaceError(
+                "Cannot delete the last agent; create another agent first"
+            )
+
+        remaining = [k for k in agents if k != agent_id]
+        replacement = remaining[0]
+
+        del agents[agent_id]
+        raw["agents"] = agents
+
+        sources = raw.get("sources") or {}
+        if isinstance(sources, dict):
+            for cfg in sources.values():
+                if isinstance(cfg, dict) and cfg.get("target_agent") == agent_id:
+                    cfg["target_agent"] = replacement
+
+        path.write_text(
+            yaml.safe_dump(
+                raw,
+                default_flow_style=False,
+                allow_unicode=True,
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+
+        agent_dir = self.agents_dir / agent_id
+        if agent_dir.exists():
+            shutil.rmtree(agent_dir)
 
     # --- Sessions ---------------------------------------------------------
 
@@ -238,6 +353,13 @@ class WorkspaceManager:
         return session.workspace_config
 
     # --- Internal helpers -------------------------------------------------
+
+    @staticmethod
+    def _validate_agent_id(agent_id: str) -> None:
+        if not agent_id or agent_id != agent_id.strip():
+            raise WorkspaceError("Invalid agent id")
+        if agent_id in (".", "..") or "/" in agent_id or "\\" in agent_id:
+            raise WorkspaceError("Invalid agent id")
 
     @staticmethod
     def _slugify(value: str) -> str:

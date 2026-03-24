@@ -26,6 +26,10 @@ class LaneManager:
         self._lanes: dict[str, AgentLane] = {}
         self._create_loop = create_loop
 
+    def update_config(self, new_config: GatewayConfig) -> None:
+        """Replace gateway config (e.g. after gateway.yml is updated on disk)."""
+        self._config = new_config
+
     async def route(self, event: GatewayEvent) -> None:
         assert event.session_id, "session_id must be stamped by EventRouter before routing"
         lane = self._get_or_create(event.session_id)
@@ -71,6 +75,15 @@ class LaneManager:
         for lane in self._lanes.values():
             await lane.stop()
         self._lanes.clear()
+
+    async def remove_lanes_for_agent(self, agent_id: str) -> None:
+        """Stop and drop all lanes whose ``session_id`` belongs to ``agent_id``."""
+        prefix = f"{agent_id}/"
+        to_remove = [sid for sid in self._lanes if sid.startswith(prefix)]
+        for sid in to_remove:
+            lane = self._lanes.pop(sid, None)
+            if lane is not None:
+                await lane.stop()
 
     def sync_mcp_tools_to_loops(self, mcp_tools: Sequence[Any]) -> None:
         """After gateway MCP refresh, update tool registries on running loops."""
