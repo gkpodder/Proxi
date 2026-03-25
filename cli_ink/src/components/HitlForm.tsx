@@ -21,11 +21,6 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
   const options = spec.options ?? [];
   const maxIndex = Math.max(0, options.length - 1);
 
-  useEffect(() => {
-    setTextValue("");
-    setSelectIndex(0);
-  }, [spec.prompt, spec.method]);
-
   useInput((input, key) => {
     if (key.escape) {
       onCancel();
@@ -126,7 +121,6 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
           {(spec.prompt ?? "Enter value:")}
         </Text>
         <TextInput
-          key={spec.prompt ?? "text"}
           value={textValue}
           onChange={setTextValue}
           onSubmit={() => handleSubmit()}

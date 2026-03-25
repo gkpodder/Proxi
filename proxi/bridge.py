@@ -338,9 +338,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
 
         for adapter in mcp_adapters:
             try:
-                await asyncio.wait_for(adapter.close(), timeout=5.0)
-            except asyncio.TimeoutError:
-                logger.warning("mcp_close_timeout")
+                await adapter.close()
             except Exception as e:
                 logger.warning("mcp_close_error", error=str(e))
         mcp_adapters = []
@@ -460,9 +458,14 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 "text",
                 "Briefly describe this agent's persona/voice:",
             )
+            mission = await request_user_input(
+                "text",
+                "What is this agent's primary mission?",
+            )
             return workspace_manager.create_agent(
                 name=str(name or "Proxi"),
                 persona=str(persona or "Helpful, patient, and clear."),
+                mission=str(mission or "Assist the user with their tasks."),
             )
 
         # Discover existing agents
@@ -479,6 +482,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 agent_info = workspace_manager.create_agent(
                     name=agent_id,
                     persona="General-purpose TUI agent.",
+                    mission="Assist the user with interactive tasks.",
                     agent_id=agent_id,
                 )
         else:
@@ -691,25 +695,11 @@ async def run_bridge(agent_id: str | None = None) -> None:
 
 
 def main() -> None:
-    """Entry point for proxi-bridge.
-
-    .. deprecated::
-        The bridge is superseded by the gateway HTTP/SSE transport.
-        Use ``proxi-gateway`` instead.  This entry point remains for
-        backward compatibility during the transition period.
-    """
+    """Entry point for proxi-bridge."""
     import argparse
-    import warnings
-
-    warnings.warn(
-        "proxi-bridge is deprecated. The TUI now connects to the gateway over SSE. "
-        "Use `proxi-gateway` or `proxi-gateway-ctl start` instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
 
     parser = argparse.ArgumentParser(
-        description="Proxi bridge for TUI clients (DEPRECATED — use gateway)")
+        description="Proxi bridge for TUI clients")
     parser.add_argument(
         "--agent-id",
         type=str,

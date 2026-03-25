@@ -88,10 +88,5 @@ class Reflector:
         if state.current_turn >= state.max_turns:
             return False
 
-        err = turn.error or ""
-        # Client request errors (e.g. invalid conversation / missing tool outputs) won't succeed on retry.
-        if "invalid_request_error" in err or "Error code: 400" in err:
-            return False
-
         # Simple retry logic - can be enhanced
         return True

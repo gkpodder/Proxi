@@ -15,11 +15,6 @@ dependencies = [
     "google-api-python-client>=2.106.0",
     "notion-client>=2.2.1",
     "python-dotenv>=1.0.0",
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.34.0",
-    "httpx>=0.28.0",
-    "apscheduler>=3.10.0",
-    "pyyaml>=6.0.0",
 ]
 
 [project.scripts]
@@ -27,8 +22,6 @@ proxi = "proxi.tui_launcher:main"
 proxi-run = "proxi.cli.main:cli_main"
 proxi-bridge = "proxi.bridge:main"
 proxi-tui = "proxi.tui_launcher:main"
-proxi-gateway = "proxi.gateway.server:main"
-proxi-gateway-ctl = "proxi.gateway.daemon_cli:main"
 
 [project.optional-dependencies]
 dev = [

@@ -48,7 +48,7 @@ Proxi uses a filesystem-backed workspace under `~/.proxi/` (or `$PROXI_HOME`):
 │   └── system_prompt.md      # Global instructions for all agents
 └── agents/
     └── <agent_id>/
-        ├── Soul.md           # Agent name and persona
+        ├── Soul.md           # Agent persona, voice, mission
         ├── config.yaml       # (reserved for future use)
         └── sessions/
             └── <session_id>/
@@ -164,7 +164,7 @@ uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path
 - **Command palette** — type `/` to open. Commands: `/agent` (switch agent), `/mcps` (enable/disable MCPs), `/clear` (clear conversation), `/plan` (view plan.md), `/todos` (view todos.md), `/help`, `/exit`.
 - **Collaborative forms** — when the agent calls `show_collaborative_form`, a form overlay appears for structured input (choice, multiselect, yesno, text). Supports `show_if` for conditional questions.
 - **Plan / Todos overlay** — `/plan` and `/todos` display the current session's `plan.md` and `todos.md` in an overlay (Esc to close).
-- **Agent bootstrap** — on first run (or when no agents exist), you're prompted to create an agent (name, persona). With existing agents, you select one or create new.
+- **Agent bootstrap** — on first run (or when no agents exist), you're prompted to create an agent (name, persona, mission). With existing agents, you select one or create new.
 - **Input history** — up/down arrows when the input is empty cycle through previous messages.
 
 To run the TUI directly with Bun (without going through the `proxi` CLI wrapper):

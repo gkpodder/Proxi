@@ -8,19 +8,6 @@ import { theme } from "../theme.js";
 import type { ScrollbackItem } from "../types/scrollback.js";
 import { FigletTitle } from "./FigletTitle.js";
 
-function prettyInboundSourceType(st: string): string {
-  const map: Record<string, string> = {
-    heartbeat: "Heartbeat",
-    cron: "Cron",
-    webhook: "Webhook",
-    telegram: "Telegram",
-    whatsapp: "WhatsApp",
-    discord: "Discord",
-    http: "HTTP",
-  };
-  return map[st] ?? (st.length ? st.charAt(0).toUpperCase() + st.slice(1) : st);
-}
-
 function formatToolInvocation(tool: string, args: Record<string, unknown> | undefined): string {
   if (!args || Object.keys(args).length === 0) return `${tool}()`;
   const entries = Object.entries(args);
@@ -45,12 +32,7 @@ function isBlockEnder(item: ScrollbackItem | undefined): boolean {
 function needsBlockSpacingBefore(item: ScrollbackItem, prevItem: ScrollbackItem | undefined): boolean {
   if (!prevItem) return false;
   if (!isBlockEnder(prevItem)) return false;
-  return (
-    item.type === "tool_start" ||
-    item.type === "subagent" ||
-    item.type === "agent_line" ||
-    item.type === "inbound_turn_header"
-  );
+  return item.type === "tool_start" || item.type === "subagent" || item.type === "agent_line";
 }
 
 function renderItem(item: ScrollbackItem, index: number, prevItem: ScrollbackItem | undefined) {
@@ -63,56 +45,19 @@ function renderItem(item: ScrollbackItem, index: number, prevItem: ScrollbackIte
           </Text>
         </Box>
       );
-    case "inbound_turn_header": {
-      const label = prettyInboundSourceType(item.sourceType);
-      return (
-        <Box key={index} marginLeft={1} marginRight={1}>
-          <Box
-            flexDirection="column"
-            borderStyle="round"
-            borderColor={theme.purpleDim}
-            paddingX={1}
-            paddingY={0}
-          >
-            <Box flexDirection="row" flexWrap="wrap" alignItems="center">
-              <Text color={theme.purpleDim}>⏱ </Text>
-              <Text color={theme.lavender} bold>
-                {label}
-              </Text>
-              {item.sourceId ? (
-                <>
-                  <Text color={theme.mist}> · </Text>
-                  <Text color={theme.purpleDim}>{item.sourceId}</Text>
-                </>
-              ) : null}
-            </Box>
-            <Box marginTop={1}>
-              <Text backgroundColor={theme.purpleFaint} color={theme.purple}>
-                {"  > "}
-              </Text>
-              <Text backgroundColor={theme.purpleFaint} color={theme.lavender}>
-                {item.prompt}
-              </Text>
-            </Box>
-          </Box>
-        </Box>
-      );
-    }
     case "spacing":
       return (
         <Box key={index}>
           <Newline />
         </Box>
       );
-    case "agent_line": {
-      const c = item.isSystem ? theme.mist : theme.white;
+    case "agent_line":
       return (
         <Box key={index}>
-          <Text color={c}>  {item.isFirst ? "⏺" : " "} </Text>
-          <Text color={c}>{item.content}</Text>
+          <Text color={theme.white}>  {item.isFirst ? "⏺" : " "} </Text>
+          <Text color={theme.white}>{item.content}</Text>
         </Box>
       );
-    }
     case "agent_blank":
       return (
         <Box key={index}>

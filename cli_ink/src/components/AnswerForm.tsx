@@ -257,13 +257,7 @@ export function AnswerForm({ payload, onSubmit }: Props) {
       }
       return;
     }
-
-    // TextInput already handles Enter via its own onSubmit callback.
-    // Only call advanceOrSubmit here for question types that don't use
-    // a TextInput (i.e. choice/multiselect without "Other" active).
     if (key.return && !key.shift) {
-      if (currentQ.type === "text") return;
-      if (isOtherSelected) return;
       advanceOrSubmit();
       return;
     }

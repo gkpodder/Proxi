@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [main, staging]
 
-permissions:
-  contents: read
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -27,27 +24,3 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
-
-  release:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Compute release tag and title
-        id: meta
-        run: |
-          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
-          SHORT=$(git rev-parse --short HEAD)
-          echo "tag=v${VERSION}-${SHORT}" >> "$GITHUB_OUTPUT"
-          echo "title=proxi ${VERSION} (${SHORT})" >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.title }}
-          generate_release_notes: true
