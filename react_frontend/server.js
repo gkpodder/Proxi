@@ -111,6 +111,30 @@ async function gatewayPost(pathname, body = {}) {
   return payload;
 }
 
+async function gatewayPut(pathname, body = {}) {
+  const response = await fetch(`${gatewayBaseUrl}${pathname}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.detail || payload?.error || `Gateway request failed: ${response.status}`);
+  }
+  return payload;
+}
+
+async function gatewayDelete(pathname) {
+  const response = await fetch(`${gatewayBaseUrl}${pathname}`, {
+    method: "DELETE",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.detail || payload?.error || `Gateway request failed: ${response.status}`);
+  }
+  return payload;
+}
+
 async function resolveInitialSessionId() {
   if (preferredSessionId) return preferredSessionId;
 
@@ -409,6 +433,46 @@ async function getUserProfile() {
   };
 }
 
+async function listCronJobs() {
+  const payload = await gatewayGet("/v1/cron-jobs");
+  return Array.isArray(payload?.cron_jobs) ? payload.cron_jobs : [];
+}
+
+async function listAgents() {
+  const payload = await gatewayGet("/v1/agents");
+  const agents = Array.isArray(payload?.agents) ? payload.agents : [];
+  return agents
+    .map((item) => String(item?.agent_id || "").trim())
+    .filter(Boolean);
+}
+
+async function getCronCapabilities() {
+  try {
+    const payload = await gatewayGet("/v1/cron-capabilities");
+    return {
+      supportsSixField: Boolean(payload?.supports_six_field),
+    };
+  } catch {
+    return {
+      supportsSixField: false,
+    };
+  }
+}
+
+async function upsertCronJob(sourceId, cronJob) {
+  return gatewayPut(`/v1/cron-jobs/${encodeURIComponent(sourceId)}`, cronJob);
+}
+
+async function deleteCronJob(sourceId) {
+  return gatewayDelete(`/v1/cron-jobs/${encodeURIComponent(sourceId)}`);
+}
+
+async function setCronPaused(sourceId, paused) {
+  return gatewayPost(`/v1/cron-jobs/${encodeURIComponent(sourceId)}/pause`, {
+    paused: Boolean(paused),
+  });
+}
+
 async function upsertUserProfile(profile) {
   const encoded = Buffer.from(JSON.stringify(profile || {}), "utf-8").toString("base64");
   const raw = await runPython([
@@ -546,6 +610,106 @@ const server = createServer(async (req, res) => {
     try {
       await deleteUserProfile();
       sendJson(res, 200, { ok: true });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/cron-jobs" && method === "GET") {
+    try {
+      const cronJobs = await listCronJobs();
+      sendJson(res, 200, { cronJobs });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/agents" && method === "GET") {
+    try {
+      const agents = await listAgents();
+      sendJson(res, 200, { agents });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/cron-capabilities" && method === "GET") {
+    try {
+      const capabilities = await getCronCapabilities();
+      sendJson(res, 200, capabilities);
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/cron-jobs/") && url.pathname.endsWith("/pause") && method === "PUT") {
+    try {
+      const sourceId = decodeURIComponent(url.pathname.replace("/api/cron-jobs/", "").replace("/pause", "")).trim();
+      if (!sourceId) {
+        sendJson(res, 400, { error: "Cron source id is required" });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const paused = Boolean(body?.paused);
+      const result = await setCronPaused(sourceId, paused);
+      sendJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/cron-jobs/") && method === "PUT") {
+    try {
+      const sourceId = decodeURIComponent(url.pathname.replace("/api/cron-jobs/", "")).trim();
+      if (!sourceId) {
+        sendJson(res, 400, { error: "Cron source id is required" });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const schedule = String(body?.schedule || "").trim();
+      const prompt = String(body?.prompt || "").trim();
+      const targetAgent = String(body?.targetAgent || "").trim();
+      const targetSession = String(body?.targetSession || "").trim();
+      const priority = Number.isFinite(Number(body?.priority)) ? Number(body.priority) : 0;
+      const paused = Boolean(body?.paused);
+
+      if (!schedule || !prompt || !targetAgent) {
+        sendJson(res, 400, { error: "schedule, prompt, and targetAgent are required" });
+        return;
+      }
+
+      const saved = await upsertCronJob(sourceId, {
+        schedule,
+        prompt,
+        target_agent: targetAgent,
+        target_session: targetSession,
+        priority,
+        paused,
+      });
+      sendJson(res, 200, { ok: true, cronJob: saved });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/cron-jobs/") && method === "DELETE") {
+    try {
+      const sourceId = decodeURIComponent(url.pathname.replace("/api/cron-jobs/", "")).trim();
+      if (!sourceId) {
+        sendJson(res, 400, { error: "Cron source id is required" });
+        return;
+      }
+
+      await deleteCronJob(sourceId);
+      sendJson(res, 200, { ok: true, sourceId });
     } catch (error) {
       sendJson(res, 500, { error: String(error) });
     }

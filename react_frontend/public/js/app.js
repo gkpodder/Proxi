@@ -34,6 +34,21 @@ function App() {
   const [mcpsLoading, setMcpsLoading] = useState(false);
   const [mcpsSaving, setMcpsSaving] = useState(false);
   const [mcpFeedback, setMcpFeedback] = useState("");
+  const [cronJobs, setCronJobs] = useState([]);
+  const [cronLoading, setCronLoading] = useState(false);
+  const [cronSaving, setCronSaving] = useState(false);
+  const [cronFeedback, setCronFeedback] = useState("");
+  const [cronSupportsSixField, setCronSupportsSixField] = useState(false);
+  const [availableAgents, setAvailableAgents] = useState([]);
+  const [cronDraft, setCronDraft] = useState({
+    sourceId: "",
+    schedule: "",
+    prompt: "",
+    targetAgent: "",
+    targetSession: "",
+    priority: "0",
+    paused: false,
+  });
   const [profile, setProfile] = useState({
     name: "",
     location: "",
@@ -114,10 +129,43 @@ function App() {
 
   useEffect(() => {
     if (!settingsOpen) return;
+    loadAgents();
     loadApiKeys();
     loadMcps();
+    loadCronCapabilities();
+    loadCronJobs();
     loadUserProfile();
   }, [settingsOpen]);
+
+  async function loadAgents() {
+    try {
+      const response = await fetch("/api/agents");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load agents");
+      const agents = Array.isArray(payload.agents) ? payload.agents.map((a) => String(a || "")).filter(Boolean) : [];
+      setAvailableAgents(agents);
+
+      if (agents.length > 0) {
+        setCronDraft((prev) => {
+          if (prev.targetAgent) return prev;
+          return { ...prev, targetAgent: agents[0] };
+        });
+      }
+    } catch {
+      setAvailableAgents([]);
+    }
+  }
+
+  async function loadCronCapabilities() {
+    try {
+      const response = await fetch("/api/cron-capabilities");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to read cron capabilities");
+      setCronSupportsSixField(Boolean(payload?.supportsSixField));
+    } catch {
+      setCronSupportsSixField(false);
+    }
+  }
 
   async function loadUserProfile() {
     setProfileLoading(true);
@@ -269,6 +317,163 @@ function App() {
       setMcpFeedback(`Error: ${String(error)}`);
     } finally {
       setMcpsSaving(false);
+    }
+  }
+
+  async function loadCronJobs() {
+    setCronLoading(true);
+    setCronFeedback("");
+    try {
+      const response = await fetch("/api/cron-jobs");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load cron jobs");
+
+      const items = Array.isArray(payload.cronJobs) ? payload.cronJobs : [];
+      setCronJobs(items);
+
+      if (!cronDraft.targetAgent && items.length > 0) {
+        setCronDraft((prev) => ({ ...prev, targetAgent: String(items[0].target_agent || "") }));
+      }
+    } catch (error) {
+      setCronFeedback(`Error: ${String(error)}`);
+    } finally {
+      setCronLoading(false);
+    }
+  }
+
+  function editCronJob(item) {
+    setCronDraft({
+      sourceId: String(item?.source_id || ""),
+      schedule: String(item?.schedule || ""),
+      prompt: String(item?.prompt || ""),
+      targetAgent: String(item?.target_agent || ""),
+      targetSession: String(item?.target_session || ""),
+      priority: String(item?.priority ?? 0),
+      paused: Boolean(item?.paused),
+    });
+    setCronFeedback("Editing cron job. Update fields and click Save Cron Job.");
+  }
+
+  function clearCronDraft() {
+    setCronDraft({
+      sourceId: "",
+      schedule: "",
+      prompt: "",
+      targetAgent: availableAgents[0] ? String(availableAgents[0]) : "",
+      targetSession: "",
+      priority: "0",
+      paused: false,
+    });
+  }
+
+  async function saveCronJob() {
+    const sourceId = cronDraft.sourceId.trim();
+    const schedule = cronDraft.schedule.trim();
+    const prompt = cronDraft.prompt.trim();
+    const targetAgent = cronDraft.targetAgent.trim();
+    const targetSession = cronDraft.targetSession.trim();
+    const priority = Number.parseInt(cronDraft.priority, 10);
+    const paused = Boolean(cronDraft.paused);
+    const scheduleFieldCount = schedule.split(/\s+/).filter(Boolean).length;
+
+    if (!sourceId || !schedule || !prompt || !targetAgent) {
+      setCronFeedback("Error: source id, schedule, prompt, and target agent are required.");
+      return;
+    }
+
+    if (!Number.isFinite(priority)) {
+      setCronFeedback("Error: priority must be an integer.");
+      return;
+    }
+    if (priority < 0 || priority > 5) {
+      setCronFeedback("Error: priority must be between 0 and 5.");
+      return;
+    }
+
+    if (scheduleFieldCount === 6 && !cronSupportsSixField) {
+      setCronFeedback(
+        "Error: this running gateway only supports 5-field cron right now. Restart gateway to enable Seconds schedules, or use Minute/Day/Week/Monthly."
+      );
+      return;
+    }
+
+    setCronSaving(true);
+    setCronFeedback("");
+    try {
+      const response = await fetch(`/api/cron-jobs/${encodeURIComponent(sourceId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schedule,
+          prompt,
+          targetAgent,
+          targetSession,
+          priority,
+          paused,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to save cron job");
+
+      setCronFeedback(`Saved cron job ${sourceId}.`);
+      await loadCronJobs();
+      clearCronDraft();
+    } catch (error) {
+      const errorText = String(error || "");
+      const fieldCount = schedule.split(/\s+/).filter(Boolean).length;
+      const looksLikeOldCronParser = /Expected 5-field cron expression/i.test(errorText);
+      if (looksLikeOldCronParser && fieldCount === 6) {
+        setCronFeedback(
+          "Error: this gateway process only supports 5-field cron in its current runtime. Restart gateway, then retry the Seconds option."
+        );
+      } else {
+        setCronFeedback(`Error: ${errorText}`);
+      }
+    } finally {
+      setCronSaving(false);
+    }
+  }
+
+  async function removeCronJob(sourceId) {
+    const confirmed = window.confirm(`Delete cron job ${sourceId}?`);
+    if (!confirmed) return;
+
+    setCronSaving(true);
+    setCronFeedback("");
+    try {
+      const response = await fetch(`/api/cron-jobs/${encodeURIComponent(sourceId)}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to delete cron job");
+
+      setCronFeedback(`Deleted cron job ${sourceId}.`);
+      await loadCronJobs();
+    } catch (error) {
+      setCronFeedback(`Error: ${String(error)}`);
+    } finally {
+      setCronSaving(false);
+    }
+  }
+
+  async function setCronJobPaused(sourceId, paused) {
+    setCronSaving(true);
+    setCronFeedback("");
+    try {
+      const response = await fetch(`/api/cron-jobs/${encodeURIComponent(sourceId)}/pause`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: Boolean(paused) }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to update cron state");
+
+      setCronFeedback(`${paused ? "Paused" : "Resumed"} cron job ${sourceId}.`);
+      await loadCronJobs();
+    } catch (error) {
+      setCronFeedback(`Error: ${String(error)}`);
+    } finally {
+      setCronSaving(false);
     }
   }
 
@@ -515,6 +720,15 @@ function App() {
       case "thinking_stream":
         recordThinking(msg.content || msg.text || "");
         break;
+      case "inbound_turn": {
+        const sourceType = String(msg.source_type || "").toLowerCase();
+        if (sourceType === "cron") {
+          const sourceId = msg.source_id || "cron";
+          const prompt = msg.prompt || "Scheduled job triggered.";
+          addActivity("cron", `Cron triggered: ${sourceId}`, prompt);
+        }
+        break;
+      }
       case "user_input_required":
         commitStream();
         handleUserInputRequired(msg);
@@ -843,6 +1057,20 @@ function App() {
         mcps={mcps}
         toggleMcp={toggleMcp}
         loadMcps={loadMcps}
+        cronJobs={cronJobs}
+        cronLoading={cronLoading}
+        cronSaving={cronSaving}
+        cronFeedback={cronFeedback}
+        cronSupportsSixField={cronSupportsSixField}
+        availableAgents={availableAgents}
+        cronDraft={cronDraft}
+        setCronDraft={setCronDraft}
+        saveCronJob={saveCronJob}
+        removeCronJob={removeCronJob}
+        setCronJobPaused={setCronJobPaused}
+        loadCronJobs={loadCronJobs}
+        editCronJob={editCronJob}
+        clearCronDraft={clearCronDraft}
       />
 
       <BootstrapModal

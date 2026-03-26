@@ -443,6 +443,10 @@ body.light {
   color: #a5b4fc;
 }
 
+.activityItem.cron .activityKind {
+  color: #f59e0b;
+}
+
 .msg {
   display: flex;
   flex-direction: column;
@@ -736,6 +740,25 @@ input[type="text"]::placeholder {
   color: #666;
 }
 
+input[type="number"] {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  color: #e5e5e5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input[type="number"]:focus {
+  border-color: #3b82f6;
+}
+
+input[type="number"]::placeholder {
+  color: #666;
+}
+
 .app.light input[type="text"] {
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -747,6 +770,20 @@ input[type="text"]::placeholder {
 }
 
 .app.light input[type="text"]:focus {
+  border-color: #3b82f6;
+}
+
+.app.light input[type="number"] {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #1f2937;
+}
+
+.app.light input[type="number"]::placeholder {
+  color: #d1d5db;
+}
+
+.app.light input[type="number"]:focus {
   border-color: #3b82f6;
 }
 

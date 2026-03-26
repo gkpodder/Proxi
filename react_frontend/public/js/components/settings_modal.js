@@ -1,5 +1,5 @@
 (function registerSettingsModal(global) {
-  const { useMemo, useRef, useState } = React;
+  const { useEffect, useMemo, useRef, useState } = React;
   const components = global.ProxiComponents || (global.ProxiComponents = {});
   const { TIMEZONE_OPTIONS } = global.ProxiUtils;
 
@@ -54,6 +54,20 @@
       mcps,
       toggleMcp,
       loadMcps,
+      cronJobs,
+      cronLoading,
+      cronSaving,
+      cronFeedback,
+      cronSupportsSixField,
+      availableAgents,
+      cronDraft,
+      setCronDraft,
+      saveCronJob,
+      removeCronJob,
+      setCronJobPaused,
+      loadCronJobs,
+      editCronJob,
+      clearCronDraft,
     } = props;
 
     const [openSections, setOpenSections] = useState({
@@ -61,7 +75,14 @@
       profile: true,
       keys: false,
       mcps: false,
+      cron: false,
     });
+    const [scheduleMode, setScheduleMode] = useState("quick");
+    const [everyValue, setEveryValue] = useState("30");
+    const [everyUnit, setEveryUnit] = useState("minute");
+    const [customStates, setCustomStates] = useState([]);
+    const [customStateInput, setCustomStateInput] = useState("");
+    const [editingCron, setEditingCron] = useState(false);
 
     const sectionRefs = useRef({});
 
@@ -71,9 +92,22 @@
         { key: "profile", label: "Profile" },
         { key: "keys", label: "API Keys" },
         { key: "mcps", label: "MCPs" },
+        { key: "cron", label: "Cron Jobs" },
       ],
       []
     );
+
+    useEffect(() => {
+      if (scheduleMode !== "quick") return;
+      const generated = buildQuickCron();
+      setCronDraft((prev) => ({ ...prev, schedule: generated }));
+    }, [scheduleMode, everyValue, everyUnit, setCronDraft]);
+
+    useEffect(() => {
+      if (!Array.isArray(availableAgents) || availableAgents.length === 0) return;
+      if (cronDraft.targetAgent) return;
+      setCronDraft((prev) => ({ ...prev, targetAgent: availableAgents[0] }));
+    }, [availableAgents, cronDraft.targetAgent, setCronDraft]);
 
     if (!isOpen) return null;
 
@@ -86,6 +120,29 @@
       requestAnimationFrame(() => {
         sectionRefs.current[sectionKey]?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
+    }
+
+    function buildQuickCron() {
+      const rawValue = Number.parseInt(String(everyValue || "1"), 10);
+      const n = Number.isFinite(rawValue) ? Math.max(1, rawValue) : 1;
+
+      if (everyUnit === "second") {
+        // 6-field format: second minute hour day month day_of_week
+        return `*/${n} * * * * *`;
+      }
+      if (everyUnit === "minute") {
+        return `*/${n} * * * *`;
+      }
+      if (everyUnit === "day") {
+        return `0 0 */${n} * *`;
+      }
+      if (everyUnit === "week") {
+        return `0 0 */${Math.max(1, n * 7)} * *`;
+      }
+      if (everyUnit === "monthly") {
+        return `0 0 1 */${n} *`;
+      }
+      return "*/30 * * * *";
     }
 
     return (
@@ -353,6 +410,281 @@
                 {mcpFeedback && <div className="formHint">{mcpFeedback}</div>}
                 <div className="formActions">
                   <button onClick={() => loadMcps()} disabled={mcpsLoading || mcpsSaving}>
+                    Refresh
+                  </button>
+                </div>
+              </Section>
+
+              <Section
+                sectionKey="cron"
+                title="Cron Jobs"
+                openSections={openSections}
+                toggleSection={toggleSection}
+                sectionRefs={sectionRefs}
+              >
+                <div className="settingsHint">
+                  Configure scheduled prompts that run through the gateway and persist in `~/.proxi/gateway.yml`.
+                </div>
+
+                {cronLoading ? (
+                  <div className="formHint">Loading cron jobs...</div>
+                ) : (
+                  <div className="mcpList">
+                    {cronJobs.length === 0 && <div className="formHint">No cron jobs configured.</div>}
+                    {cronJobs.map((item) => (
+                      <div key={item.source_id} className="mcpRow">
+                        <div className="mcpMeta">
+                          <div className="mcpName">{item.source_id}</div>
+                          <div className="mcpStatus">
+                            {item.schedule} → {item.target_agent} | p{item.priority} | {item.paused ? "Paused" : "Running"}
+                          </div>
+                        </div>
+                        <div className="formActions">
+                          <button onClick={() => editCronJob(item)} disabled={cronSaving}>Edit</button>
+                          <button
+                            onClick={() => setCronJobPaused(item.source_id, !item.paused)}
+                            disabled={cronSaving}
+                          >
+                            {item.paused ? "Resume" : "Pause"}
+                          </button>
+                          <button className="disableBtn" onClick={() => removeCronJob(item.source_id)} disabled={cronSaving}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="keyAddSection">
+                  <div className="keyAddTitle">Create or Update Cron Job</div>
+                  <div className="settingsHint">
+                    Easy Schedule is the default. Switch to Custom Cron only if you want to type cron manually.
+                  </div>
+
+                  <div className="profileGrid">
+                    <label className="profileField">
+                      <span>Source ID</span>
+                      <input
+                        type="text"
+                        value={cronDraft.sourceId}
+                        placeholder="cron_daily_summary"
+                        onChange={(e) => setCronDraft((prev) => ({ ...prev, sourceId: e.target.value }))}
+                      />
+                    </label>
+                    <label className="profileField">
+                      <span>Target Agent</span>
+                      <select
+                        className="profileSelect"
+                        value={cronDraft.targetAgent}
+                        disabled={availableAgents.length === 0}
+                        onChange={(e) => setCronDraft((prev) => ({ ...prev, targetAgent: e.target.value }))}
+                      >
+                        {availableAgents.length === 0 ? (
+                          <option value="">No agents found</option>
+                        ) : (
+                          availableAgents.map((agentId) => (
+                            <option key={agentId} value={agentId}>
+                              {agentId}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="profileGrid">
+                    <label className="profileField">
+                      <span>Target Session (optional)</span>
+                      <input
+                        type="text"
+                        value={cronDraft.targetSession}
+                        placeholder="main"
+                        onChange={(e) => setCronDraft((prev) => ({ ...prev, targetSession: e.target.value }))}
+                      />
+                    </label>
+                    <label className="profileField">
+                      <span>Priority</span>
+                      <select
+                        className="profileSelect"
+                        value={cronDraft.priority}
+                        onChange={(e) => setCronDraft((prev) => ({ ...prev, priority: e.target.value }))}
+                      >
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  {scheduleMode === "quick" && (
+                    <div className="profileGrid">
+                      <label className="profileField">
+                        <span>Every</span>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={everyValue}
+                          onChange={(e) => setEveryValue(e.target.value)}
+                        />
+                      </label>
+                      <label className="profileField">
+                        <span>Unit</span>
+                        <select
+                          className="profileSelect"
+                          value={everyUnit}
+                          onChange={(e) => setEveryUnit(e.target.value)}
+                        >
+                          <option value="second" disabled={!cronSupportsSixField}>Second</option>
+                          <option value="minute">Minute</option>
+                          <option value="day">Day</option>
+                          <option value="week">Week</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
+
+                  <div className="profileGrid">
+                    <label className="profileField profileFieldFull">
+                      <span>Generated Cron {editingCron && "(editing)"}</span>
+                      {!editingCron && scheduleMode === "quick" && (
+                        <div
+                          onClick={() => setEditingCron(true)}
+                          style={{
+                            cursor: "pointer",
+                            background: "#1a1a1a",
+                            border: "1px solid #333",
+                            color: "#e5e5e5",
+                            borderRadius: "6px",
+                            padding: "10px 12px",
+                            fontSize: "14px",
+                            userSelect: "none",
+                            transition: "all 0.2s",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.borderColor = "#3b82f6";
+                            e.target.style.background = "#252525";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.borderColor = "#333";
+                            e.target.style.background = "#1a1a1a";
+                          }}
+                        >
+                          {buildQuickCron()}
+                        </div>
+                      )}
+                      {editingCron || scheduleMode === "manual" ? (
+                        <input
+                          type="text"
+                          autoFocus={editingCron}
+                          value={cronDraft.schedule}
+                          placeholder="0 8 * * MON-FRI"
+                          onChange={(e) => setCronDraft((prev) => ({ ...prev, schedule: e.target.value }))}
+                          onBlur={() => setEditingCron(false)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              setEditingCron(false);
+                            }
+                          }}
+                        />
+                      ) : null}
+                      <div className="formHint">Example formats: */30 * * * * or 0 8 * * MON-FRI | Click to edit</div>
+                    </label>
+                  </div>
+
+                  <div className="profileGrid">
+                    <label className="profileField">
+                      <span>State</span>
+                      <select
+                        className="profileSelect"
+                        value={cronDraft.paused ? "paused" : "running"}
+                        onChange={(e) =>
+                          setCronDraft((prev) => ({
+                            ...prev,
+                            paused: e.target.value === "paused",
+                          }))
+                        }
+                      >
+                        <option value="running">Running</option>
+                        <option value="paused">Paused</option>
+                        {customStates.map((state) => (
+                          <option key={state} value={state}>
+                            {state}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="profileField">
+                      <span>Add Custom State</span>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+                        <input
+                          type="text"
+                          value={customStateInput}
+                          placeholder="e.g., archived, testing"
+                          onChange={(e) => setCustomStateInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && customStateInput.trim()) {
+                              if (!customStates.includes(customStateInput.trim())) {
+                                setCustomStates([...customStates, customStateInput.trim()]);
+                                setCronDraft((prev) => ({
+                                  ...prev,
+                                  paused: true,
+                                  customState: customStateInput.trim(),
+                                }));
+                              }
+                              setCustomStateInput("");
+                            }
+                          }}
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          onClick={() => {
+                            if (customStateInput.trim() && !customStates.includes(customStateInput.trim())) {
+                              setCustomStates([...customStates, customStateInput.trim()]);
+                              setCronDraft((prev) => ({
+                                ...prev,
+                                paused: false,
+                                customState: customStateInput.trim(),
+                              }));
+                              setCustomStateInput("");
+                            }
+                          }}
+                          disabled={!customStateInput.trim() || customStates.includes(customStateInput.trim())}
+                          style={{ marginBottom: "0" }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="profileGrid">
+                    <label className="profileField profileFieldFull">
+                      <span>Prompt</span>
+                      <textarea
+                        className="formTextarea"
+                        value={cronDraft.prompt}
+                        placeholder="Summarize yesterday's work and plan today."
+                        onChange={(e) => setCronDraft((prev) => ({ ...prev, prompt: e.target.value }))}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {cronFeedback && <div className="formHint">{cronFeedback}</div>}
+                <div className="formActions">
+                  <button className="primaryBtn" onClick={saveCronJob} disabled={cronLoading || cronSaving}>
+                    Save Cron Job
+                  </button>
+                  <button onClick={clearCronDraft} disabled={cronLoading || cronSaving}>
+                    Clear Form
+                  </button>
+                  <button onClick={() => loadCronJobs()} disabled={cronLoading || cronSaving}>
                     Refresh
                   </button>
                 </div>

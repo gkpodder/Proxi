@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
+import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -24,7 +25,7 @@ from proxi.cli.main import (
 )
 from proxi.core.loop import AgentLoop
 from proxi.core.state import WorkspaceConfig
-from proxi.gateway.channels.cron import CronRegistry
+from proxi.gateway.channels.cron import CronRegistry, _parse_cron
 from proxi.gateway.channels.discord import DiscordAdapter
 from proxi.gateway.channels.heartbeat import HeartbeatManager
 from proxi.gateway.channels.http import (
@@ -99,6 +100,50 @@ def _reload_gateway_config() -> None:
     for aid, agent_cfg in config.agents.items():
         if agent_cfg.working_dir and aid not in _agent_working_dirs:
             _agent_working_dirs[aid] = agent_cfg.working_dir
+
+
+def _gateway_config_path() -> Path:
+    return _workspace_root() / "gateway.yml"
+
+
+def _load_gateway_raw_config() -> dict[str, Any]:
+    path = _gateway_config_path()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"gateway.yml not found at {path}")
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=500, detail="gateway.yml must be a YAML mapping")
+
+    if not isinstance(raw.get("agents"), dict):
+        raw["agents"] = {}
+    if not isinstance(raw.get("sources"), dict):
+        raw["sources"] = {}
+    return raw
+
+
+def _write_gateway_raw_config(raw: dict[str, Any]) -> None:
+    path = _gateway_config_path()
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+
+
+def _reload_cron_registry() -> None:
+    # Scheduler in this gateway process only hosts cron jobs.
+    for job in scheduler.get_jobs():
+        scheduler.remove_job(job.id)
+
+    if lane_manager is None:
+        return
+
+    CronRegistry(config, lane_manager, router).load_all(scheduler)
+
+
+def _persist_and_reload_gateway_config(raw: dict[str, Any]) -> None:
+    _write_gateway_raw_config(raw)
+    _reload_gateway_config()
+    _reload_cron_registry()
 
 
 async def _refresh_mcp_tools() -> None:
@@ -680,6 +725,19 @@ class SwitchAgentRequest(BaseModel):
     agent_id: str
 
 
+class CronJobUpsertRequest(BaseModel):
+    schedule: str
+    prompt: str
+    target_agent: str
+    priority: int = 0
+    paused: bool = False
+    target_session: str = ""
+
+
+class CronPauseRequest(BaseModel):
+    paused: bool
+
+
 @app.post("/v1/sessions/switch")
 async def switch_agent_endpoint(body: SwitchAgentRequest) -> dict[str, Any]:
     """Switch the TUI to a different agent.
@@ -693,6 +751,154 @@ async def switch_agent_endpoint(body: SwitchAgentRequest) -> dict[str, Any]:
     new_session_id = f"{agent.agent_id}/{agent.default_session}"
     lane_manager._get_or_create(new_session_id)
     return {"session_id": new_session_id, "agent_id": agent.agent_id}
+
+
+@app.get("/v1/cron-jobs")
+async def list_cron_jobs_endpoint() -> dict[str, Any]:
+    """List cron jobs defined in ``gateway.yml`` sources."""
+    jobs: list[dict[str, Any]] = []
+    for source_id, source in config.sources.items():
+        if source.source_type != "cron":
+            continue
+        jobs.append(
+            {
+                "source_id": source_id,
+                "schedule": source.schedule,
+                "prompt": source.prompt,
+                "target_agent": source.target_agent,
+                "target_session": source.target_session,
+                "priority": source.priority,
+                "paused": source.paused,
+            }
+        )
+
+    jobs.sort(key=lambda item: item["source_id"])
+    return {"cron_jobs": jobs}
+
+
+@app.get("/v1/cron-capabilities")
+async def cron_capabilities_endpoint() -> dict[str, Any]:
+    """Return cron parser capabilities for UI compatibility checks."""
+    supports_six_field = True
+    try:
+        _parse_cron("*/15 * * * * *")
+    except ValueError:
+        supports_six_field = False
+
+    return {
+        "supports_six_field": supports_six_field,
+        "accepted_formats": [
+            "minute hour day month day_of_week",
+            "second minute hour day month day_of_week",
+        ] if supports_six_field else [
+            "minute hour day month day_of_week",
+        ],
+    }
+
+
+@app.put("/v1/cron-jobs/{source_id}")
+async def upsert_cron_job_endpoint(source_id: str, body: CronJobUpsertRequest) -> dict[str, Any]:
+    """Create or update a cron source in ``gateway.yml`` and hot-reload scheduler jobs."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    schedule = (body.schedule or "").strip()
+    prompt = (body.prompt or "").strip()
+    target_agent = (body.target_agent or "").strip()
+    target_session = (body.target_session or "").strip()
+
+    if not schedule:
+        raise HTTPException(status_code=400, detail="schedule is required")
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    if not target_agent:
+        raise HTTPException(status_code=400, detail="target_agent is required")
+    if target_agent not in config.agents:
+        raise HTTPException(status_code=400, detail=f"Unknown agent: {target_agent}")
+    if body.priority < 0 or body.priority > 5:
+        raise HTTPException(status_code=400, detail="priority must be between 0 and 5")
+
+    try:
+        _parse_cron(schedule)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+
+    existing = sources.get(sid)
+    if existing is None:
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    existing["type"] = "cron"
+    existing["schedule"] = schedule
+    existing["prompt"] = prompt
+    existing["target_agent"] = target_agent
+    existing["priority"] = int(body.priority)
+    existing["paused"] = bool(body.paused)
+    if target_session:
+        existing["target_session"] = target_session
+    elif "target_session" in existing:
+        del existing["target_session"]
+
+    sources[sid] = existing
+
+    _persist_and_reload_gateway_config(raw)
+
+    return {
+        "source_id": sid,
+        "schedule": schedule,
+        "prompt": prompt,
+        "target_agent": target_agent,
+        "target_session": target_session,
+        "priority": int(body.priority),
+        "paused": bool(body.paused),
+    }
+
+
+@app.post("/v1/cron-jobs/{source_id}/pause")
+async def pause_cron_job_endpoint(source_id: str, body: CronPauseRequest) -> dict[str, Any]:
+    """Pause or resume a cron source and hot-reload scheduler jobs."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get(sid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
+    if not isinstance(existing, dict) or existing.get("type") != "cron":
+        raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+
+    existing["paused"] = bool(body.paused)
+    sources[sid] = existing
+
+    _persist_and_reload_gateway_config(raw)
+    return {"status": "updated", "source_id": sid, "paused": bool(body.paused)}
+
+
+@app.delete("/v1/cron-jobs/{source_id}")
+async def delete_cron_job_endpoint(source_id: str) -> dict[str, Any]:
+    """Delete a cron source from ``gateway.yml`` and hot-reload scheduler jobs."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get(sid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
+    if not isinstance(existing, dict) or existing.get("type") != "cron":
+        raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+
+    del sources[sid]
+    _persist_and_reload_gateway_config(raw)
+    return {"status": "deleted", "source_id": sid}
 
 
 # ---------------------------------------------------------------------------
