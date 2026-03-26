@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "bun server.js"
+    "start": "bun server.js",
+    "start:existing-gateway": "bun server.js --use-existing-gateway"
   },
   "dependencies": {
     "ws": "^8.18.0"

@@ -1,5 +1,4 @@
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,15 +10,303 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const publicDir = path.join(__dirname, "public");
 const port = Number(process.env.PORT || 5174);
-const activeBridges = new Set();
+const gatewayBaseUrl = (process.env.PROXI_GATEWAY_URL || `http://127.0.0.1:${process.env.GATEWAY_PORT || 8765}`).replace(/\/$/, "");
+const preferredSessionId = process.env.PROXI_SESSION_ID || "";
+const argv = new Set(process.argv.slice(2));
+const disableGatewayAutostart =
+  argv.has("--use-existing-gateway") ||
+  argv.has("--no-gateway-start") ||
+  String(process.env.PROXI_GATEWAY_AUTOSTART || "1").trim().toLowerCase() === "0";
 
-function broadcastBridgeCommand(command) {
-  const payload = JSON.stringify(command);
-  for (const bridge of activeBridges) {
-    if (bridge?.stdin?.writable) {
-      bridge.stdin.write(`${payload}\n`);
+let gatewayEnabled = false;
+let managedGatewayProcess = null;
+
+function withTimeout(promise, ms, fallbackValue = null) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallbackValue), ms);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallbackValue);
+      });
+  });
+}
+
+async function detectGateway() {
+  const force = String(process.env.PROXI_TRANSPORT || "").trim().toLowerCase();
+  if (force && force !== "gateway") {
+    throw new Error("Only gateway transport is supported. Set PROXI_TRANSPORT=gateway or unset it.");
+  }
+
+  const response = await withTimeout(fetch(`${gatewayBaseUrl}/health`), 1200, null);
+  return Boolean(response && response.ok);
+}
+
+function startManagedGateway() {
+  if (managedGatewayProcess && managedGatewayProcess.exitCode == null) {
+    return managedGatewayProcess;
+  }
+
+  managedGatewayProcess = spawn("uv", ["run", "proxi-gateway"], {
+    cwd: projectRoot,
+    env: process.env,
+    shell: process.platform === "win32",
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+
+  managedGatewayProcess.stderr.setEncoding("utf-8");
+  managedGatewayProcess.stderr.on("data", (chunk) => {
+    const text = String(chunk || "").trim();
+    if (text) {
+      console.error(`[gateway] ${text}`);
+    }
+  });
+
+  return managedGatewayProcess;
+}
+
+async function ensureGatewayReady() {
+  if (await detectGateway()) return;
+
+  if (disableGatewayAutostart) {
+    throw new Error(
+      `Gateway is not reachable at ${gatewayBaseUrl}. Start it first, or run without --use-existing-gateway.`
+    );
+  }
+
+  startManagedGateway();
+
+  const maxAttempts = 25;
+  for (let i = 0; i < maxAttempts; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    if (await detectGateway()) return;
+  }
+
+  throw new Error(`Gateway did not become ready at ${gatewayBaseUrl}`);
+}
+
+async function gatewayGet(pathname) {
+  const response = await fetch(`${gatewayBaseUrl}${pathname}`);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.detail || payload?.error || `Gateway request failed: ${response.status}`);
+  }
+  return payload;
+}
+
+async function gatewayPost(pathname, body = {}) {
+  const response = await fetch(`${gatewayBaseUrl}${pathname}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.detail || payload?.error || `Gateway request failed: ${response.status}`);
+  }
+  return payload;
+}
+
+async function resolveInitialSessionId() {
+  if (preferredSessionId) return preferredSessionId;
+
+  const agentsPayload = await gatewayGet("/v1/agents");
+  const agents = Array.isArray(agentsPayload?.agents) ? agentsPayload.agents : [];
+  if (agents.length === 0) {
+    throw new Error("No agents are configured in gateway.");
+  }
+
+  const primary = agents[0];
+  const agentId = String(primary?.agent_id || "").trim();
+  const sessionName = String(primary?.default_session || "main").trim() || "main";
+  if (!agentId) {
+    throw new Error("Gateway returned an invalid agent configuration.");
+  }
+  return `${agentId}/${sessionName}`;
+}
+
+function parseSseChunk(buffer, onData) {
+  let cursor = buffer;
+  while (true) {
+    const boundary = cursor.indexOf("\n\n");
+    if (boundary < 0) break;
+    const rawEvent = cursor.slice(0, boundary);
+    cursor = cursor.slice(boundary + 2);
+
+    const dataLines = rawEvent
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart());
+
+    if (dataLines.length > 0) {
+      onData(dataLines.join("\n"));
     }
   }
+  return cursor;
+}
+
+function createGatewaySessionController(ws) {
+  let closed = false;
+  let streamAbort = null;
+  let activeSessionId = null;
+  let pendingSwitchPrompt = false;
+  let streamGeneration = 0;
+
+  const sendToClient = (payload) => {
+    if (closed || ws.readyState !== ws.OPEN) return;
+    ws.send(typeof payload === "string" ? payload : JSON.stringify(payload));
+  };
+
+  const closeStream = () => {
+    if (streamAbort) {
+      streamAbort.abort();
+      streamAbort = null;
+    }
+  };
+
+  const attachStream = async (sessionId) => {
+    closeStream();
+    activeSessionId = sessionId;
+
+    const generation = ++streamGeneration;
+    const controller = new AbortController();
+    streamAbort = controller;
+
+    try {
+      const response = await fetch(
+        `${gatewayBaseUrl}/v1/sessions/${encodeURIComponent(sessionId)}/stream`,
+        { signal: controller.signal }
+      );
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Unable to open stream for session ${sessionId}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let sseBuffer = "";
+
+      while (!closed && generation === streamGeneration) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        sseBuffer += decoder.decode(value, { stream: true });
+        sseBuffer = parseSseChunk(sseBuffer, (eventData) => {
+          if (!eventData || eventData.startsWith(":")) return;
+          sendToClient(eventData);
+        });
+      }
+    } catch (error) {
+      const isAbort =
+        error?.name === "AbortError" ||
+        (typeof error?.message === "string" && /aborted/i.test(error.message));
+      if (isAbort || closed || generation !== streamGeneration) {
+        return;
+      }
+      throw error;
+    } finally {
+      if (streamAbort === controller) {
+        streamAbort = null;
+      }
+    }
+  };
+
+  const startStream = (sessionId) => {
+    attachStream(sessionId).catch((error) => {
+      sendToClient({
+        type: "bridge_stderr",
+        content: `Gateway stream error: ${String(error)}`,
+      });
+    });
+  };
+
+  const start = async () => {
+    const initialSession = await resolveInitialSessionId();
+    startStream(initialSession);
+  };
+
+  const onMessage = async (data) => {
+    let message;
+    try {
+      message = JSON.parse(String(data));
+    } catch {
+      return;
+    }
+
+    const msgType = message?.type;
+    if (!msgType) return;
+
+    if (msgType === "start") {
+      const task = String(message.task || "").trim();
+      if (!task || !activeSessionId) return;
+      await gatewayPost(`/v1/sessions/${encodeURIComponent(activeSessionId)}/send`, { message: task });
+      return;
+    }
+
+    if (msgType === "abort") {
+      if (!activeSessionId) return;
+      await gatewayPost(`/v1/sessions/${encodeURIComponent(activeSessionId)}/abort`, {});
+      return;
+    }
+
+    if (msgType === "user_input_response") {
+      const payload = message?.payload;
+      if (!payload || !activeSessionId) return;
+      await gatewayPost(`/v1/sessions/${encodeURIComponent(activeSessionId)}/send`, {
+        message: "form answer",
+        form_answer: payload,
+      });
+      return;
+    }
+
+    if (msgType === "switch_agent") {
+      const agentsPayload = await gatewayGet("/v1/agents");
+      const agents = Array.isArray(agentsPayload?.agents) ? agentsPayload.agents : [];
+      const options = agents.map((a) => String(a.agent_id || "").trim()).filter(Boolean);
+      if (options.length === 0) {
+        sendToClient({ type: "bridge_stderr", content: "No agents available to switch." });
+        return;
+      }
+      pendingSwitchPrompt = true;
+      sendToClient({
+        type: "user_input_required",
+        method: "select",
+        prompt: "Select an agent",
+        options,
+      });
+      return;
+    }
+
+    if (msgType === "user_input") {
+      const value = String(message?.value || "").trim();
+      if (!value || !activeSessionId) return;
+
+      if (pendingSwitchPrompt) {
+        pendingSwitchPrompt = false;
+        const switched = await gatewayPost("/v1/sessions/switch", { agent_id: value });
+        const nextSession = String(switched?.session_id || "").trim();
+        if (!nextSession) throw new Error("Gateway switch response did not include session_id.");
+        sendToClient({ type: "status_update", label: "Switching agent...", status: "running" });
+        startStream(nextSession);
+        sendToClient({ type: "status_update", label: "Agent switch complete", status: "done" });
+        return;
+      }
+
+      await gatewayPost(`/v1/sessions/${encodeURIComponent(activeSessionId)}/send`, {
+        message: value,
+      });
+    }
+  };
+
+  const onClose = () => {
+    closed = true;
+    closeStream();
+  };
+
+  return { start, onMessage, onClose };
 }
 
 function runPython(commandArgs) {
@@ -83,12 +370,31 @@ async function upsertApiKey(keyName, value) {
 }
 
 async function listMcps() {
+  if (gatewayEnabled) {
+    const payload = await gatewayGet("/v1/mcps");
+    const mcps = Array.isArray(payload?.mcps) ? payload.mcps : [];
+    return mcps.map((item) => ({
+      mcp_name: String(item?.name || ""),
+      enabled: Boolean(item?.enabled),
+    }));
+  }
+
   const raw = await runPython(["-m", "proxi.security.key_store", "list-mcps"]);
   const payload = JSON.parse(raw || "{}");
   return payload.mcps || [];
 }
 
 async function toggleMcp(mcpName, enabled) {
+  if (gatewayEnabled) {
+    const currentMcps = await listMcps();
+    const current = currentMcps.find((entry) => entry.mcp_name === mcpName);
+    const currentEnabled = Boolean(current?.enabled);
+    if (currentEnabled !== enabled) {
+      await gatewayPost(`/v1/mcps/${encodeURIComponent(mcpName)}/toggle`, {});
+    }
+    return { ok: true, mcp_name: mcpName, enabled };
+  }
+
   const command = enabled ? "enable-mcp" : "disable-mcp";
   const raw = await runPython(["-m", "proxi.security.key_store", command, mcpName]);
   return JSON.parse(raw || "{}");
@@ -118,12 +424,6 @@ async function upsertUserProfile(profile) {
 async function deleteUserProfile() {
   const raw = await runPython(["-m", "proxi.security.key_store", "delete-profile"]);
   return JSON.parse(raw || "{}");
-}
-
-async function loadEnvFromKeyStore() {
-  const raw = await runPython(["-m", "proxi.security.key_store", "export-env"]);
-  const payload = JSON.parse(raw || "{}");
-  return payload.env || {};
 }
 
 async function readJsonBody(req) {
@@ -208,7 +508,6 @@ const server = createServer(async (req, res) => {
       const enabled = Boolean(body?.enabled);
 
       await toggleMcp(mcpName, enabled);
-      broadcastBridgeCommand({ type: "refresh_mcps" });
       sendJson(res, 200, { ok: true, mcpName, enabled });
     } catch (error) {
       sendJson(res, 500, { error: String(error) });
@@ -270,93 +569,36 @@ const server = createServer(async (req, res) => {
 const wss = new WebSocketServer({ server, path: "/bridge" });
 
 wss.on("connection", (ws) => {
-  let bridge = null;
+  const gatewaySession = createGatewaySessionController(ws);
 
-  const startBridge = async () => {
-    try {
-      const keyEnv = await loadEnvFromKeyStore();
-      const env = {
-        ...process.env,
-        ...keyEnv,
-        PYTHONUNBUFFERED: "1",
-        PYTHONPATH: `${projectRoot}${path.delimiter}${process.env.PYTHONPATH || ""}`,
-      };
-
-      bridge = spawn("uv", ["run", "proxi-bridge"], {
-        cwd: projectRoot,
-        env,
-        shell: process.platform === "win32",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      activeBridges.add(bridge);
-
-      bridge.stdout.setEncoding("utf-8");
-      bridge.stderr.setEncoding("utf-8");
-
-      bridge.stdout.on("data", (chunk) => {
-        stdoutBuffer += chunk;
-        const lines = stdoutBuffer.split("\n");
-        stdoutBuffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          if (ws.readyState === ws.OPEN) {
-            ws.send(trimmed);
-          }
-        }
-      });
-
-      bridge.stderr.on("data", (chunk) => {
-        const text = String(chunk).trim();
-        if (!text || ws.readyState !== ws.OPEN) return;
-        ws.send(JSON.stringify({ type: "bridge_stderr", content: text }));
-      });
-
-      bridge.on("exit", (code, signal) => {
-        activeBridges.delete(bridge);
-        if (ws.readyState === ws.OPEN) {
-          ws.send(JSON.stringify({ type: "bridge_exit", code, signal }));
-          ws.close();
-        }
-      });
-    } catch (error) {
+  gatewaySession
+    .start()
+    .catch((error) => {
       if (ws.readyState === ws.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "bridge_stderr",
-            content: `Unable to start bridge: ${String(error)}`,
-          })
-        );
+        ws.send(JSON.stringify({ type: "bridge_stderr", content: `Gateway mode error: ${String(error)}` }));
         ws.close();
       }
-    }
-  };
-
-  let stdoutBuffer = "";
-
-  startBridge();
+    });
 
   ws.on("message", (raw) => {
-    const data = String(raw);
-    if (!bridge || !bridge.stdin.writable) return;
-    bridge.stdin.write(data.endsWith("\n") ? data : `${data}\n`);
+    gatewaySession.onMessage(raw).catch((error) => {
+      if (ws.readyState === ws.OPEN) {
+        ws.send(JSON.stringify({ type: "bridge_stderr", content: String(error) }));
+      }
+    });
   });
 
   ws.on("close", () => {
-    if (bridge) {
-      activeBridges.delete(bridge);
-    }
-    if (bridge && bridge.exitCode == null) {
-      bridge.kill();
-    }
+    gatewaySession.onClose();
   });
 });
 
 initApiKeyDb()
-  .then(() => {
+  .then(async () => {
+    await ensureGatewayReady();
+    gatewayEnabled = true;
     server.listen(port, () => {
-      console.log(`Proxi React frontend running at http://localhost:${port}`);
+      console.log(`Proxi React frontend running at http://localhost:${port} using gateway (${gatewayBaseUrl})`);
     });
   })
   .catch((error) => {

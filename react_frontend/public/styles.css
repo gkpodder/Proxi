@@ -214,6 +214,11 @@ body.light {
   min-height: 0;
 }
 
+.mainPanels.activityCollapsed {
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 10px;
+}
+
 .panel {
   border: 1px solid #2a313d;
   border-radius: 14px;
@@ -249,8 +254,74 @@ body.light {
   padding: 4px 4px 10px;
 }
 
+.activityHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 2px 8px;
+}
+
+.activityHeaderRow .activityHeader {
+  padding: 0;
+}
+
 .app.light .activityHeader {
   color: #1f2937;
+}
+
+.activityToggleBtn {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.activityToggleCollapseBtn {
+  width: 26px;
+  height: 26px;
+}
+
+.activityDrawerSlot {
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.activityDrawerHandle {
+  width: 24px;
+  height: 62px;
+  border-radius: 999px;
+}
+
+.activityToggleBtn:hover {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #cbd5e1;
+}
+
+.app.light .activityToggleBtn {
+  color: #6b7280;
+  background: transparent;
+  border-color: rgba(107, 114, 128, 0.28);
+}
+
+.app.light .activityToggleBtn:hover {
+  background: rgba(107, 114, 128, 0.1);
+  border-color: rgba(107, 114, 128, 0.45);
+  color: #374151;
 }
 
 .activityList {

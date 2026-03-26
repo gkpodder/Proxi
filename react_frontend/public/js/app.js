@@ -14,6 +14,7 @@ function App() {
   const [statusLabel, setStatusLabel] = useState("Starting...");
   const [messages, setMessages] = useState([]);
   const [activityItems, setActivityItems] = useState([]);
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [input, setInput] = useState("");
   const [bootInfo, setBootInfo] = useState(null);
@@ -55,6 +56,8 @@ function App() {
   const chatRef = useRef(null);
   const recognizerRef = useRef(null);
   const pendingMcpActivityRef = useRef({});
+  const activeToolRef = useRef(null);
+  const lastThinkingRef = useRef(null);
 
   const visibleQuestions = useMemo(() => {
     if (!formUi) return [];
@@ -76,13 +79,13 @@ function App() {
 
     ws.onopen = () => {
       setSocketState("connected");
-      addSystem("Connected to bridge relay.");
+      addSystem("Connected to gateway relay.");
     };
 
     ws.onclose = () => {
       setSocketState("closed");
       commitStream();
-      addSystem("Bridge connection closed.");
+      addSystem("Gateway connection closed.");
     };
 
     ws.onerror = () => {
@@ -337,9 +340,49 @@ function App() {
     return typeof toolName === "string" && toolName.toLowerCase().startsWith("mcp_");
   }
 
+  function getThinkingSummary(content) {
+    if (!content || typeof content !== "string") return "";
+    const trimmed = content.trim();
+    const isGenericThinking = /^thinking\.{0,3}$/i.test(trimmed) || /^reasoning\.{0,3}$/i.test(trimmed);
+    if (!isGenericThinking) return trimmed;
+
+    if (isPromptActive) {
+      return "Waiting for required input before continuing.";
+    }
+
+    const activeTool = activeToolRef.current;
+    if (activeTool?.name) {
+      const elapsedSec = Math.max(0, Math.round((Date.now() - activeTool.startedAt) / 1000));
+      const source = activeTool.isMcp ? "MCP" : "Tool";
+      return `${source} in progress: ${activeTool.name}${elapsedSec > 0 ? ` (${elapsedSec}s)` : ""}.`;
+    }
+
+    if (statusLabel && statusLabel !== "Idle") {
+      return `Current status: ${statusLabel}`;
+    }
+
+    return "Analyzing context and preparing the next action.";
+  }
+
   function recordThinking(content) {
-    if (!content || typeof content !== "string") return;
-    addActivity("thinking", "Model thinking", content);
+    const summary = getThinkingSummary(content);
+    if (!summary) return;
+
+    const now = Date.now();
+    const last = lastThinkingRef.current;
+    if (last && last.text === summary && now - last.at < 12000) {
+      const nextCount = last.count + 1;
+      updateActivityById(last.id, (existing) => ({
+        ...existing,
+        content: `${summary} (x${nextCount})`,
+        at: new Date().toLocaleTimeString(),
+      }));
+      lastThinkingRef.current = { ...last, count: nextCount, at: now };
+      return;
+    }
+
+    const id = addActivity("thinking", "Thinking", summary);
+    lastThinkingRef.current = { id, text: summary, count: 1, at: now };
   }
 
   function commitStream() {
@@ -383,8 +426,8 @@ function App() {
 
     switch (msg.type) {
       case "ready":
-        setStatusLabel("Bridge ready");
-        addSystem("Bridge ready.");
+        setStatusLabel("Gateway ready");
+        addSystem("Gateway ready.");
         break;
       case "boot_complete":
         setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
@@ -397,9 +440,10 @@ function App() {
         if (msg.status === "running") {
           setStatusLabel(msg.label ? `Running: ${msg.label}` : "Running...");
           if (msg.label && /thinking|reasoning/i.test(msg.label)) {
-            addActivity("thinking", "Thinking", msg.label);
+            recordThinking(msg.label);
           }
         } else if (msg.status === "done") {
+          activeToolRef.current = null;
           setStatusLabel("Idle");
           commitStream();
         }
@@ -407,6 +451,11 @@ function App() {
       case "tool_start": {
         const toolName = msg.tool || "Unknown tool";
         const argsText = msg.arguments ? JSON.stringify(msg.arguments) : "";
+        activeToolRef.current = {
+          name: toolName,
+          isMcp: isMcpToolName(toolName),
+          startedAt: Date.now(),
+        };
         if (isMcpToolName(toolName)) {
           const mcpId = addActivity("mcp", `Start: ${toolName}`, argsText || "Status: running");
           pendingMcpActivityRef.current[toolName] = mcpId;
@@ -426,6 +475,9 @@ function App() {
       }
       case "tool_done": {
         const toolName = msg.tool || "Unknown tool";
+        if (activeToolRef.current?.name === toolName) {
+          activeToolRef.current = null;
+        }
         const status = msg.success ? "success" : "error";
         if (isMcpToolName(toolName)) {
           const pendingId = pendingMcpActivityRef.current[toolName];
@@ -468,11 +520,11 @@ function App() {
         handleUserInputRequired(msg);
         break;
       case "bridge_stderr":
-        addError(`Bridge stderr: ${msg.content}`);
+        addError(`Gateway error: ${msg.content}`);
         break;
       case "bridge_exit":
-        addError(`Bridge exited (code=${msg.code ?? "null"}).`);
-        setStatusLabel("Bridge stopped");
+        addError(`Gateway stream stopped (code=${msg.code ?? "null"}).`);
+        setStatusLabel("Gateway stopped");
         break;
       default:
         break;
@@ -720,7 +772,7 @@ function App() {
             title={darkMode ? "Switch to light theme" : "Switch to dark theme"}
             aria-label={darkMode ? "Switch to light theme" : "Switch to dark theme"}
           >
-            <i className={`fa-solid ${darkMode ? "fa-sun" : "fa-moon"}`} aria-hidden="true"></i>
+            <span aria-hidden="true">{darkMode ? "☾" : "☀"}</span>
           </button>
           <button
             className="switchAgentBtn"
@@ -742,6 +794,8 @@ function App() {
         chatRef={chatRef}
         messages={messages}
         activityItems={activityItems}
+        activityCollapsed={activityCollapsed}
+        onToggleActivity={() => setActivityCollapsed((prev) => !prev)}
         streaming={streaming}
         renderMarkdown={renderMarkdown}
         bootInfo={bootInfo}

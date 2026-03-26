@@ -87,6 +87,11 @@ class LaneManager:
             if lane is not None:
                 await lane.stop()
 
+    async def reset_all_loops(self) -> None:
+        """Reset all in-memory loops so runtime config changes apply to active sessions."""
+        for lane in self._lanes.values():
+            await lane.reset_loop()
+
     def sync_mcp_tools_to_loops(
         self,
         mcp_tools: Sequence[Any],

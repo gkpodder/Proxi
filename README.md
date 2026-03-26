@@ -286,5 +286,28 @@ pytest tests/ -v
 
 Optional verification:
 
-- **Bridge only:** From project root, run `uv run proxi-bridge`. You should see `{"type":"ready"}`. (Ctrl+C to exit.) This checks that the Python agent bridge starts correctly.
+- **Gateway only:** From project root, run `uv run proxi-gateway`. Then open `http://127.0.0.1:8765/health` and verify `{"status":"ok", ...}`.
 - **Full flow:** Run `proxi` or `uv run proxi`; you should see the boot sequence, agent selection (if applicable), and a prompt. Type a task and press Enter.
+
+## React Frontend (Gateway)
+
+From project root:
+
+```bash
+# Default: starts the React frontend and auto-starts gateway if needed
+bun run proxi-react
+
+# Use an already running gateway (do not auto-start)
+bun run proxi-react:existing-gateway
+```
+
+Frontend startup parameters:
+
+| Parameter | Where | Description |
+|----------|-------|-------------|
+| `--use-existing-gateway` | CLI flag to `react_frontend/server.js` | Do not auto-start gateway; require an existing gateway. |
+| `--no-gateway-start` | CLI flag to `react_frontend/server.js` | Alias for `--use-existing-gateway`. |
+| `PROXI_GATEWAY_AUTOSTART=0` | Environment variable | Disable gateway auto-start and use existing gateway only. |
+| `PROXI_GATEWAY_URL` | Environment variable | Override gateway base URL (default: `http://127.0.0.1:8765`). |
+| `PROXI_SESSION_ID` | Environment variable | Start the web UI on a specific session id. |
+| `PORT` | Environment variable | React frontend HTTP port (default: `5174`). |
