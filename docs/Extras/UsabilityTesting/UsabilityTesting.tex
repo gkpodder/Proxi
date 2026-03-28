@@ -1,0 +1,1202 @@
+\documentclass[12pt, titlepage]{article}
+
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{geometry}
+\usepackage{ragged2e}
+\usepackage{caption}
+
+\geometry{margin=1in}
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+
+\hypersetup{
+    colorlinks,
+    citecolor=black,
+    filecolor=black,
+    linkcolor=red,
+    urlcolor=blue
+}
+
+\input{../../Comments}
+\input{../../Common}
+
+\begin{document}
+
+\hypersetup{pageanchor=false}
+
+\title{Usability Testing Report: Project Proxi}
+\author{\authname}
+\date{\today}
+
+\maketitle
+
+\pagenumbering{roman}
+
+\section{Revision History}
+
+\begin{tabularx}{\textwidth}{p{3cm}p{2cm}X}
+\toprule
+{\bf Date} & {\bf Version} & {\bf Notes}\\
+\midrule
+March 20th, 2026 & 1.0 &
+Initial draft created with testing scope, plan, and result
+placeholders.\\
+March 23rd, 2026 & 1.1 &
+Added participant profiles, task scenarios, questionnaires,
+and data analysis plan.\\
+March 26th, 2026 & 1.2 &
+Added quantitative and qualitative findings, themes,
+severity ratings, and recommendations.\\
+March 27th, 2026 & 2.0 &
+Added exploratory free-use sessions, feature-discovery
+analysis, and updated appendices.\\
+\bottomrule
+\end{tabularx}
+
+\newpage
+
+\tableofcontents
+
+\newpage
+
+\hypersetup{pageanchor=true}
+\pagenumbering{arabic}
+
+\section{Introduction}
+
+Project Proxi is an AI-powered desktop assistant designed to help users
+complete computer tasks through natural voice and text interaction.
+Proxi was developed to improve accessibility, efficiency, and ease of
+use for seniors, users with disabilities, and power users who want a
+faster workflow for common digital tasks.
+
+The purpose of this report is to present the usability testing
+conducted for Proxi. This report follows a systematic, rigorous, and
+quantified evaluation process. The study includes a clear testing plan,
+realistic task scenarios, structured pre-test and post-test questions,
+post-task rating instruments, observed task metrics, and qualitative
+analysis based on participant feedback.
+
+The main objective of this usability study was to determine whether
+Proxi is understandable, useful, and efficient when users attempt
+realistic daily workflows such as reading and sending emails, creating
+and managing calendar events, requesting weather information, updating
+notes, and interacting with the system using speech. Because Proxi was
+designed to support both accessibility-focused and productivity-focused
+usage, the study evaluated not only task success but also confidence,
+clarity, comfort, learnability, and willingness to use the system in
+real life.
+
+\section{Executive Summary}
+
+This usability study examined how well Project Proxi supports realistic
+computer tasks through a high-level conversational interface. Four
+participants were recruited to represent different intended user groups:
+a power user, an elderly user, a voice-first professional user, and a
+general daily-task user. Participants completed scenario-based tasks
+covering email, calendar, notes, search, weather, and accessibility
+features. In addition to the structured task study, two participants
+were also given a short exploratory session with open access to Proxi.
+During this session, they were encouraged to interact with the system
+freely and try whatever features felt natural to them. This helped
+capture spontaneous usage patterns, feature discovery, and unprompted
+usability issues that may not appear in scripted tasks.
+
+The results showed that Proxi performed strongly in workflows involving
+email drafting, calendar management, weather retrieval, and note
+creation. Participants especially appreciated the convenience of using
+one assistant to complete multi-step actions without switching between
+many applications. They also responded positively to the voice-first
+interaction style and to the system's potential to support users who
+find traditional interfaces frustrating.
+
+The most significant usability issue observed was command
+discoverability. Participants often knew what they wanted to do, but
+were not always sure how to phrase the request. Some follow-up requests
+were also too ambiguous for the system to resolve smoothly. In addition,
+Punjabi support and other accessibility-oriented features were seen as
+highly valuable, but participants wanted such capabilities to be made
+more visible earlier in the interaction.
+
+Overall, the findings suggest that Proxi is highly promising as both an
+accessibility tool and a productivity assistant. The report concludes
+with design recommendations focusing on onboarding, example prompts,
+multilingual support, contextual clarification, and better visibility
+of supported commands.
+
+\section{Overview}
+
+Project Proxi is intended to reduce the effort required to perform
+common computer tasks. Instead of relying only on a keyboard, mouse, or
+multiple application interfaces, users can ask Proxi to complete tasks
+through text or speech. These tasks include reading unread emails,
+drafting replies, showing calendars, creating events, updating notes,
+summarizing information, and answering practical day-to-day questions.
+
+Usability is a central concern for this project because the target users
+include seniors and accessibility-focused users who may struggle with
+small controls, multi-step actions, and complex interface navigation.
+At the same time, power users expect the system to be fast, flexible,
+and efficient enough to be worth adopting into their daily workflow.
+
+This report therefore focuses on whether Proxi supports the right kinds
+of interaction for its intended audience and whether the current design
+needs refinement before final delivery.
+
+\section{Usability Testing Goals and Success Criteria}
+
+This study was designed to evaluate Proxi in a systematic, rigorous,
+and quantified manner consistent with the expectations of the HCI
+course. The testing plan focused on whether representative users could
+complete realistic tasks, whether the interaction style was easy to
+learn, and whether the system felt useful enough for real use.
+
+\subsection{Usability Testing Goals}
+
+The main goals of the usability study were as follows:
+\begin{enumerate}[label=\arabic*.]
+    \item Evaluate learnability by determining whether first-time users
+    can understand how to begin interacting with Proxi after a short
+    orientation.
+    \item Evaluate task success by measuring whether users can complete
+    realistic workflows involving email, calendar, search, notes, and
+    weather.
+    \item Evaluate accessibility by observing whether an elderly user
+    and a lower-English-fluency user can interact with the system with
+    confidence and low frustration.
+    \item Evaluate efficiency by observing whether Proxi reduces the
+    need to switch between applications for power and professional
+    users.
+    \item Evaluate exploratory use by observing what users try when they
+    are given open access to Proxi without being told exactly what to
+    do.
+    \item Evaluate clarity of system response by determining whether
+    users understand what Proxi is doing and what happened after each
+    command.
+    \item Evaluate confidence and trust by measuring whether users feel
+    that Proxi understood their requests and behaved predictably.
+    \item Evaluate satisfaction by measuring whether participants would
+    use Proxi again in real life.
+\end{enumerate}
+
+\subsection{Success Criteria}
+
+To make the evaluation more rigorous, the team defined the following
+success criteria before reviewing the study results:
+
+\begin{itemize}
+    \item unaided task completion rate of at least 80\% across all core
+    tasks.
+    \item average overall satisfaction score of at least 4.0 out of 5.
+    \item average confidence score of at least 4.0 out of 5 for whether
+    Proxi understood user intent.
+    \item average assists per task of no more than one assist for every
+    two tasks.
+    \item successful completion of at least one key task for each target
+    user type represented in the study.
+    \item clear qualitative evidence that participants understood the
+    value of Proxi for either accessibility, efficiency, or both.
+\end{itemize}
+
+\subsection{Administration of Measures}
+
+The same procedure was used for each participant. One moderator guided
+the session and one note-taker recorded times, attempts, assists,
+confusion points, and direct quotes. After each task, participants
+completed the same post-task questionnaire using a 1 to 5 Likert scale
+before moving to the next task. At the end of the session, each
+participant completed the same post-test interview.
+
+\subsection{Justification of Study Size}
+
+This was a formative usability study intended to identify major
+usability issues across a small set of representative user types rather
+than to produce statistically generalizable results. The participant set
+was intentionally selected to cover distinct usage contexts that matched
+the core Proxi user groups, including an elderly user, a power user, a
+voice-first professional user, and a general daily-task user.
+
+\section{Research Questions}
+
+The usability study was designed to answer the following questions:
+
+\begin{enumerate}[label=\arabic*.]
+    \item Can users complete realistic workflows involving email,
+    calendar, search, weather, and notes?
+    \item Does Proxi support both accessibility-driven and
+    productivity-driven usage patterns?
+    \item Are users satisfied with the overall conversation flow?
+    \item What barriers do users encounter while speaking to or typing
+    commands into Proxi?
+    \item Do users understand what Proxi can do without relying too
+    heavily on help prompts?
+    \item Are the responses clear, actionable, and trustworthy?
+    \item What improvements would make Proxi easier to use in everyday
+    settings?
+    \item What features do users discover and attempt on their own when
+    they are given open-ended access to Proxi?
+\end{enumerate}
+
+\section{Participant Profiles}
+
+Participants were selected to reflect the intended user space of Proxi.
+Each participant represented a distinct use context that matched one or
+more project personas and user groups.
+
+\subsection{Participant 1: Raj - Power User}
+
+Raj is a tech-savvy user who regularly works with research, note-taking,
+and email. He often repeats multi-step workflows and wants a system that
+reduces application switching. His main goal was to test whether Proxi
+could speed up searching, summarizing, note updates, and email actions.
+Raj also participated in the exploratory free-use portion of the study
+because he was likely to test a broader range of productivity features
+without needing heavy prompting.
+
+\subsection{Participant 2: Tony - Elderly User}
+
+Tony is an older user who prefers a light theme and simpler interaction.
+He speaks less English and is more comfortable with direct spoken
+interaction than with typing. His scenario emphasized accessibility,
+theme preference, ease of understanding, and multilingual support.
+
+\subsection{Participant 3: Jassi - Voice Productivity User}
+
+This participant works in real estate and frequently needs to schedule
+meetings and send follow-up messages while moving between appointments.
+His scenario focused on the usefulness of voice-based calendar and email
+workflows under time pressure.
+
+\subsection{Participant 4: Mikayla - Daily-Task User}
+
+The fourth participant represented a broader everyday use case. This
+scenario focused on practical daily information tasks, including
+weather, reminders, and lightweight note creation. Mikayla also
+participated in the exploratory free-use portion of the study to help
+evaluate how a general user approaches Proxi when given open-ended
+access rather than specific scripted tasks.
+
+\subsection{Recruitment Criteria}
+
+Participants were included if they matched at least one of the
+following:
+\begin{itemize}
+    \item older adult or accessibility-oriented user.
+    \item regular user of email, calendar, or note workflows.
+    \item someone likely to benefit from voice interaction.
+    \item willing participant in a moderated usability study.
+\end{itemize}
+
+Participants were excluded if they were directly involved with Proxi's
+development or were already overly familiar with the exact command set.
+
+\section{Methodology}
+
+This study used a moderated task-based usability testing approach. Each
+session followed a consistent structure:
+\begin{enumerate}[label=\arabic*.]
+    \item introduction and consent.
+    \item pre-test questionnaire.
+    \item short orientation.
+    \item warm-up task.
+    \item scenario-based tasks.
+    \item post-task questionnaire after each task.
+    \item post-test interview.
+    \item final notes and debrief.
+\end{enumerate}
+
+This method was chosen because Proxi is an interactive system whose
+value depends on real workflows rather than isolated feature checks. A
+moderated study allowed the team to record both measurable task results
+and richer participant reactions such as hesitation, delight,
+confusion, and suggestions for improvement.
+
+\subsection{Session Length}
+
+Each usability session lasted approximately 25 to 35 minutes.
+
+\subsection{Data Collected}
+
+For each participant and task, the following data was recorded:
+\begin{itemize}
+    \item task completion status.
+    \item time to complete the task.
+    \item number of attempts.
+    \item number of retries.
+    \item number of moderator assists.
+    \item post-task ratings.
+    \item direct participant quotes.
+    \item notable confusion points.
+    \item final comments and recommendations.
+    \item features attempted during exploratory free use.
+    \item number of spontaneous commands not tied to scripted tasks.
+    \item order of feature discovery during exploratory use.
+\end{itemize}
+
+\subsection{Exploratory Free-Use Session}
+
+In addition to the structured task sessions, two participants completed
+a short exploratory free-use session. These participants were given open
+access to Proxi for approximately 8 to 10 minutes after their main task
+session. They were told that they could ``play around'' with the system
+and try any features that felt natural, useful, or interesting to them.
+The moderator did not provide specific tasks during this part of the
+study unless the participant asked a clarifying question about system
+availability.
+
+The purpose of this exploratory session was to observe spontaneous
+feature discovery, natural command phrasing, and unprompted breakdowns.
+This portion of the study was especially useful for understanding what
+participants believed Proxi could do without being guided by scripted
+prompts.
+
+During the exploratory session, the note-taker recorded:
+\begin{itemize}
+    \item which features participants chose to try first,
+    \item how often they switched between voice and text input,
+    \item whether they used the help feature,
+    \item whether they returned to features from the structured tasks,
+    \item moments of surprise, delight, hesitation, or confusion,
+    \item direct quotes describing what they expected Proxi to do.
+\end{itemize}
+
+\section{Testing Environment and Setup}
+
+Testing took place in a quiet indoor environment using a laptop running
+a working Proxi build with microphone input enabled. The moderator sat
+beside the participant and guided the session. A note-taker recorded
+observations, quotes, retries, assists, and time measurements.
+
+The hardware and materials used during testing were:
+\begin{itemize}
+    \item one laptop running Proxi.
+    \item one microphone for speech input.
+    \item keyboard for optional text interaction.
+    \item printed task packet.
+    \item printed rating sheets.
+    \item observation sheets for note-taking.
+\end{itemize}
+
+The environment was controlled to reduce interruptions and maintain
+similar testing conditions across all participants.
+
+\section{Pre-Test Questionnaire}
+
+Before beginning the tasks, participants were asked the following
+questions.
+
+\subsection{General Information}
+
+\begin{enumerate}[label=\arabic*.]
+    \item What is your age range?
+    \item Which role best describes you: student, working professional,
+    retiree, or other?
+    \item How comfortable are you with computers in general?
+    \item How often do you use voice assistants such as Siri, Alexa,
+    Google Assistant, or dictation tools?
+    \item Do you usually prefer typing, speaking, or a mix of both?
+\end{enumerate}
+
+\subsection{Current Workflow}
+
+\begin{enumerate}[label=\arabic*.]
+    \setcounter{enumi}{5}
+    \item What computer tasks do you do most often in a normal week?
+    \item Which of these do you use most: email, calendar, notes, file
+    reading, web search, reminders?
+    \item What usually feels slow or frustrating in your current
+    workflow?
+    \item Do you often repeat the same steps across different apps?
+    \item Have you ever wished you could just tell the computer what to
+    do?
+\end{enumerate}
+
+\subsection{Expectations}
+
+\begin{enumerate}[label=\arabic*.]
+    \setcounter{enumi}{10}
+    \item Before using Proxi, what tasks would you expect a tool like
+    this to help with?
+    \item What would make a system like this feel genuinely useful to
+    you?
+    \item What would make you not trust it?
+\end{enumerate}
+
+\subsection{Accessibility and Comfort}
+
+\begin{enumerate}[label=\arabic*.]
+    \setcounter{enumi}{13}
+    \item Do you ever find menus, small buttons, or multi-step actions
+    frustrating?
+    \item Would voice input be useful in your daily life? Why or why
+    not?
+    \item Would language flexibility, such as Punjabi support, make a
+    difference for you or someone you know?
+\end{enumerate}
+
+\section{Training and Warm-Up Procedure}
+
+Before the main tasks, each participant received a short orientation.
+The moderator explained that:
+\begin{itemize}
+    \item Proxi supports both voice and text input.
+    \item The participant was not being tested.
+    \item There was no single perfect phrasing.
+    \item Confusion or frustration should be described openly.
+    \item The participant could skip a task if needed.
+\end{itemize}
+
+Each participant then completed one simple warm-up task that was not
+counted in the study results. The warm-up task was either:
+\begin{itemize}
+    \item ask Proxi what the weather is today; or
+    \item ask Proxi what it can do.
+\end{itemize}
+
+This allowed the participant to hear a response and get comfortable
+before the formal task timing began.
+
+\section{Task Scenarios}
+
+Each participant completed realistic tasks written as scenarios rather
+than as rigid commands. This was done to evaluate whether users could
+naturally express their goals.
+
+\subsection{Scenario 1: Raj - Power Workflow}
+
+Raj is in the middle of a busy workday. He wants to do quick research,
+save useful information to a note page, and handle email without opening
+several different applications.
+
+\textbf{Tasks}
+\begin{enumerate}[label=\arabic*.]
+    \item Search the web for a topic and summarize the result.
+    \item Add the summary to a note or Notion page.
+    \item Read the latest unread email.
+    \item Draft a reply email based on the context.
+\end{enumerate}
+
+\subsection{Scenario 2: Tony - Elderly and Punjabi-Support Workflow}
+
+Tony wants an easier way to use the computer. He prefers light mode,
+speaks less English, and benefits from simpler spoken interaction.
+
+\textbf{Tasks}
+\begin{enumerate}[label=\arabic*.]
+    \item Change the application to light theme.
+    \item Ask Proxi for today's weather using speech.
+    \item Ask a follow-up question in a simpler or mixed-language way.
+    \item Request the answer again in an easier-to-understand form.
+    \item Use the help feature if unsure what to say next.
+\end{enumerate}
+
+\subsection{Scenario 3: Realtor - On-the-Go Scheduling}
+
+The participant is moving between appointments and wants to update the
+day quickly using voice.
+
+\textbf{Tasks}
+\begin{enumerate}[label=\arabic*.]
+    \item Show tomorrow's calendar.
+    \item Create a client meeting.
+    \item Change or delete a conflicting event.
+    \item Draft an email confirming the meeting.
+\end{enumerate}
+
+\subsection{Scenario 4: Everyday Utility}
+
+The participant wants help planning the day with quick information.
+
+\textbf{Tasks}
+\begin{enumerate}[label=\arabic*.]
+    \item Search for Hamilton weather.
+    \item Summarize the result.
+    \item Create a short daily note or page.
+    \item Add a reminder or event related to the day's plan.
+\end{enumerate}
+
+\section{Post-Task Questionnaire}
+
+After each task, participants completed the following rating questions
+using a 1 to 5 Likert scale, where 1 means strongly disagree and 5 means
+strongly agree.
+
+\begin{enumerate}[label=\arabic*.]
+    \item I was able to complete this task easily.
+    \item I understood what the system was doing.
+    \item The system responded quickly enough for me.
+    \item I knew what to say or type during this task.
+    \item The system feedback was clear and helpful.
+    \item I felt confident that Proxi understood me.
+    \item I would use this feature in real life.
+    \item I was satisfied with how this task went overall.
+\end{enumerate}
+
+Participants were then asked the following short open-ended questions:
+\begin{enumerate}[label=\arabic*.]
+    \item What, if anything, confused you during this task?
+    \item What did you like most about this task?
+    \item What would have improved this task for you?
+\end{enumerate}
+
+\section{Post-Test Interview}
+
+At the end of the session, participants answered the following
+questions:
+
+\begin{enumerate}[label=\arabic*.]
+    \item What did you like most about using Proxi?
+    \item What did you dislike most about using Proxi?
+    \item What did you think about the overall flow of interaction?
+    \item Did any feature feel surprisingly useful?
+    \item Did anything feel harder than you expected?
+    \item Was there any point where you were unsure how to phrase your
+    request?
+    \item Did you feel like the system gave enough feedback during
+    waiting or processing?
+    \item Would you use Proxi in the future? Why or why not?
+    \item What other things would you want Proxi to help with?
+    \item Is there anything else you would like to add?
+\end{enumerate}
+
+\section{Data Analysis Plan}
+
+Both quantitative and qualitative data were analyzed.
+
+\subsection{Quantitative Measures}
+
+The following metrics were recorded:
+\begin{itemize}
+    \item time per task.
+    \item number of attempts.
+    \item number of retries.
+    \item number of assists.
+    \item task completion rate.
+    \item satisfaction score.
+    \item confidence score.
+    \item future-use score.
+\end{itemize}
+
+\subsection{Qualitative Measures}
+
+The following types of qualitative evidence were collected:
+\begin{itemize}
+    \item direct quotes.
+    \item observed hesitation.
+    \item confusion about phrasing.
+    \item trust and confidence comments.
+    \item feature requests.
+    \item emotional reactions such as relief, surprise, and frustration.
+\end{itemize}
+
+\subsection{Planned Analysis}
+
+The team used descriptive statistics for numeric measures and thematic
+analysis for open-ended responses and observations. Issues were then
+grouped by frequency, severity, and impact.
+
+\subsection{Exploratory Session Analysis}
+
+For the exploratory session, the team used descriptive counts and
+thematic analysis rather than task-completion scoring alone. Since this
+portion of the study was open-ended, the analysis focused on what users
+chose to do, which features they discovered without prompting, which
+commands felt natural to them, and what kinds of confusion arose during
+self-directed use. This allowed the team to compare structured task
+performance with spontaneous real-world style interaction.
+
+\section{Quantitative Findings}
+
+A total of 16 formal task attempts were recorded across 4 participants.
+
+\begin{table}[H]
+\centering
+\caption{Overall Quantitative Results}
+\begin{tabularx}{0.75\textwidth}{l>{\RaggedLeft\arraybackslash}p{3cm}}
+\toprule
+Metric & Result \\
+\midrule
+Total participants & 4 \\
+Total tasks attempted & 16 \\
+Completed without help & 13 \\
+Completed with help & 2 \\
+Not completed & 1 \\
+Unaided completion rate & 81.25\% \\
+Average task time & 52 seconds \\
+Average attempts per task & 1.4 \\
+Average assists per task & 0.31 \\
+Average satisfaction & 4.3 / 5 \\
+Average confidence Proxi understood intent & 4.1 / 5 \\
+Average future-use interest & 4.4 / 5 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The quantitative results suggest that Proxi supports core tasks
+successfully for most users. Satisfaction and future-use scores were
+especially strong, indicating that participants saw practical value in
+the system even when they encountered small issues.
+
+\section{Exploratory Session Findings}
+
+Two participants, Raj and Mikayla, completed an additional exploratory
+free-use session after the structured task portion of the study. Each
+participant was given approximately 10 minutes of open access to Proxi
+and was encouraged to try any features that seemed useful or
+interesting.
+
+\subsection{Exploratory Quantitative Summary}
+
+\begin{table}[H]
+\centering
+\caption{Exploratory Free-Use Session Summary}
+\begin{tabularx}{\textwidth}{p{3cm}ccX}
+\toprule
+Participant & Commands Tried & Features Used & Notes \\
+\midrule
+Raj & 9 & 5 &
+Used search, notes, email, help, and calendar features. \\
+Mikayla & 7 & 4 &
+Used weather, reminders, help, and note creation features. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Across the two exploratory sessions, participants issued a total of 16
+self-directed commands and used 6 distinct feature types without being
+prompted by the moderator. The help feature was used 3 times across the
+two sessions. Both participants returned to at least one feature they
+had already used during the structured task study, but they also tried
+new commands that had not been assigned to them in the formal scenario
+tasks.
+
+\subsection{Exploratory Qualitative Summary}
+
+The exploratory sessions showed that participants quickly formed mental
+models about what Proxi was useful for. Raj treated Proxi primarily as a
+workflow assistant and naturally tested whether it could connect search,
+notes, and email. Mikayla treated Proxi more like a practical daily
+assistant and explored weather, reminders, and lightweight note-taking.
+
+The exploratory session also revealed that users were willing to test
+feature boundaries. When they were not given a script, participants
+more often tried broad requests such as asking what Proxi could do,
+requesting multi-step actions, or testing whether earlier context would
+carry into follow-up commands. This produced richer evidence about how
+the system might be used in real life.
+
+\section{Qualitative Findings}
+
+\subsection{Successes}
+
+\subsubsection{Strong perceived value for real tasks}
+
+Participants repeatedly noted that Proxi felt useful when it reduced
+application switching.
+
+\begin{quote}
+``This is actually nice because I don't have to open three different
+things just to do one small task.''
+\end{quote}
+
+\begin{quote}
+``The email and calendar part felt the most real to me.''
+\end{quote}
+
+\begin{quote}
+``For work, this would save me time every day.''
+\end{quote}
+
+\subsubsection{High value for voice-first accessibility}
+
+Tony's session showed that voice interaction reduced tension around
+computer use.
+
+\begin{quote}
+``I like that I don't have to keep finding buttons.''
+\end{quote}
+
+\begin{quote}
+``Light mode is much better for me.''
+\end{quote}
+
+\begin{quote}
+``Oh, I didn't know Punjabi option was also there.''
+\end{quote}
+
+\begin{quote}
+``If it can understand this way too, then that's actually very
+helpful.''
+\end{quote}
+
+\begin{quote}
+``For older people this is easier than typing.''
+\end{quote}
+
+\subsubsection{Useful for mobile-style professionals}
+
+The realtor scenario showed strong value for voice-first scheduling.
+
+\begin{quote}
+``This is exactly the kind of thing I would use in the car before going
+inside.''
+\end{quote}
+
+\begin{quote}
+``Calendar plus email together is very practical.''
+\end{quote}
+
+\begin{quote}
+``I liked that I could just say it instead of going back and forth.''
+\end{quote}
+
+\subsubsection{Discoverability improved after early success}
+
+Participants generally became more confident after one successful task.
+
+\begin{quote}
+``Once I understood how it wanted me to ask, it got much easier.''
+\end{quote}
+
+\begin{quote}
+``The first task felt strange, then after that I got it.''
+\end{quote}
+
+\begin{quote}
+``Now I know what kind of commands it likes.''
+\end{quote}
+
+\subsection{Exploratory Use Behaviours}
+
+The exploratory sessions provided useful evidence about how participants
+approached Proxi when they were not given explicit instructions. Raj
+quickly began testing whether Proxi could chain together multiple
+productivity actions. After completing the structured tasks, he tried
+broader commands and commented:
+
+\begin{quote}
+``Now I want to see if it can do the full thing without me breaking it
+into steps.''
+\end{quote}
+
+He also tried combining search and note-taking more naturally and said:
+
+\begin{quote}
+``This is the kind of thing I would actually ask if I were working.''
+\end{quote}
+
+Mikayla's exploratory use was more curiosity-driven. She started by
+asking what else Proxi could do and then moved into daily planning
+features. She commented:
+
+\begin{quote}
+``I wasn't told to do reminders here, but that was the next thing I
+wanted to try.''
+\end{quote}
+
+She also reacted positively when discovering additional capability:
+
+\begin{quote}
+``It feels better when I can just explore instead of following exact
+steps.''
+\end{quote}
+
+At the same time, exploratory use made command discoverability issues
+more visible. Without a task prompt in front of them, both participants
+were more likely to pause before speaking and more likely to use the
+help feature. One participant noted:
+
+\begin{quote}
+``When I have a goal in mind, I still want examples of how to ask it.''
+\end{quote}
+
+\subsection{Challenges}
+
+\subsubsection{Difficulty knowing how to phrase requests}
+
+This was the most important usability issue. Participants often knew the
+goal but were unsure how to ask for it.
+
+\begin{quote}
+``I know what I want, I just don't know how to ask it.''
+\end{quote}
+
+\begin{quote}
+``It feels like I need to guess the right sentence.''
+\end{quote}
+
+\begin{quote}
+``I wanted it to understand what I meant, not the exact wording.''
+\end{quote}
+
+\begin{quote}
+``I wasn't sure whether to say summarize the page, summarize the
+website, or summarize the result.''
+\end{quote}
+
+\subsubsection{Ambiguity in follow-up commands}
+
+Some participants expected natural references like ``that'' or ``do that
+for tomorrow'' to work more smoothly.
+
+\begin{quote}
+``I thought it would know what `that' meant.''
+\end{quote}
+
+\begin{quote}
+``I was referring to the same thing, but I guess it needed more
+detail.''
+\end{quote}
+
+\begin{quote}
+``The follow-up felt natural to me, but maybe not to the system.''
+\end{quote}
+
+\subsubsection{Need for more visible examples}
+
+Participants wanted examples before needing to ask for help.
+
+\begin{quote}
+``A little box saying `try asking this' would help a lot.''
+\end{quote}
+
+\begin{quote}
+``Once I used help, it made more sense.''
+\end{quote}
+
+\begin{quote}
+``I wish it showed examples without me having to ask first.''
+\end{quote}
+
+\subsubsection{Multilingual support needs better onboarding}
+
+Punjabi support was perceived as very valuable, but participants wanted
+it to be introduced more explicitly.
+
+\begin{quote}
+``If I knew earlier that Punjabi was supported, I would have tried that
+first.''
+\end{quote}
+
+\begin{quote}
+``Oh wow, I didn't know it could understand that too.''
+\end{quote}
+
+\begin{quote}
+``This would help people who mix languages naturally.''
+\end{quote}
+
+\subsubsection{Note and page updates need more flexibility}
+
+Raj expected note titles and page references to be handled more
+forgivingly.
+
+\begin{quote}
+``I knew which page I meant, but I guess the title had to match more
+closely.''
+\end{quote}
+
+\begin{quote}
+``This part should be smarter about similar names.''
+\end{quote}
+
+\section{Severity Ratings}
+
+Issues were grouped by severity using a scale inspired by standard
+usability severity ratings.
+
+\subsection{Severity 4 - Usability Catastrophe}
+
+\textbf{Difficulty with phrasing requests.}
+
+Participants may know the intended goal but still fail because they are
+not sure what wording the system accepts. This issue affects first-time
+learnability and is important to fix before broader release.
+
+\subsection{Severity 3 - Major Usability Problem}
+
+\textbf{Ambiguous follow-up references.}
+
+This issue did not block all tasks, but it caused noticeable breaks in
+the interaction flow and reduced confidence.
+
+\subsection{Severity 3 - Major Usability Problem}
+
+\textbf{Hidden multilingual capability.}
+
+Participants strongly valued Punjabi support once discovered, but its low
+visibility limited its benefit.
+
+\subsection{Severity 2 - Minor Usability Problem}
+
+\textbf{Theme preference discoverability.}
+
+Participants liked the light theme once they saw it, but it was not
+always obvious where to find or how to change it.
+
+\subsection{Severity 2 - Minor Usability Problem}
+
+\textbf{Limited visible examples before help request.}
+
+This did not stop most tasks, but it slowed early confidence and made
+first impressions weaker.
+
+\section{Themes and Recommendations}
+
+\subsection{Theme A: Usability of Conversation Flow}
+
+Participants liked the idea of conversational interaction, but the flow
+was strongest when Proxi either gave clear next steps or when users
+already knew the supported phrasing.
+
+\textbf{Recommendation:} Add visible example prompts on the home screen
+and after failed requests.
+
+Examples:
+\begin{itemize}
+    \item ``Try saying: summarize the current result.''
+    \item ``Try saying: show my calendar for tomorrow.''
+    \item ``Try saying: add this to my notes.''
+\end{itemize}
+
+\subsection{Theme B: Usability of System Response}
+
+Users wanted stronger confirmation and recap messages, especially after
+multi-step actions.
+
+\textbf{Recommendation:} Improve recap and clarification feedback.
+
+Examples:
+\begin{itemize}
+    \item ``I found the weather for Hamilton and summarized it below.''
+    \item ``I added the meeting and drafted the follow-up email.''
+    \item ``I'm not sure which page you mean. Did you mean Project
+    Notes?''
+\end{itemize}
+
+\subsection{Theme C: Accessibility and Inclusivity}
+
+Elderly and lower-English-fluency users responded positively to Proxi
+when the interaction was simple and forgiving.
+
+\textbf{Recommendation:} Add multilingual hints, simplified response
+mode, a more visible help area, and an onboarding step for theme and
+language preferences.
+
+\subsection{Theme D: Productivity Potential}
+
+Power users and professionals saw the most value when Proxi combined
+tasks into one flow.
+
+\textbf{Recommendation:} Promote chained workflows more explicitly.
+
+Examples:
+\begin{itemize}
+    \item search, summarize, and add to notes.
+    \item create meeting and draft email.
+    \item read latest email and prepare response.
+\end{itemize}
+
+\subsection{Theme E: Exploratory Use and Feature Discovery}
+
+The exploratory free-use session showed that participants were willing
+to test Proxi beyond the assigned scenarios, especially when they had
+already experienced one or two successful interactions. However, this
+also made command discoverability issues more visible. When users were
+not given a task prompt, they were more likely to hesitate, test broad
+commands, or rely on the help feature.
+
+\textbf{Recommendation:} Improve self-guided exploration by making
+feature discovery easier for first-time users.
+
+Examples:
+\begin{itemize}
+    \item provide a visible set of starter prompts on the home screen,
+    \item surface suggested follow-up commands after successful actions,
+    \item add a lightweight ``explore'' or ``try asking'' panel,
+    \item show capability categories such as email, notes, calendar,
+    and weather.
+\end{itemize}
+
+\section{Conclusion}
+
+This usability study found that Proxi has strong promise as both an
+accessibility tool and a productivity assistant. Participants valued the
+ability to complete practical workflows involving email, calendar,
+weather, notes, and search through a high-level conversational
+interface.
+
+The strongest positive findings were related to reduced application
+switching, voice-first convenience, and practical support for everyday
+tasks. The most important design challenge was command discoverability:
+participants often knew what they wanted to do but were not always sure
+how to phrase the request. Better onboarding, stronger examples,
+multilingual discoverability, and improved handling of follow-up
+references would substantially strengthen the user experience.
+
+The exploratory free-use sessions strengthened these findings by showing
+how participants behaved when they were not constrained by scripted
+tasks. In that setting, participants naturally explored feature
+boundaries, attempted broader requests, and relied more heavily on
+their own assumptions about what Proxi could do. This confirmed both
+the usefulness of the system and the importance of making feature
+discovery more visible for self-directed use.
+
+Overall, the study supports the conclusion that Proxi is functionally
+useful, well aligned with its intended audience, and capable of becoming
+a highly effective assistant with a few targeted usability improvements.
+
+\appendix
+
+\section{Appendix A: Moderator Script}
+
+\subsection{Introduction}
+
+Hi, thank you for participating in this usability study for Project
+Proxi. Today, you will be using Proxi, an AI-powered desktop assistant
+that supports voice and text interaction. We are testing the system, not
+you. There are no right or wrong answers, and you may stop at any time.
+
+\subsection{Before Starting}
+
+\begin{itemize}
+    \item Ask participant to review and sign consent form.
+    \item Explain note-taking and optional session recording.
+    \item Explain that questions will be asked before, during, and after
+    the tasks.
+    \item Remind the participant to be honest about confusion,
+    frustration, or delight.
+\end{itemize}
+
+\subsection{Moderator Prompts During Session}
+
+\begin{itemize}
+    \item What are you thinking right now?
+    \item Why did you phrase it that way?
+    \item What did you expect Proxi to do?
+    \item Was that response clear to you?
+    \item Would you try that differently now?
+    \item Is there anything about this task that feels difficult or
+    unnatural?
+\end{itemize}
+
+\subsection{Exploratory Session Prompt}
+
+For the next part of the study, you will have open access to Proxi for a
+short period of time. There are no required tasks in this part. Please
+feel free to try anything that seems useful, interesting, or natural to
+you. You can use voice or text. We are interested in what you choose to
+do on your own, what you expect Proxi to be able to do, and whether
+anything surprises or confuses you.
+
+\section{Appendix B: Full Questionnaires}
+
+\subsection{Post-Test Rating Questions}
+
+Please rate the following on a scale from 1 to 5:
+\begin{enumerate}[label=\arabic*.]
+    \item Overall, I was satisfied with my experience using Proxi.
+    \item I felt that Proxi could understand my requests.
+    \item I felt that Proxi was useful.
+    \item I would consider using Proxi again.
+    \item I would recommend a tool like Proxi to someone who values
+    accessibility or efficiency.
+\end{enumerate}
+
+\subsection{Final Open-Ended Questions}
+
+\begin{enumerate}[label=\arabic*.]
+    \item What did you like most?
+    \item What did you dislike most?
+    \item What would you improve first?
+    \item What feature should Proxi support next?
+\end{enumerate}
+
+\section{Appendix C: Data Logging Template}
+
+\begin{table}[H]
+\centering
+\caption{Sample Data Logging Template}
+\begin{tabularx}{\textwidth}{p{1.1cm}p{2.6cm}cccccX}
+\toprule
+ID & Task & Time & Attempts & Assists & Rating & Notes \\
+\midrule
+P1 & Search and summarize & 44 s & 1 & 0 & 5 &
+Smooth interaction; strong positive value. \\
+P1 & Update note page & 58 s & 2 & 0 & 4 &
+Minor confusion with page title match. \\
+P2 & Weather by voice & 49 s & 1 & 0 & 5 &
+Comfortable and direct. \\
+P2 & Punjabi follow-up & 65 s & 2 & 1 & 4 &
+Positive surprise; wanted earlier visibility. \\
+P3 & Create event & 40 s & 1 & 0 & 5 & Natural workflow. \\
+P3 & Draft client email & 53 s & 1 & 0 & 5 &
+High real-world value. \\
+P4 & Weather summary & 46 s & 1 & 0 & 4 & Clear result. \\
+P4 & Reminder creation & 57 s & 2 & 0 & 4 &
+Small hesitation with phrasing. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Exploratory Session Logging Template}
+\begin{tabularx}{\textwidth}{p{1.2cm}p{2.8cm}p{2cm}X}
+\toprule
+ID & First Feature Tried & Help Used & Notes \\
+\midrule
+P1 & Search and notes & Yes &
+Tested whether Proxi could chain multiple actions. \\
+P4 & Weather and reminders & Yes &
+Explored daily planning tasks without prompting. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Appendix D: Sample Quote Bank}
+
+\subsection{Raj}
+
+\begin{itemize}
+    \item ``This feels useful because it cuts out the app switching.''
+    \item ``The note update was good, but it should be more forgiving
+    with names.''
+    \item ``I can see myself using this for quick research summaries.''
+\end{itemize}
+
+\subsection{Tony}
+
+\begin{itemize}
+    \item ``I like the light one better. It feels simpler.''
+    \item ``Oh, I didn't know Punjabi option was also there.''
+    \item ``If it understands both, that is very good.''
+    \item ``Typing is more difficult for me than just saying it.''
+    \item ``I want it to explain slowly when I ask again.''
+\end{itemize}
+
+\subsection{Jassi}
+
+\begin{itemize}
+    \item ``This is actually practical for my work.''
+    \item ``The calendar part felt the most natural.''
+    \item ``I liked that it asked before doing something important.''
+    \item ``If I'm driving between showings, this would help.''
+\end{itemize}
+
+\subsection{Mikayla}
+
+\begin{itemize}
+    \item ``Weather plus reminder is a nice combo.''
+    \item ``I didn't know what exact words to use at first.''
+    \item ``Help made sense, but I wish I saw examples earlier.''
+    \item ``It felt smart when it remembered the earlier thing.''
+\end{itemize}
+
+\end{document}
