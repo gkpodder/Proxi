@@ -38,18 +38,27 @@ DEFAULT_MCP_CONFIG: dict[str, Any] = {
 }
 
 
-def create_llm_client(provider: str = "openai") -> OpenAIClient | AnthropicClient:
+def create_llm_client(
+    provider: str = "openai",
+    model: str | None = None,
+) -> OpenAIClient | AnthropicClient:
     """Create an LLM client based on provider."""
     if provider.lower() == "anthropic":
         api_key = get_key_value("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY is not set in SQLite key store. Use the React frontend (🔐 button) to add it.")
-        return AnthropicClient(api_key=api_key)
+        return AnthropicClient(
+            api_key=api_key,
+            model=(model or "claude-3-5-sonnet-20241022"),
+        )
     else:
         api_key = get_key_value("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY is not set in SQLite key store. Use the React frontend (🔐 button) to add it.")
-        return OpenAIClient(api_key=api_key)
+        return OpenAIClient(
+            api_key=api_key,
+            model=(model or "gpt-5-mini-2025-08-07"),
+        )
 
 
 def setup_tools(working_directory: Path | None = None) -> ToolRegistry:

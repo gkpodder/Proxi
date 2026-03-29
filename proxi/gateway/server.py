@@ -65,6 +65,23 @@ lane_manager: LaneManager | None = None
 heartbeat_mgr: HeartbeatManager
 scheduler = AsyncIOScheduler()
 
+SUPPORTED_LLM_MODELS: dict[str, list[str]] = {
+    "openai": [
+        "gpt-5-mini-2025-08-07",
+        "gpt-5-2025-08-07",
+        "gpt-4.1-mini",
+    ],
+    "anthropic": [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-7-sonnet-20250219",
+    ],
+}
+DEFAULT_LLM_MODELS: dict[str, str] = {
+    provider: models[0] for provider, models in SUPPORTED_LLM_MODELS.items()
+}
+llm_provider: str = "openai"
+llm_model: str = DEFAULT_LLM_MODELS["openai"]
+
 # MCP adapters loaded once at startup; their tools are injected into each lane.
 _mcp_adapters: list[Any] = []
 _mcp_tools: list[Any] = []           # live (always-loaded) MCP tools
@@ -146,6 +163,26 @@ def _persist_and_reload_gateway_config(raw: dict[str, Any]) -> None:
     _reload_cron_registry()
 
 
+def _normalize_provider(provider: str | None) -> str:
+    normalized = (provider or "").strip().lower()
+    if normalized not in SUPPORTED_LLM_MODELS:
+        raise ValueError(
+            f"Unsupported provider: {provider}. Expected one of: {', '.join(sorted(SUPPORTED_LLM_MODELS))}",
+        )
+    return normalized
+
+
+def _resolve_model(provider: str, model: str | None) -> str:
+    requested = (model or "").strip()
+    if not requested:
+        return DEFAULT_LLM_MODELS[provider]
+
+    allowed = SUPPORTED_LLM_MODELS.get(provider, [])
+    if requested not in allowed:
+        raise ValueError(f"Unsupported model for {provider}: {requested}")
+    return requested
+
+
 async def _refresh_mcp_tools() -> None:
     """Reload MCP tools when the enabled-MCP set has changed."""
     global _mcp_adapters, _mcp_tools, _mcp_deferred_tools, _last_mcp_signature
@@ -213,8 +250,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     (plan, todos, soul) resolve to the correct session paths.
     MCP tools loaded at gateway startup are shared across all lanes.
     """
-    provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
-    llm_client = create_llm_client(provider=provider)
+    llm_client = create_llm_client(provider=llm_provider, model=llm_model)
 
     working_dir = _agent_working_dirs.get(workspace_config.agent_id, _working_dir)
 
@@ -263,6 +299,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     global config, router, lane_manager, heartbeat_mgr
     global _mcp_adapters, _mcp_tools
+    global llm_provider, llm_model
 
     workspace_root = _workspace_root()
     WorkspaceManager(root=workspace_root).ensure_global_system_prompt()
@@ -274,6 +311,20 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     for _aid, _agent_cfg in config.agents.items():
         if _agent_cfg.working_dir:
             _agent_working_dirs[_aid] = _agent_cfg.working_dir
+
+    env_provider_raw = os.environ.get("PROXI_PROVIDER", "openai")
+    try:
+        env_provider = _normalize_provider(env_provider_raw)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+    env_model = os.environ.get("PROXI_MODEL", "") or os.environ.get(
+        f"PROXI_{env_provider.upper()}_MODEL", ""
+    )
+    llm_provider = env_provider
+    try:
+        llm_model = _resolve_model(env_provider, env_model)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
 
     # Load MCP adapters once so their tools are available to all lanes.
     await _refresh_mcp_tools()
@@ -725,6 +776,11 @@ class SwitchAgentRequest(BaseModel):
     agent_id: str
 
 
+class LlmConfigUpdateRequest(BaseModel):
+    provider: str
+    model: str = ""
+
+
 class CronJobUpsertRequest(BaseModel):
     schedule: str
     prompt: str
@@ -751,6 +807,43 @@ async def switch_agent_endpoint(body: SwitchAgentRequest) -> dict[str, Any]:
     new_session_id = f"{agent.agent_id}/{agent.default_session}"
     lane_manager._get_or_create(new_session_id)
     return {"session_id": new_session_id, "agent_id": agent.agent_id}
+
+
+@app.get("/v1/llm-config")
+async def get_llm_config_endpoint() -> dict[str, Any]:
+    return {
+        "provider": llm_provider,
+        "model": llm_model,
+        "providers": sorted(SUPPORTED_LLM_MODELS.keys()),
+        "models": SUPPORTED_LLM_MODELS,
+        "defaults": DEFAULT_LLM_MODELS,
+    }
+
+
+@app.put("/v1/llm-config")
+async def update_llm_config_endpoint(body: LlmConfigUpdateRequest) -> dict[str, Any]:
+    global llm_provider, llm_model
+
+    try:
+        provider = _normalize_provider(body.provider)
+        model = _resolve_model(provider, body.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    llm_provider = provider
+    llm_model = model
+
+    if lane_manager is not None:
+        await lane_manager.reset_all_loops()
+
+    logger.info("llm_config_updated", provider=provider, model=model)
+    return {
+        "provider": llm_provider,
+        "model": llm_model,
+        "providers": sorted(SUPPORTED_LLM_MODELS.keys()),
+        "models": SUPPORTED_LLM_MODELS,
+        "defaults": DEFAULT_LLM_MODELS,
+    }
 
 
 @app.get("/v1/cron-jobs")

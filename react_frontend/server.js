@@ -252,6 +252,20 @@ function createGatewaySessionController(ws) {
     startStream(initialSession);
   };
 
+  const switchToAgent = async (agentId) => {
+    const targetAgentId = String(agentId || "").trim();
+    if (!targetAgentId) {
+      throw new Error("agentId is required for switch_agent_to");
+    }
+
+    const switched = await gatewayPost("/v1/sessions/switch", { agent_id: targetAgentId });
+    const nextSession = String(switched?.session_id || "").trim();
+    if (!nextSession) throw new Error("Gateway switch response did not include session_id.");
+    sendToClient({ type: "status_update", label: "Switching agent...", status: "running" });
+    startStream(nextSession);
+    sendToClient({ type: "status_update", label: "Agent switch complete", status: "done" });
+  };
+
   const onMessage = async (data) => {
     let message;
     try {
@@ -304,18 +318,19 @@ function createGatewaySessionController(ws) {
       return;
     }
 
+    if (msgType === "switch_agent_to") {
+      pendingSwitchPrompt = false;
+      await switchToAgent(message?.agentId);
+      return;
+    }
+
     if (msgType === "user_input") {
       const value = String(message?.value || "").trim();
       if (!value || !activeSessionId) return;
 
       if (pendingSwitchPrompt) {
         pendingSwitchPrompt = false;
-        const switched = await gatewayPost("/v1/sessions/switch", { agent_id: value });
-        const nextSession = String(switched?.session_id || "").trim();
-        if (!nextSession) throw new Error("Gateway switch response did not include session_id.");
-        sendToClient({ type: "status_update", label: "Switching agent...", status: "running" });
-        startStream(nextSession);
-        sendToClient({ type: "status_update", label: "Agent switch complete", status: "done" });
+        await switchToAgent(value);
         return;
       }
 
@@ -444,6 +459,31 @@ async function listAgents() {
   return agents
     .map((item) => String(item?.agent_id || "").trim())
     .filter(Boolean);
+}
+
+async function getLlmConfig() {
+  const payload = await gatewayGet("/v1/llm-config");
+  return {
+    provider: String(payload?.provider || "openai").trim().toLowerCase(),
+    model: String(payload?.model || "").trim(),
+    providers: Array.isArray(payload?.providers) ? payload.providers : [],
+    models: payload?.models && typeof payload.models === "object" ? payload.models : {},
+    defaults: payload?.defaults && typeof payload.defaults === "object" ? payload.defaults : {},
+  };
+}
+
+async function updateLlmConfig(provider, model) {
+  const payload = await gatewayPut("/v1/llm-config", {
+    provider: String(provider || "").trim().toLowerCase(),
+    model: String(model || "").trim(),
+  });
+  return {
+    provider: String(payload?.provider || "openai").trim().toLowerCase(),
+    model: String(payload?.model || "").trim(),
+    providers: Array.isArray(payload?.providers) ? payload.providers : [],
+    models: payload?.models && typeof payload.models === "object" ? payload.models : {},
+    defaults: payload?.defaults && typeof payload.defaults === "object" ? payload.defaults : {},
+  };
 }
 
 async function getCronCapabilities() {
@@ -630,6 +670,34 @@ const server = createServer(async (req, res) => {
     try {
       const agents = await listAgents();
       sendJson(res, 200, { agents });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/llm-config" && method === "GET") {
+    try {
+      const config = await getLlmConfig();
+      sendJson(res, 200, config);
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/llm-config" && method === "PUT") {
+    try {
+      const body = await readJsonBody(req);
+      const provider = String(body?.provider || "").trim().toLowerCase();
+      const model = String(body?.model || "").trim();
+      if (!provider) {
+        sendJson(res, 400, { error: "provider is required" });
+        return;
+      }
+
+      const config = await updateLlmConfig(provider, model);
+      sendJson(res, 200, config);
     } catch (error) {
       sendJson(res, 500, { error: String(error) });
     }

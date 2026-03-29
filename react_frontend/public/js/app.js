@@ -40,6 +40,16 @@ function App() {
   const [cronFeedback, setCronFeedback] = useState("");
   const [cronSupportsSixField, setCronSupportsSixField] = useState(false);
   const [availableAgents, setAvailableAgents] = useState([]);
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [agentFeedback, setAgentFeedback] = useState("");
+  const [llmProvider, setLlmProvider] = useState("openai");
+  const [llmModel, setLlmModel] = useState("");
+  const [llmProviders, setLlmProviders] = useState([]);
+  const [llmModelsByProvider, setLlmModelsByProvider] = useState({});
+  const [llmDefaults, setLlmDefaults] = useState({});
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [llmSaving, setLlmSaving] = useState(false);
+  const [llmFeedback, setLlmFeedback] = useState("");
   const [cronDraft, setCronDraft] = useState({
     sourceId: "",
     schedule: "",
@@ -135,7 +145,15 @@ function App() {
     loadCronCapabilities();
     loadCronJobs();
     loadUserProfile();
+    loadLlmConfig();
   }, [settingsOpen]);
+
+  useEffect(() => {
+    const activeAgentId = String(bootInfo?.agentId || "").trim();
+    if (!activeAgentId) return;
+    setSelectedAgentId(activeAgentId);
+    setAgentFeedback("");
+  }, [bootInfo?.agentId]);
 
   async function loadAgents() {
     try {
@@ -144,6 +162,12 @@ function App() {
       if (!response.ok) throw new Error(payload.error || "Failed to load agents");
       const agents = Array.isArray(payload.agents) ? payload.agents.map((a) => String(a || "")).filter(Boolean) : [];
       setAvailableAgents(agents);
+      setSelectedAgentId((prev) => {
+        if (prev && agents.includes(prev)) return prev;
+        const activeAgentId = String(bootInfo?.agentId || "").trim();
+        if (activeAgentId && agents.includes(activeAgentId)) return activeAgentId;
+        return agents[0] || "";
+      });
 
       if (agents.length > 0) {
         setCronDraft((prev) => {
@@ -153,6 +177,80 @@ function App() {
       }
     } catch {
       setAvailableAgents([]);
+    }
+  }
+
+  async function loadLlmConfig() {
+    setLlmLoading(true);
+    setLlmFeedback("");
+    try {
+      const response = await fetch("/api/llm-config");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load LLM configuration");
+
+      const provider = String(payload?.provider || "openai").trim().toLowerCase();
+      const providers = Array.isArray(payload?.providers)
+        ? payload.providers.map((entry) => String(entry || "").trim().toLowerCase()).filter(Boolean)
+        : [];
+      const modelsByProvider = payload?.models && typeof payload.models === "object" ? payload.models : {};
+      const defaults = payload?.defaults && typeof payload.defaults === "object" ? payload.defaults : {};
+      const providerModels = Array.isArray(modelsByProvider?.[provider]) ? modelsByProvider[provider] : [];
+      const normalizedModel = String(payload?.model || "").trim() || String(defaults?.[provider] || "").trim() || String(providerModels[0] || "").trim();
+
+      setLlmProvider(provider);
+      setLlmProviders(providers);
+      setLlmModelsByProvider(modelsByProvider);
+      setLlmDefaults(defaults);
+      setLlmModel(normalizedModel);
+    } catch (error) {
+      setLlmFeedback(`Error: ${String(error)}`);
+    } finally {
+      setLlmLoading(false);
+    }
+  }
+
+  function changeLlmProvider(provider) {
+    const normalized = String(provider || "").trim().toLowerCase();
+    const providerModels = Array.isArray(llmModelsByProvider?.[normalized]) ? llmModelsByProvider[normalized] : [];
+    const fallbackModel =
+      String(llmDefaults?.[normalized] || "").trim() ||
+      String(providerModels[0] || "").trim() ||
+      "";
+
+    setLlmProvider(normalized);
+    setLlmModel(fallbackModel);
+    setLlmFeedback("");
+  }
+
+  async function saveLlmConfig() {
+    const provider = String(llmProvider || "").trim().toLowerCase();
+    const model = String(llmModel || "").trim();
+    if (!provider || !model) {
+      setLlmFeedback("Error: provider and model are required.");
+      return;
+    }
+
+    setLlmSaving(true);
+    setLlmFeedback("");
+    try {
+      const response = await fetch("/api/llm-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, model }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to update LLM configuration");
+
+      setLlmProvider(String(payload?.provider || provider).trim().toLowerCase());
+      setLlmModel(String(payload?.model || model).trim());
+      setLlmProviders(Array.isArray(payload?.providers) ? payload.providers : llmProviders);
+      setLlmModelsByProvider(payload?.models && typeof payload.models === "object" ? payload.models : llmModelsByProvider);
+      setLlmDefaults(payload?.defaults && typeof payload.defaults === "object" ? payload.defaults : llmDefaults);
+      setLlmFeedback("LLM updated. Existing sessions were refreshed to use this configuration.");
+    } catch (error) {
+      setLlmFeedback(`Error: ${String(error)}`);
+    } finally {
+      setLlmSaving(false);
     }
   }
 
@@ -607,18 +705,33 @@ function App() {
   }
 
   function onSwitchAgent() {
+    switchAgentToSelected();
+  }
+
+  function switchAgentToSelected() {
     if (isPromptActive) {
       addSystem("Complete the current prompt first.");
       return;
     }
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    if (socketState !== "connected") {
       addError("Bridge is not connected.");
       return;
     }
-    wsRef.current.send(JSON.stringify({ type: "switch_agent" }));
+    const targetAgentId = String(selectedAgentId || "").trim();
+    if (!targetAgentId) {
+      setAgentFeedback("Select an agent before switching.");
+      return;
+    }
+    if (targetAgentId === String(bootInfo?.agentId || "").trim()) {
+      setAgentFeedback("Already using this agent.");
+      return;
+    }
+
+    send({ type: "switch_agent_to", agentId: targetAgentId });
     commitStream();
-    addSystem("Switching agent...");
+    addSystem(`Switching to ${targetAgentId}...`);
     setStatusLabel("Switching...");
+    setAgentFeedback(`Switching to ${targetAgentId}...`);
     setBootInfo(null);
     setBootstrapInput(null);
     setFormUi(null);
@@ -636,6 +749,8 @@ function App() {
         break;
       case "boot_complete":
         setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
+        setSelectedAgentId(String(msg.agentId || ""));
+        setAgentFeedback("");
         setBootstrapInput(null);
         break;
       case "text_stream":
@@ -990,10 +1105,10 @@ function App() {
           </button>
           <button
             className="switchAgentBtn"
-            onClick={onSwitchAgent}
+            onClick={() => setSettingsOpen(true)}
             disabled={socketState !== "connected" || isPromptActive}
-            title="Switch to a different agent"
-            aria-label="Switch to a different agent"
+            title="Open settings to switch agent"
+            aria-label="Open settings to switch agent"
           >
             <i className="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
           </button>
@@ -1031,6 +1146,10 @@ function App() {
         socketState={socketState}
         isPromptActive={isPromptActive}
         onSwitchAgent={onSwitchAgent}
+        selectedAgentId={selectedAgentId}
+        setSelectedAgentId={setSelectedAgentId}
+        agentFeedback={agentFeedback}
+        switchAgentToSelected={switchAgentToSelected}
         profile={profile}
         profileLoading={profileLoading}
         profileSaving={profileSaving}
@@ -1071,6 +1190,17 @@ function App() {
         loadCronJobs={loadCronJobs}
         editCronJob={editCronJob}
         clearCronDraft={clearCronDraft}
+        llmProvider={llmProvider}
+        llmModel={llmModel}
+        llmProviders={llmProviders}
+        llmModelsByProvider={llmModelsByProvider}
+        llmLoading={llmLoading}
+        llmSaving={llmSaving}
+        llmFeedback={llmFeedback}
+        changeLlmProvider={changeLlmProvider}
+        setLlmModel={setLlmModel}
+        saveLlmConfig={saveLlmConfig}
+        loadLlmConfig={loadLlmConfig}
       />
 
       <BootstrapModal

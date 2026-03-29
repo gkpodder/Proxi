@@ -232,6 +232,11 @@ class AgentLane:
         self.budget.reset()
         self._loop = None
 
+    async def reset_loop(self) -> None:
+        """Recreate the runtime loop while keeping session history in memory."""
+        await self.abort()
+        self._loop = None
+
     async def _drain(self) -> None:
         """Core loop — processes events one at a time, serialising within the session."""
         while True:

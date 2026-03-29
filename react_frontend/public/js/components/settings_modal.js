@@ -28,6 +28,10 @@
       socketState,
       isPromptActive,
       onSwitchAgent,
+      selectedAgentId,
+      setSelectedAgentId,
+      agentFeedback,
+      switchAgentToSelected,
       profile,
       profileLoading,
       profileSaving,
@@ -68,6 +72,17 @@
       loadCronJobs,
       editCronJob,
       clearCronDraft,
+      llmProvider,
+      llmModel,
+      llmProviders,
+      llmModelsByProvider,
+      llmLoading,
+      llmSaving,
+      llmFeedback,
+      changeLlmProvider,
+      setLlmModel,
+      saveLlmConfig,
+      loadLlmConfig,
     } = props;
 
     const [openSections, setOpenSections] = useState({
@@ -76,6 +91,7 @@
       keys: false,
       mcps: false,
       cron: false,
+      llm: false,
     });
     const [scheduleMode, setScheduleMode] = useState("quick");
     const [everyValue, setEveryValue] = useState("30");
@@ -93,6 +109,7 @@
         { key: "keys", label: "API Keys" },
         { key: "mcps", label: "MCPs" },
         { key: "cron", label: "Cron Jobs" },
+        { key: "llm", label: "LLM Provider" },
       ],
       []
     );
@@ -178,14 +195,36 @@
                     <div className="settingsLabel">Current agent</div>
                     <div className="settingsValue">{bootInfo?.agentId || "Not selected"}</div>
                   </div>
+                  <select
+                    className="profileSelect"
+                    value={selectedAgentId}
+                    disabled={socketState !== "connected" || isPromptActive || availableAgents.length === 0}
+                    onChange={(e) => setSelectedAgentId(e.target.value)}
+                  >
+                    {availableAgents.length === 0 ? (
+                      <option value="">No agents found</option>
+                    ) : (
+                      availableAgents.map((agentId) => (
+                        <option key={agentId} value={agentId}>
+                          {agentId}
+                        </option>
+                      ))
+                    )}
+                  </select>
                   <button
                     className="primaryBtn"
-                    onClick={onSwitchAgent}
-                    disabled={socketState !== "connected" || isPromptActive}
+                    onClick={switchAgentToSelected || onSwitchAgent}
+                    disabled={
+                      socketState !== "connected" ||
+                      isPromptActive ||
+                      !selectedAgentId ||
+                      selectedAgentId === bootInfo?.agentId
+                    }
                   >
-                    Switch Agent
+                    {selectedAgentId !== bootInfo?.agentId ? "Switch Agent" : "Agent Selected"}
                   </button>
                 </div>
+                {agentFeedback && <div className="formHint">{agentFeedback}</div>}
               </Section>
 
               <Section
@@ -685,6 +724,65 @@
                     Clear Form
                   </button>
                   <button onClick={() => loadCronJobs()} disabled={cronLoading || cronSaving}>
+                    Refresh
+                  </button>
+                </div>
+              </Section>
+
+              <Section
+                sectionKey="llm"
+                title="LLM Provider"
+                openSections={openSections}
+                toggleSection={toggleSection}
+                sectionRefs={sectionRefs}
+              >
+                <div className="settingsHint">Choose the provider and model used for all new turns.</div>
+                <div className="profileGrid">
+                  <label className="profileField">
+                    <span>Provider</span>
+                    <select
+                      className="profileSelect"
+                      value={llmProvider}
+                      disabled={llmLoading || llmSaving}
+                      onChange={(e) => changeLlmProvider(e.target.value)}
+                    >
+                      {(llmProviders || []).map((provider) => (
+                        <option key={provider} value={provider}>
+                          {provider}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="profileField">
+                    <span>Model</span>
+                    <select
+                      className="profileSelect"
+                      value={llmModel}
+                      disabled={llmLoading || llmSaving}
+                      onChange={(e) => setLlmModel(e.target.value)}
+                    >
+                      {((llmModelsByProvider && llmModelsByProvider[llmProvider]) || []).map((modelName) => (
+                        <option key={modelName} value={modelName}>
+                          {modelName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {llmFeedback && <div className="formHint">{llmFeedback}</div>}
+                <div className="formActions">
+                  <button
+                    className="primaryBtn"
+                    onClick={saveLlmConfig}
+                    disabled={
+                      llmLoading ||
+                      llmSaving ||
+                      ((llmProvider === bootInfo?.llm_provider) && (llmModel === bootInfo?.llm_model))
+                    }
+                  >
+                    {((llmProvider !== bootInfo?.llm_provider) || (llmModel !== bootInfo?.llm_model)) ? "Switch LLM Provider" : "LLM Provider Selected"}
+                  </button>
+                  <button onClick={() => loadLlmConfig()} disabled={llmLoading || llmSaving}>
                     Refresh
                   </button>
                 </div>
