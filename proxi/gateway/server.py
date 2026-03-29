@@ -66,7 +66,8 @@ scheduler = AsyncIOScheduler()
 
 # MCP adapters loaded once at startup; their tools are injected into each lane.
 _mcp_adapters: list[Any] = []
-_mcp_tools: list[Any] = []
+_mcp_tools: list[Any] = []           # live (always-loaded) MCP tools
+_mcp_deferred_tools: list[Any] = []  # deferred MCP tools (loaded via search_tools)
 _last_mcp_signature: str | None = None
 _mcp_refresh_lock = asyncio.Lock()
 
@@ -91,7 +92,7 @@ def _reload_gateway_config() -> None:
 
 async def _refresh_mcp_tools() -> None:
     """Reload MCP tools when the enabled-MCP set has changed."""
-    global _mcp_adapters, _mcp_tools, _last_mcp_signature
+    global _mcp_adapters, _mcp_tools, _mcp_deferred_tools, _last_mcp_signature
 
     no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
     if no_mcp:
@@ -122,6 +123,7 @@ async def _refresh_mcp_tools() -> None:
                 logger.warning("mcp_close_error", error=str(exc))
         _mcp_adapters.clear()
         _mcp_tools.clear()
+        _mcp_deferred_tools.clear()
 
         try:
             from proxi.tools.registry import ToolRegistry as _TR
@@ -131,8 +133,13 @@ async def _refresh_mcp_tools() -> None:
                 auto_load_mcp_servers(tmp_registry), timeout=30.0
             )
             _mcp_tools[:] = list(tmp_registry._tools.values())
-            logger.info("mcp_refreshed", adapters=len(
-                _mcp_adapters), tools=len(_mcp_tools))
+            _mcp_deferred_tools[:] = list(tmp_registry._deferred_tools.values())
+            logger.info(
+                "mcp_refreshed",
+                adapters=len(_mcp_adapters),
+                tools=len(_mcp_tools),
+                deferred=len(_mcp_deferred_tools),
+            )
         except Exception as exc:
             logger.warning("mcp_refresh_error", error=str(exc))
 
@@ -140,7 +147,7 @@ async def _refresh_mcp_tools() -> None:
         # global tool objects and closes old MCP stdio clients — push the new tools
         # into every active loop so toggles take effect without restarting the gateway.
         if lane_manager is not None:
-            lane_manager.sync_mcp_tools_to_loops(_mcp_tools)
+            lane_manager.sync_mcp_tools_to_loops(_mcp_tools, _mcp_deferred_tools)
 
 
 def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
@@ -161,6 +168,11 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 
     for mcp_tool in _mcp_tools:
         tool_registry.register(mcp_tool)
+    for mcp_tool in _mcp_deferred_tools:
+        tool_registry.register_deferred(mcp_tool)
+    if tool_registry.has_deferred_tools():
+        from proxi.tools.search_tools_tool import SearchToolsTool
+        tool_registry.register(SearchToolsTool(tool_registry))
 
     no_sub_agents = os.environ.get("PROXI_NO_SUB_AGENTS", "").lower() in (
         "1", "true", "yes",

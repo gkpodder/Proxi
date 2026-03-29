@@ -440,6 +440,7 @@ class AgentLoop:
     ) -> tuple[ModelDecision, dict[str, int]]:
         """Make a decision based on current state."""
         tools = self.tool_registry.to_specs()
+        deferred_count = self.tool_registry.deferred_tool_count()
         agents = None
         if self.sub_agent_manager:
             agents = self.sub_agent_manager.registry.to_specs()
@@ -450,7 +451,7 @@ class AgentLoop:
 
         stream_cb = stream_callback if emit_stream else None
         decision, usage = await self.planner.decide(
-            state, tools, agents, stream_callback=stream_cb
+            state, tools, agents, stream_callback=stream_cb, deferred_tool_count=deferred_count
         )
         return decision, usage
 
