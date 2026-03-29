@@ -308,6 +308,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
         except Exception as e:
             logger.warning("mcp_setup_error", error=str(e))
 
+    # Register search_tools if any tools were deferred
+    if tool_registry.has_deferred_tools():
+        from proxi.tools.search_tools_tool import SearchToolsTool
+        tool_registry.register(SearchToolsTool(tool_registry))
+        logger.info("search_tools_registered", deferred_count=tool_registry.deferred_tool_count())
+
     async def refresh_mcp_tools() -> None:
         """Reload MCP tools from currently enabled MCPs without restarting bridge."""
         nonlocal mcp_adapters
@@ -331,10 +337,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
             return
         last_mcp_signature = signature
 
-        # Remove previously registered MCP tools, then re-load and re-register.
+        # Remove previously registered MCP tools (and search_tools), then re-load.
         removed = tool_registry.unregister_by_prefix("mcp_")
         if removed:
             logger.info("mcp_tools_unregistered", count=removed)
+        # Remove search_tools so it can be re-registered with the updated registry
+        tool_registry.unregister_by_prefix("search_tools")
 
         for adapter in mcp_adapters:
             try:
@@ -365,6 +373,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 logger.warning("mcp_setup_timeout", server=mcp_server)
             except Exception as e:
                 logger.warning("mcp_setup_error", error=str(e))
+
+        # Re-register search_tools if deferred tools exist after refresh
+        if tool_registry.has_deferred_tools():
+            from proxi.tools.search_tools_tool import SearchToolsTool
+            tool_registry.register(SearchToolsTool(tool_registry))
+            logger.info("search_tools_re_registered", deferred_count=tool_registry.deferred_tool_count())
 
     async def request_user_input(
         method: str,

@@ -26,6 +26,7 @@ class Planner:
         tools: list[ToolSpec],
         agents: list[SubAgentSpec] | None = None,
         stream_callback: Callable[[str], Awaitable[None]] | None = None,
+        deferred_tool_count: int = 0,
     ) -> tuple[ModelDecision, dict[str, int]]:
         """
         Make a decision based on current state.
@@ -35,6 +36,9 @@ class Planner:
             tools: Available tools
             agents: Available sub-agents
             stream_callback: If set and client supports streaming, called with each content token.
+            deferred_tool_count: Number of tools in the deferred tier; used to
+                inject a hint into the system prefix so the LLM knows to call
+                ``search_tools`` when it needs additional capabilities.
 
         Returns:
             Tuple of (Model decision, token usage)
@@ -46,7 +50,7 @@ class Planner:
         )
 
         # Build prompt with static→incremental→volatile structure.
-        payload = self.prompt_builder.build(state, tools=tools)
+        payload = self.prompt_builder.build(state, tools=tools, deferred_tool_count=deferred_tool_count)
         session_id = state.workspace.session_id if state.workspace is not None else None
 
         generate_stream = getattr(self.llm_client, "generate_stream", None)

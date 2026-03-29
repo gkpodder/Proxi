@@ -57,16 +57,19 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     """Set up the tool registry with default tools."""
     registry = ToolRegistry()
 
-    # Filesystem tools
-    registry.register(ReadFileTool())
-    registry.register(WriteFileTool())
-    registry.register(ListDirectoryTool())
-
-    # Shell tool (not registered right now as it is not safe)
-    # registry.register(ExecuteCommandTool(working_directory=working_directory))
-
-    # Datetime tool
-    registry.register(DateTimeTool())
+    builtin_tools = [
+        ReadFileTool(),
+        WriteFileTool(),
+        ListDirectoryTool(),
+        # Shell tool is not registered by default (security)
+        # ExecuteCommandTool(working_directory=working_directory),
+        DateTimeTool(),
+    ]
+    for tool in builtin_tools:
+        if getattr(tool, "defer_loading", False):
+            registry.register_deferred(tool)
+        else:
+            registry.register(tool)
 
     return registry
 
@@ -101,14 +104,23 @@ async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]
             logger.info("mcp_server_skipped_not_enabled", server=server_name)
             continue
 
+        defer_server = bool(mcp_servers[server_name].get("defer_loading", False))
+        always_load: set[str] = set(mcp_servers[server_name].get("always_load", []))
+
         try:
             logger.info("auto_loading_mcp_server", server=server_name)
             adapter = await setup_mcp_from_config(server_name)
             if adapter:
                 mcp_tools = await adapter.get_tools()
                 for tool in mcp_tools:
-                    tool_registry.register(tool)
-                    logger.info("mcp_tool_registered", server=server_name, tool=tool.name)
+                    # MCPToolAdapter.mcp_tool_name is the original unprefixed name
+                    unprefixed = getattr(tool, "mcp_tool_name", tool.name)
+                    if defer_server and unprefixed not in always_load:
+                        tool_registry.register_deferred(tool)
+                        logger.info("mcp_tool_deferred", server=server_name, tool=tool.name)
+                    else:
+                        tool_registry.register(tool)
+                        logger.info("mcp_tool_registered", server=server_name, tool=tool.name)
                 loaded_adapters.append(adapter)
         except Exception as e:
             logger.warning("auto_load_mcp_server_error", server=server_name, error=str(e))
@@ -395,6 +407,12 @@ async def main():
                     for tool in mcp_tools:
                         tool_registry.register(tool)
                         logger.info("mcp_tool_registered", tool=tool.name)
+
+        # Register search_tools if any tools were deferred
+        if tool_registry.has_deferred_tools():
+            from proxi.tools.search_tools_tool import SearchToolsTool
+            tool_registry.register(SearchToolsTool(tool_registry))
+            logger.info("search_tools_registered", deferred_count=tool_registry.deferred_tool_count())
 
         # Set up sub-agents
         sub_agent_manager = None

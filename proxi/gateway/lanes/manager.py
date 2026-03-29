@@ -85,10 +85,14 @@ class LaneManager:
             if lane is not None:
                 await lane.stop()
 
-    def sync_mcp_tools_to_loops(self, mcp_tools: Sequence[Any]) -> None:
+    def sync_mcp_tools_to_loops(
+        self,
+        mcp_tools: Sequence[Any],
+        deferred_tools: Sequence[Any] = (),
+    ) -> None:
         """After gateway MCP refresh, update tool registries on running loops."""
         for lane in self._lanes.values():
-            lane.sync_mcp_tools(list(mcp_tools))
+            lane.sync_mcp_tools(list(mcp_tools), list(deferred_tools))
 
     def _get_or_create(self, session_id: str) -> AgentLane:
         if session_id in self._lanes:

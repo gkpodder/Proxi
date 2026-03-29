@@ -39,18 +39,32 @@ class PromptBuilder:
         self._cached_key: str | None = None
         self._cached_system_prefix: str | None = None
 
-    def build(self, state: AgentState, tools: Sequence[ToolSpec] | None = None) -> PromptPayload:
+    def build(
+        self,
+        state: AgentState,
+        tools: Sequence[ToolSpec] | None = None,
+        deferred_tool_count: int = 0,
+    ) -> PromptPayload:
         """Build a PromptPayload from agent state and tools.
 
         Messages are passed through unmodified to preserve prompt-cache
         stability.  Workspace context (plan/todos) is NOT injected here;
         the agent pulls it on demand via tool calls.
+
+        Args:
+            state: Current agent state.
+            tools: Live tool specs to include in the system prefix.
+            deferred_tool_count: Number of tools currently in the deferred
+                tier.  When non-zero, a hint is appended to the system prefix
+                instructing the LLM to call ``search_tools`` to load them.
         """
         workspace = state.workspace
 
         system_prefix = None
         if workspace is not None:
-            system_prefix = self._get_cached_system_prefix(workspace, tools or [])
+            system_prefix = self._get_cached_system_prefix(
+                workspace, tools or [], deferred_tool_count
+            )
 
         if not state.history:
             return PromptPayload(messages=[], system=system_prefix)
@@ -59,17 +73,27 @@ class PromptBuilder:
 
     # --- Internal helpers -------------------------------------------------
 
-    def _get_cached_system_prefix(self, workspace, tools: Sequence[ToolSpec]) -> str:
-        """Build system prefix with a cache keyed by workspace and tool signature."""
-        key = self._system_prefix_cache_key(workspace, tools)
+    def _get_cached_system_prefix(
+        self,
+        workspace,
+        tools: Sequence[ToolSpec],
+        deferred_tool_count: int = 0,
+    ) -> str:
+        """Build system prefix with a cache keyed by workspace, tools, and deferred count."""
+        key = self._system_prefix_cache_key(workspace, tools, deferred_tool_count)
         if self._cached_key == key and self._cached_system_prefix is not None:
             return self._cached_system_prefix
-        rendered = self._build_system_prefix(workspace, tools)
+        rendered = self._build_system_prefix(workspace, tools, deferred_tool_count)
         self._cached_key = key
         self._cached_system_prefix = rendered
         return rendered
 
-    def _system_prefix_cache_key(self, workspace, tools: Sequence[ToolSpec]) -> str:
+    def _system_prefix_cache_key(
+        self,
+        workspace,
+        tools: Sequence[ToolSpec],
+        deferred_tool_count: int = 0,
+    ) -> str:
         """Deterministic cache key that invalidates on file/tool changes."""
         global_path = Path(workspace.global_system_prompt_path)
         soul_path = Path(workspace.soul_path)
@@ -94,11 +118,17 @@ class PromptBuilder:
             "db_path": str(db_path),
             "db_mtime_ns": db_mtime,
             "tools": tools_shape,
+            "deferred_tool_count": deferred_tool_count,
         }
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def _build_system_prefix(self, workspace, tools: Sequence[ToolSpec]) -> str:
+    def _build_system_prefix(
+        self,
+        workspace,
+        tools: Sequence[ToolSpec],
+        deferred_tool_count: int = 0,
+    ) -> str:
         """Assemble the static system prefix: global + soul + tool definitions."""
         global_text = ""
         soul_text = ""
@@ -166,6 +196,23 @@ When building the questions array:
             parts.append(form_guidance.strip())
         if user_profile_text:
             parts.append(user_profile_text)
+        if deferred_tool_count > 0:
+            parts.append(
+                f"## search_tools — {deferred_tool_count} additional tool(s) available on demand\n\n"
+                "Not all tools are loaded at startup. Before attempting any action, check whether the "
+                "required tool is in your current tool list. If it is not, you MUST call `search_tools` "
+                "first — NEVER hallucinate that an action was taken or use a wrong tool as a substitute.\n\n"
+                "Rules:\n"
+                "- You MUST call `search_tools(query=\"...\")` before using any tool that is not already in your tool list.\n"
+                "- Do NOT use a read/list tool to perform a write/send action (e.g. do NOT use `mcp_read_emails` to send email).\n"
+                "- Do NOT tell the user an action was completed if you did not successfully call the correct tool.\n"
+                "- After `search_tools` returns, the matched tools are immediately active — call them in the next step.\n\n"
+                "Examples of when to call search_tools first:\n"
+                "- User wants to send an email → search_tools('send email') → then call mcp_send_email\n"
+                "- User wants to create a calendar event → search_tools('create calendar event') → then call mcp_calendar_create_event\n"
+                "- User wants to write an Obsidian note → search_tools('obsidian note') → then call mcp_obsidian_create_note\n"
+                "- User wants to create a Notion page → search_tools('notion page') → then call mcp_notion_create_page"
+            )
 
         return "\n\n".join(parts).strip()
 

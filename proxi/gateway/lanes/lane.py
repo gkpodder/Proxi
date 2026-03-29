@@ -155,14 +155,24 @@ class AgentLane:
     def is_running(self) -> bool:
         return self._task is not None and not self._task.done()
 
-    def sync_mcp_tools(self, mcp_tools: Sequence[Any]) -> None:
+    def sync_mcp_tools(
+        self,
+        mcp_tools: Sequence[Any],
+        deferred_tools: Sequence[Any] = (),
+    ) -> None:
         """Replace MCP-backed tools on an existing loop (stdio clients are per-refresh)."""
         if self._loop is None:
             return
         reg = self._loop.tool_registry
         reg.unregister_by_prefix("mcp_")
+        reg.unregister_by_prefix("search_tools")
         for tool in mcp_tools:
             reg.register(tool)
+        for tool in deferred_tools:
+            reg.register_deferred(tool)
+        if reg.has_deferred_tools():
+            from proxi.tools.search_tools_tool import SearchToolsTool
+            reg.register(SearchToolsTool(reg))
 
     def _sync_state_if_history_cleared(self) -> None:
         """Align memory with disk when history.jsonl is empty (e.g. /clear raced ahead of _state reset)."""
