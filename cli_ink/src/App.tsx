@@ -9,7 +9,7 @@ import {
   parseBridgeMessage,
   type BridgeMessage,
   type UserInputRequired,
-  isCollaborativeFormRequired,
+  isAskUserQuestionRequired,
 } from "./protocol.js";
 import type { ScrollbackItem } from "./types/scrollback.js";
 import { ScrollbackArea } from "./components/ScrollbackArea.js";
@@ -977,7 +977,7 @@ export default function App() {
           isWaitingForInput={!!hitlSpec}
         />
         {hitlSpec ? (
-          isCollaborativeFormRequired(hitlSpec) ? (
+          isAskUserQuestionRequired(hitlSpec) ? (
             <AnswerForm
               payload={hitlSpec.payload}
               onSubmit={onAnswerFormSubmit}

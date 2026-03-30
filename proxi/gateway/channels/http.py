@@ -8,7 +8,7 @@ from typing import Any
 from proxi.gateway.events import GatewayEvent, ReplyChannel
 
 
-def _answers_from_collaborative_form_chat(form_req: Any, text: str) -> dict[str, Any]:
+def _answers_from_ask_user_question_chat(form_req: Any, text: str) -> dict[str, Any]:
     """Map a free-form chat line to form answers when the user replies in the main input."""
     raw = text.strip()
     if not raw:
@@ -123,7 +123,7 @@ class HttpFormBridge:
                 "tool_call_id": tool_call_id,
                 "goal": form_request.goal,
                 "title": form_request.title,
-                "questions": [q.model_dump() for q in form_request.questions],
+                "questions": [q.model_dump(exclude_none=True) for q in form_request.questions],
                 "allow_skip": form_request.allow_skip,
             },
         }
@@ -151,7 +151,7 @@ class HttpFormBridge:
         if fut is None or fut.done():
             return False
         form_req = self._pending_forms.get(tool_call_id)
-        answers = _answers_from_collaborative_form_chat(form_req, text)
+        answers = _answers_from_ask_user_question_chat(form_req, text)
         fut.set_result(
             {
                 "tool_call_id": tool_call_id,

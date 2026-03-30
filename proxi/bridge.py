@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from proxi.interaction.tool import get_show_collaborative_form_spec
+from proxi.interaction.tool import get_ask_user_question_spec
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.cli.main import (
     auto_load_mcp_servers,
@@ -186,7 +186,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
 
     logger.info("setting_up_tools")
     tool_registry = setup_tools(working_directory=working_dir)
-    tool_registry.register_raw_spec(get_show_collaborative_form_spec())
+    tool_registry.register_raw_spec(get_ask_user_question_spec())
     if no_sub_agents:
         sub_agent_manager = None
     else:
@@ -245,7 +245,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
                     "tool_call_id": tool_call_id,
                     "goal": form_request.goal,
                     "title": form_request.title,
-                    "questions": [q.model_dump() for q in form_request.questions],
+                    "questions": [q.model_dump(exclude_none=True) for q in form_request.questions],
                     "allow_skip": form_request.allow_skip,
                 },
             })

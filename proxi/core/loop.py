@@ -465,9 +465,9 @@ class AgentLoop:
             tool_call_id = payload.get("id", "")
             arguments = payload.get("arguments", {})
 
-            # Intercept show_collaborative_form — never execute via registry
-            if tool_name == "show_collaborative_form":
-                return await self._handle_show_collaborative_form(
+            # Intercept ask_user_question — never execute via registry
+            if tool_name == "ask_user_question":
+                return await self._handle_ask_user_question(
                     state, tool_call_id, arguments, turn
                 )
 
@@ -623,14 +623,14 @@ class AgentLoop:
                 "error": f"Unknown decision type: {decision.type}",
             }
 
-    async def _handle_show_collaborative_form(
+    async def _handle_ask_user_question(
         self,
         state: AgentState,
         tool_call_id: str,
         arguments: dict[str, Any] | str,
         turn: TurnState,
     ) -> dict[str, Any]:
-        """Intercept show_collaborative_form: validate, emit to TUI, await response."""
+        """Intercept ask_user_question: validate, emit to TUI, await response."""
         from pydantic import ValidationError
 
         from proxi.interaction.models import FormResponse
@@ -646,35 +646,16 @@ class AgentLoop:
         except (ValidationError, json.JSONDecodeError) as e:
             return {
                 "type": "tool_call",
-                "tool": "show_collaborative_form",
+                "tool": "ask_user_question",
                 "success": False,
                 "output": "",
                 "error": f"Schema validation error — fix and retry:\n{e}",
                 "metadata": {},
             }
-        # TODO: implement proper policy for when to allow forms vs conversational follow-ups. For now, block all non-calendar forms with a helpful message.
-        if not self._is_calendar_form_request(form_request):
-            self.logger.info(
-                "form_request_blocked_non_calendar",
-                goal=form_request.goal,
-            )
-            return {
-                "type": "tool_call",
-                "tool": "show_collaborative_form",
-                "success": True,
-                "output": (
-                    "Policy: show_collaborative_form is restricted to calendar clarification workflows. "
-                    "For non-calendar tasks, continue without form input and ask at most one concise follow-up "
-                    "in a normal response only if absolutely necessary."
-                ),
-                "error": None,
-                "metadata": {},
-            }
-
         if self.form_bridge is None:
             return {
                 "type": "tool_call",
-                "tool": "show_collaborative_form",
+                "tool": "ask_user_question",
                 "success": False,
                 "output": "",
                 "error": "Form input not available in headless mode. Use TUI/bridge to enable collaborative forms.",
@@ -716,7 +697,7 @@ class AgentLoop:
 
         return {
             "type": "tool_call",
-            "tool": "show_collaborative_form",
+            "tool": "ask_user_question",
             "success": True,
             "output": content,
             "error": None,
@@ -748,32 +729,3 @@ class AgentLoop:
         else:
             return f"Unknown action result type: {result_type}"
 
-    # REMOVE THIS ITS TEMPORARY, make it better
-    @staticmethod
-    def _is_calendar_form_request(form_request: Any) -> bool:
-        """Return True when a form request is clearly calendar-related."""
-        calendar_keywords = {
-            "calendar",
-            "event",
-            "meeting",
-            "schedule",
-            "attendee",
-            "invite",
-            "availability",
-            "timezone",
-            "start time",
-            "end time",
-        }
-
-        text_parts: list[str] = [
-            str(getattr(form_request, "goal", "") or ""),
-            str(getattr(form_request, "title", "") or ""),
-        ]
-
-        for question in getattr(form_request, "questions", []) or []:
-            text_parts.append(str(getattr(question, "label", "") or ""))
-            text_parts.append(str(getattr(question, "hint", "") or ""))
-            text_parts.append(str(getattr(question, "why", "") or ""))
-
-        combined = " ".join(text_parts).lower()
-        return any(keyword in combined for keyword in calendar_keywords)

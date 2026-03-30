@@ -1,5 +1,5 @@
 const { useEffect, useMemo, useRef, useState } = React;
-const { ChatView, BootstrapModal, CollaborativeFormModal, SettingsModal } = window.ProxiComponents;
+const { ChatView, BootstrapModal, AskUserQuestionModal, SettingsModal } = window.ProxiComponents;
 const {
   OTHER_OPTION,
   renderMarkdown,
@@ -798,7 +798,7 @@ function App() {
         skipBootstrap={skipBootstrap}
       />
 
-      <CollaborativeFormModal
+      <AskUserQuestionModal
         formUi={formUi}
         currentQuestion={currentQuestion}
         visibleQuestions={visibleQuestions}
