@@ -47,7 +47,7 @@ from proxi.gateway.middleware.hmac import (
     verify_whatsapp_signature,
 )
 from proxi.gateway.router import EventRouter
-from proxi.interaction.tool import get_show_collaborative_form_spec
+from proxi.interaction.tool import get_ask_user_question_spec
 from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_user_profile
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
@@ -161,7 +161,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     llm_client = create_llm_client(provider=provider)
 
     tool_registry = setup_tools()
-    tool_registry.register_raw_spec(get_show_collaborative_form_spec())
+    tool_registry.register_raw_spec(get_ask_user_question_spec())
     tool_registry.register(ManagePlanTool(workspace_config))
     tool_registry.register(ManageTodosTool(workspace_config))
     tool_registry.register(ReadSoulTool(workspace_config))

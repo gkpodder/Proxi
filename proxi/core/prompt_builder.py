@@ -154,35 +154,6 @@ class PromptBuilder:
                 tools_block_lines.append(f"- {tool.name}: {tool.description}")
         tools_block = "\n".join(tools_block_lines)
 
-        tool_names = {t.name for t in tools} if tools else set()
-        form_guidance = ""
-        if "show_collaborative_form" in tool_names:
-            form_guidance = """
-## show_collaborative_form — When and How to Use
-
-Call `show_collaborative_form` when:
-- The task is calendar/event scheduling and missing details would cause a wrong event action
-- You need specific information from the user not present in the conversation history
-- The missing information would materially change your approach or the output you produce
-- You cannot make a reasonable assumption and proceeding without it risks a wrong result
-
-Do NOT call `show_collaborative_form` when:
-- The task is not calendar-related (e.g., Obsidian, files, search, notes, code help)
-- You can make a reasonable assumption and state it in your response
-- The information is already present in the conversation
-- You need minor clarification — use RESPOND to ask conversationally instead
-- You want to confirm something trivial
-
-When building the questions array:
-- Set `goal` to one sentence: what you are trying to determine
-- Set `hint` on each question to a plain-language explanation of why it matters (shown to user)
-- Set `why` to your internal reasoning about how the answer affects your next steps (used by Reflector, not shown to user)
-- Prefer `yesno` and `choice` over `text` wherever possible
-- Keep the question list minimal — only ask what you cannot infer
-- Do NOT include an "Other" or custom option in `options` arrays — the TUI adds it automatically
-- Do NOT use types "number" or "file" — only "choice", "multiselect", "yesno", "text" are supported
-"""
-
         user_profile_text = self._build_user_profile_context()
 
         parts = []
@@ -192,8 +163,6 @@ When building the questions array:
             parts.append("YOUR IDENTITY:\n" + soul_text.strip())
         if tools_block:
             parts.append(tools_block)
-        if form_guidance:
-            parts.append(form_guidance.strip())
         if user_profile_text:
             parts.append(user_profile_text)
         if deferred_tool_count > 0:

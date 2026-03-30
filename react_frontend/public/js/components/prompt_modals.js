@@ -60,7 +60,7 @@
     );
   };
 
-  components.CollaborativeFormModal = function CollaborativeFormModal(props) {
+  components.AskUserQuestionModal = function AskUserQuestionModal(props) {
     const {
       formUi,
       currentQuestion,

@@ -7,7 +7,7 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from "react"
 import { Box, Text, useInput, useFocusManager } from "ink";
 import TextInput from "ink-text-input";
 import { theme } from "../theme.js";
-import type { CollaborativeFormPayload, Question } from "../protocol.js";
+import type { AskUserQuestionPayload, Question } from "../protocol.js";
 
 const OTHER_OPTION = "Other (type your own)";
 
@@ -42,7 +42,7 @@ function getOptionsWithOther(
 }
 
 type Props = {
-  payload: CollaborativeFormPayload;
+  payload: AskUserQuestionPayload;
   onSubmit: (result: {
     tool_call_id: string;
     answers: Record<string, unknown>;

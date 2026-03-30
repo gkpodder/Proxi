@@ -115,7 +115,7 @@ class AgentLane:
                 pass
 
     def try_resolve_pending_form_with_text(self, text: str) -> bool:
-        """If the agent is blocked on ``show_collaborative_form``, map chat text to answers."""
+        """If the agent is blocked on ``ask_user_question``, map chat text to answers."""
         fb = self._form_bridge
         if fb is None or not hasattr(fb, "consume_chat_as_form_reply"):
             return False

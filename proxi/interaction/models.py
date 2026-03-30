@@ -46,12 +46,12 @@ class Question(BaseModel):
             "Question is hidden until the condition is met."
         ),
     )
-    why: str = Field(
+    why: str | None = Field(
+        default=None,
         description=(
-            "Internal reasoning: why the agent needs this specific piece of information "
-            "and how the answer will affect subsequent steps. "
-            "Used by the Reflector — NOT shown to the user (use `hint` for user-facing context)."
-        )
+            "Internal reasoning: how the answer affects subsequent steps. "
+            "Used by the Reflector — NOT shown to the user."
+        ),
     )
 
     @model_validator(mode="after")

@@ -66,7 +66,7 @@ export const UserInputRequiredBootstrapSchema = z.object({
 });
 export type UserInputRequiredBootstrap = z.infer<typeof UserInputRequiredBootstrapSchema>;
 
-// Collaborative form flow (show_collaborative_form): payload with questions
+// ask_user_question flow: payload with questions
 export const QuestionSchema = z.object({
   id: z.string(),
   type: z.enum(["choice", "multiselect", "yesno", "text"]),
@@ -76,22 +76,22 @@ export const QuestionSchema = z.object({
   hint: z.string().nullable().optional(),
   required: z.boolean().optional(),
   show_if: z.record(z.string(), z.unknown()).nullable().optional(),
-  why: z.string(),
+  why: z.string().optional(),
 });
 export type Question = z.infer<typeof QuestionSchema>;
 
-export const CollaborativeFormPayloadSchema = z.object({
+export const AskUserQuestionPayloadSchema = z.object({
   tool_call_id: z.string(),
   goal: z.string(),
   title: z.string().nullable().optional(),
   questions: z.array(QuestionSchema),
   allow_skip: z.boolean().optional(),
 });
-export type CollaborativeFormPayload = z.infer<typeof CollaborativeFormPayloadSchema>;
+export type AskUserQuestionPayload = z.infer<typeof AskUserQuestionPayloadSchema>;
 
 export const UserInputRequiredFormSchema = z.object({
   type: z.literal("user_input_required"),
-  payload: CollaborativeFormPayloadSchema,
+  payload: AskUserQuestionPayloadSchema,
 });
 export type UserInputRequiredForm = z.infer<typeof UserInputRequiredFormSchema>;
 
@@ -101,7 +101,7 @@ export const UserInputRequiredSchema = z.union([
 ]);
 export type UserInputRequired = z.infer<typeof UserInputRequiredSchema>;
 
-export function isCollaborativeFormRequired(
+export function isAskUserQuestionRequired(
   msg: UserInputRequired
 ): msg is UserInputRequiredForm {
   return "payload" in msg && Array.isArray((msg as UserInputRequiredForm).payload?.questions);

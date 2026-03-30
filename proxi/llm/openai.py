@@ -335,7 +335,7 @@ class OpenAIClient:
             kwargs["stream"] = True
         if self._supports_reasoning_controls():
             # Keep effort low for reasoning-capable models unless overridden.
-            kwargs["reasoning"] = {"effort": "medium"}
+            kwargs["reasoning"] = {"effort": "minimal"}
         if system:
             kwargs["instructions"] = system
         if response_tools:
