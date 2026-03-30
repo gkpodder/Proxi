@@ -83,6 +83,18 @@
       setLlmModel,
       saveLlmConfig,
       loadLlmConfig,
+      webhooks,
+      webhookLoading,
+      webhookSaving,
+      webhookFeedback,
+      webhookDraft,
+      setWebhookDraft,
+      saveWebhook,
+      removeWebhook,
+      setWebhookPaused,
+      loadWebhooks,
+      editWebhook,
+      clearWebhookDraft,
     } = props;
 
     const [openSections, setOpenSections] = useState({
@@ -91,6 +103,7 @@
       keys: false,
       mcps: false,
       cron: false,
+      webhooks: false,
       llm: false,
     });
     const [scheduleMode, setScheduleMode] = useState("quick");
@@ -109,6 +122,7 @@
         { key: "keys", label: "API Keys" },
         { key: "mcps", label: "MCPs" },
         { key: "cron", label: "Cron Jobs" },
+        { key: "webhooks", label: "Webhooks" },
         { key: "llm", label: "LLM Provider" },
       ],
       []
@@ -125,6 +139,12 @@
       if (cronDraft.targetAgent) return;
       setCronDraft((prev) => ({ ...prev, targetAgent: availableAgents[0] }));
     }, [availableAgents, cronDraft.targetAgent, setCronDraft]);
+
+    useEffect(() => {
+      if (!Array.isArray(availableAgents) || availableAgents.length === 0) return;
+      if (webhookDraft.targetAgent) return;
+      setWebhookDraft((prev) => ({ ...prev, targetAgent: availableAgents[0] }));
+    }, [availableAgents, webhookDraft.targetAgent, setWebhookDraft]);
 
     if (!isOpen) return null;
 
@@ -724,6 +744,160 @@
                     Clear Form
                   </button>
                   <button onClick={() => loadCronJobs()} disabled={cronLoading || cronSaving}>
+                    Refresh
+                  </button>
+                </div>
+              </Section>
+
+              <Section
+                sectionKey="webhooks"
+                title="Webhooks"
+                openSections={openSections}
+                toggleSection={toggleSection}
+                sectionRefs={sectionRefs}
+              >
+                <div className="settingsHint">
+                  Configure inbound webhook sources for external integrations at /channels/webhook/{"{source_id}"}.
+                </div>
+
+                {webhookLoading ? (
+                  <div className="formHint">Loading webhooks...</div>
+                ) : (
+                  <div className="mcpList">
+                    {webhooks.length === 0 && <div className="formHint">No webhook sources configured.</div>}
+                    {webhooks.map((item) => (
+                      <div key={item.source_id} className="mcpRow">
+                        <div className="mcpMeta">
+                          <div className="mcpName">{item.source_id}</div>
+                          <div className="mcpStatus">
+                            {item.target_agent} | p{item.priority} | {item.paused ? "Paused" : "Running"}
+                            {item.has_secret ? " | Signed" : " | Unsigned"}
+                          </div>
+                        </div>
+                        <div className="formActions">
+                          <button onClick={() => editWebhook(item)} disabled={webhookSaving}>Edit</button>
+                          <button onClick={() => setWebhookPaused(item.source_id, !item.paused)} disabled={webhookSaving}>
+                            {item.paused ? "Resume" : "Pause"}
+                          </button>
+                          <button className="disableBtn" onClick={() => removeWebhook(item.source_id)} disabled={webhookSaving}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="keyAddSection">
+                  <div className="keyAddTitle">Create or Update Webhook Source</div>
+                  <div className="profileGrid">
+                    <label className="profileField">
+                      <span>Source ID</span>
+                      <input
+                        type="text"
+                        value={webhookDraft.sourceId}
+                        placeholder="github_push"
+                        onChange={(e) => setWebhookDraft((prev) => ({ ...prev, sourceId: e.target.value }))}
+                      />
+                    </label>
+                    <label className="profileField">
+                      <span>Target Agent</span>
+                      <select
+                        className="profileSelect"
+                        value={webhookDraft.targetAgent}
+                        disabled={availableAgents.length === 0}
+                        onChange={(e) => setWebhookDraft((prev) => ({ ...prev, targetAgent: e.target.value }))}
+                      >
+                        {availableAgents.length === 0 ? (
+                          <option value="">No agents found</option>
+                        ) : (
+                          availableAgents.map((agentId) => (
+                            <option key={agentId} value={agentId}>
+                              {agentId}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="profileGrid">
+                    <label className="profileField">
+                      <span>Target Session (optional)</span>
+                      <input
+                        type="text"
+                        value={webhookDraft.targetSession}
+                        placeholder="main"
+                        onChange={(e) => setWebhookDraft((prev) => ({ ...prev, targetSession: e.target.value }))}
+                      />
+                    </label>
+                    <label className="profileField">
+                      <span>Priority</span>
+                      <select
+                        className="profileSelect"
+                        value={webhookDraft.priority}
+                        onChange={(e) => setWebhookDraft((prev) => ({ ...prev, priority: e.target.value }))}
+                      >
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="profileGrid">
+                    <label className="profileField profileFieldFull">
+                      <span>Prompt Template (optional)</span>
+                      <textarea
+                        className="formTextarea"
+                        value={webhookDraft.promptTemplate}
+                        placeholder="Repo {{repository.name}} received a {{action}} event"
+                        onChange={(e) => setWebhookDraft((prev) => ({ ...prev, promptTemplate: e.target.value }))}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="profileGrid">
+                    <label className="profileField">
+                      <span>HMAC Secret Env (optional)</span>
+                      <input
+                        type="text"
+                        value={webhookDraft.secretEnv}
+                        placeholder="GITHUB_WEBHOOK_SECRET"
+                        onChange={(e) => setWebhookDraft((prev) => ({ ...prev, secretEnv: e.target.value }))}
+                      />
+                    </label>
+                    <label className="profileField">
+                      <span>State</span>
+                      <select
+                        className="profileSelect"
+                        value={webhookDraft.paused ? "paused" : "running"}
+                        onChange={(e) =>
+                          setWebhookDraft((prev) => ({
+                            ...prev,
+                            paused: e.target.value === "paused",
+                          }))
+                        }
+                      >
+                        <option value="running">Running</option>
+                        <option value="paused">Paused</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                {webhookFeedback && <div className="formHint">{webhookFeedback}</div>}
+                <div className="formActions">
+                  <button className="primaryBtn" onClick={saveWebhook} disabled={webhookLoading || webhookSaving}>
+                    Save Webhook
+                  </button>
+                  <button onClick={clearWebhookDraft} disabled={webhookLoading || webhookSaving}>
+                    Clear Form
+                  </button>
+                  <button onClick={() => loadWebhooks()} disabled={webhookLoading || webhookSaving}>
                     Refresh
                   </button>
                 </div>

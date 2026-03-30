@@ -445,7 +445,12 @@ async def generic_webhook(source_id: str, request: Request) -> dict[str, bool]:
         raise HTTPException(status_code=404, detail="Unknown webhook source")
 
     await verify_webhook_hmac(request, source)
-    raw = await request.json()
+    try:
+        raw_payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Webhook payload must be valid JSON") from exc
+
+    raw = raw_payload if isinstance(raw_payload, dict) else {"_raw": raw_payload}
 
     event = build_webhook_event(source, raw)
     event.session_id = router.resolve(event)
@@ -794,6 +799,19 @@ class CronPauseRequest(BaseModel):
     paused: bool
 
 
+class WebhookUpsertRequest(BaseModel):
+    prompt_template: str = ""
+    target_agent: str
+    priority: int = 0
+    paused: bool = False
+    target_session: str = ""
+    secret_env: str = ""
+
+
+class WebhookPauseRequest(BaseModel):
+    paused: bool
+
+
 @app.post("/v1/sessions/switch")
 async def switch_agent_endpoint(body: SwitchAgentRequest) -> dict[str, Any]:
     """Switch the TUI to a different agent.
@@ -988,6 +1006,137 @@ async def delete_cron_job_endpoint(source_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "cron":
         raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+
+    del sources[sid]
+    _persist_and_reload_gateway_config(raw)
+    return {"status": "deleted", "source_id": sid}
+
+
+
+# Webhook Sources
+# ---------------------------------------------------------------------------
+@app.get("/v1/webhooks")
+async def list_webhooks_endpoint() -> dict[str, Any]:
+    """List webhook sources defined in ``gateway.yml``."""
+    webhooks: list[dict[str, Any]] = []
+    for source_id, source in config.sources.items():
+        if source.source_type != "webhook":
+            continue
+        webhooks.append(
+            {
+                "source_id": source_id,
+                "prompt_template": source.prompt_template or "",
+                "target_agent": source.target_agent,
+                "target_session": source.target_session,
+                "priority": source.priority,
+                "paused": source.paused,
+                "has_secret": bool(source.secret_env),
+                "secret_env": source.secret_env or "",
+            }
+        )
+
+    webhooks.sort(key=lambda item: item["source_id"])
+    return {"webhooks": webhooks}
+
+
+@app.put("/v1/webhooks/{source_id}")
+async def upsert_webhook_endpoint(source_id: str, body: WebhookUpsertRequest) -> dict[str, Any]:
+    """Create or update a webhook source in ``gateway.yml``."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    target_agent = (body.target_agent or "").strip()
+    target_session = (body.target_session or "").strip()
+    secret_env = (body.secret_env or "").strip()
+
+    if not target_agent:
+        raise HTTPException(status_code=400, detail="target_agent is required")
+    if not secret_env:
+        raise HTTPException(status_code=400, detail="secret_env is required for webhook security")
+    if target_agent not in config.agents:
+        raise HTTPException(status_code=400, detail=f"Unknown agent: {target_agent}")
+    if body.priority < 0 or body.priority > 5:
+        raise HTTPException(status_code=400, detail="priority must be between 0 and 5")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+
+    existing = sources.get(sid)
+    if existing is None:
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    existing["type"] = "webhook"
+    existing["target_agent"] = target_agent
+    existing["priority"] = int(body.priority)
+    existing["paused"] = bool(body.paused)
+    
+    if body.prompt_template:
+        existing["prompt_template"] = body.prompt_template
+    elif "prompt_template" in existing:
+        del existing["prompt_template"]
+
+    if target_session:
+        existing["target_session"] = target_session
+    elif "target_session" in existing:
+        del existing["target_session"]
+
+    existing["secret_env"] = secret_env
+
+    sources[sid] = existing
+
+    _persist_and_reload_gateway_config(raw)
+
+    return {
+        "source_id": sid,
+        "prompt_template": body.prompt_template or "",
+        "target_agent": target_agent,
+        "target_session": target_session,
+        "priority": int(body.priority),
+        "paused": bool(body.paused),
+        "has_secret": True,
+        "secret_env": secret_env,
+    }
+
+
+@app.post("/v1/webhooks/{source_id}/pause")
+async def pause_webhook_endpoint(source_id: str, body: WebhookPauseRequest) -> dict[str, Any]:
+    """Pause or resume a webhook source."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get(sid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Webhook source not found: {sid}")
+    if not isinstance(existing, dict) or existing.get("type") != "webhook":
+        raise HTTPException(status_code=400, detail=f"Source is not a webhook: {sid}")
+
+    existing["paused"] = bool(body.paused)
+    sources[sid] = existing
+
+    _persist_and_reload_gateway_config(raw)
+    return {"status": "updated", "source_id": sid, "paused": bool(body.paused)}
+
+
+@app.delete("/v1/webhooks/{source_id}")
+async def delete_webhook_endpoint(source_id: str) -> dict[str, Any]:
+    """Delete a webhook source from ``gateway.yml``."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get(sid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Webhook source not found: {sid}")
+    if not isinstance(existing, dict) or existing.get("type") != "webhook":
+        raise HTTPException(status_code=400, detail=f"Source is not a webhook: {sid}")
 
     del sources[sid]
     _persist_and_reload_gateway_config(raw)

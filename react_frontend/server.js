@@ -513,6 +513,25 @@ async function setCronPaused(sourceId, paused) {
   });
 }
 
+async function listWebhooks() {
+  const payload = await gatewayGet("/v1/webhooks");
+  return Array.isArray(payload?.webhooks) ? payload.webhooks : [];
+}
+
+async function upsertWebhook(sourceId, webhook) {
+  return gatewayPut(`/v1/webhooks/${encodeURIComponent(sourceId)}`, webhook);
+}
+
+async function deleteWebhook(sourceId) {
+  return gatewayDelete(`/v1/webhooks/${encodeURIComponent(sourceId)}`);
+}
+
+async function setWebhookPaused(sourceId, paused) {
+  return gatewayPost(`/v1/webhooks/${encodeURIComponent(sourceId)}/pause`, {
+    paused: Boolean(paused),
+  });
+}
+
 async function upsertUserProfile(profile) {
   const encoded = Buffer.from(JSON.stringify(profile || {}), "utf-8").toString("base64");
   const raw = await runPython([
@@ -777,6 +796,85 @@ const server = createServer(async (req, res) => {
       }
 
       await deleteCronJob(sourceId);
+      sendJson(res, 200, { ok: true, sourceId });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  // Webhook sources
+  if (url.pathname === "/api/webhooks" && method === "GET") {
+    try {
+      const webhooks = await listWebhooks();
+      sendJson(res, 200, { webhooks });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/webhooks/") && url.pathname.endsWith("/pause") && method === "POST") {
+    try {
+      const sourceId = decodeURIComponent(url.pathname.replace("/api/webhooks/", "").replace("/pause", "")).trim();
+      if (!sourceId) {
+        sendJson(res, 400, { error: "Webhook source id is required" });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const paused = Boolean(body?.paused);
+      const updated = await setWebhookPaused(sourceId, paused);
+      sendJson(res, 200, { ok: true, updated });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/webhooks/") && method === "PUT") {
+    try {
+      const sourceId = decodeURIComponent(url.pathname.replace("/api/webhooks/", "")).trim();
+      if (!sourceId) {
+        sendJson(res, 400, { error: "Webhook source id is required" });
+        return;
+      }
+
+      const body = await readJsonBody(req);
+      const { promptTemplate, targetAgent, targetSession, priority, paused, secretEnv } = body;
+      if (!targetAgent) {
+        sendJson(res, 400, { error: "targetAgent is required" });
+        return;
+      }
+      if (!String(secretEnv || "").trim()) {
+        sendJson(res, 400, { error: "secretEnv is required for webhook security" });
+        return;
+      }
+
+      const saved = await upsertWebhook(sourceId, {
+        prompt_template: promptTemplate || "",
+        target_agent: targetAgent,
+        target_session: targetSession || "",
+        priority: Number.parseInt(priority || "0", 10),
+        paused: Boolean(paused),
+        secret_env: secretEnv || "",
+      });
+      sendJson(res, 200, { ok: true, webhook: saved });
+    } catch (error) {
+      sendJson(res, 500, { error: String(error) });
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/webhooks/") && method === "DELETE") {
+    try {
+      const sourceId = decodeURIComponent(url.pathname.replace("/api/webhooks/", "")).trim();
+      if (!sourceId) {
+        sendJson(res, 400, { error: "Webhook source id is required" });
+        return;
+      }
+
+      await deleteWebhook(sourceId);
       sendJson(res, 200, { ok: true, sourceId });
     } catch (error) {
       sendJson(res, 500, { error: String(error) });

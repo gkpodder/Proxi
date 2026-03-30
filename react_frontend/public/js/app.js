@@ -40,6 +40,19 @@ function App() {
   const [cronFeedback, setCronFeedback] = useState("");
   const [cronSupportsSixField, setCronSupportsSixField] = useState(false);
   const [availableAgents, setAvailableAgents] = useState([]);
+    const [webhooks, setWebhooks] = useState([]);
+    const [webhookLoading, setWebhookLoading] = useState(false);
+    const [webhookSaving, setWebhookSaving] = useState(false);
+    const [webhookFeedback, setWebhookFeedback] = useState("");
+    const [webhookDraft, setWebhookDraft] = useState({
+      sourceId: "",
+      promptTemplate: "",
+      targetAgent: "",
+      targetSession: "",
+      priority: "0",
+      paused: false,
+      secretEnv: "",
+    });
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [agentFeedback, setAgentFeedback] = useState("");
   const [llmProvider, setLlmProvider] = useState("openai");
@@ -145,6 +158,7 @@ function App() {
     loadCronCapabilities();
     loadCronJobs();
     loadUserProfile();
+    loadWebhooks();
     loadLlmConfig();
   }, [settingsOpen]);
 
@@ -572,6 +586,150 @@ function App() {
       setCronFeedback(`Error: ${String(error)}`);
     } finally {
       setCronSaving(false);
+    }
+  }
+
+  async function loadWebhooks() {
+    setWebhookLoading(true);
+    setWebhookFeedback("");
+    try {
+      const response = await fetch("/api/webhooks");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load webhooks");
+
+      const items = Array.isArray(payload.webhooks) ? payload.webhooks : [];
+      setWebhooks(items);
+
+      if (!webhookDraft.targetAgent && availableAgents.length > 0) {
+        setWebhookDraft((prev) => ({ ...prev, targetAgent: String(availableAgents[0] || "") }));
+      }
+    } catch (error) {
+      setWebhookFeedback(`Error: ${String(error)}`);
+    } finally {
+      setWebhookLoading(false);
+    }
+  }
+
+  function editWebhook(item) {
+    setWebhookDraft({
+      sourceId: String(item?.source_id || ""),
+      promptTemplate: String(item?.prompt_template || ""),
+      targetAgent: String(item?.target_agent || ""),
+      targetSession: String(item?.target_session || ""),
+      priority: String(item?.priority ?? 0),
+      paused: Boolean(item?.paused),
+      secretEnv: String(item?.secret_env || ""),
+    });
+    setWebhookFeedback("Editing webhook. Update fields and click Save Webhook.");
+  }
+
+  function clearWebhookDraft() {
+    setWebhookDraft({
+      sourceId: "",
+      promptTemplate: "",
+      targetAgent: availableAgents[0] ? String(availableAgents[0]) : "",
+      targetSession: "",
+      priority: "0",
+      paused: false,
+      secretEnv: "",
+    });
+  }
+
+  async function saveWebhook() {
+    const sourceId = webhookDraft.sourceId.trim();
+    const promptTemplate = webhookDraft.promptTemplate.trim();
+    const targetAgent = webhookDraft.targetAgent.trim();
+    const targetSession = webhookDraft.targetSession.trim();
+    const priority = Number.parseInt(webhookDraft.priority, 10);
+    const paused = Boolean(webhookDraft.paused);
+    const secretEnv = webhookDraft.secretEnv.trim();
+
+    if (!sourceId || !targetAgent) {
+      setWebhookFeedback("Error: source id and target agent are required.");
+      return;
+    }
+    if (!secretEnv) {
+      setWebhookFeedback("Error: HMAC Secret Env is required for webhook security.");
+      return;
+    }
+
+    if (!Number.isFinite(priority)) {
+      setWebhookFeedback("Error: priority must be an integer.");
+      return;
+    }
+    if (priority < 0 || priority > 5) {
+      setWebhookFeedback("Error: priority must be between 0 and 5.");
+      return;
+    }
+
+    setWebhookSaving(true);
+    setWebhookFeedback("");
+    try {
+      const response = await fetch(`/api/webhooks/${encodeURIComponent(sourceId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          promptTemplate,
+          targetAgent,
+          targetSession,
+          priority,
+          paused,
+          secretEnv,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to save webhook");
+
+      setWebhookFeedback(`Saved webhook ${sourceId}.`);
+      await loadWebhooks();
+      clearWebhookDraft();
+    } catch (error) {
+      setWebhookFeedback(`Error: ${String(error)}`);
+    } finally {
+      setWebhookSaving(false);
+    }
+  }
+
+  async function removeWebhook(sourceId) {
+    const confirmed = window.confirm(`Delete webhook ${sourceId}?`);
+    if (!confirmed) return;
+
+    setWebhookSaving(true);
+    setWebhookFeedback("");
+    try {
+      const response = await fetch(`/api/webhooks/${encodeURIComponent(sourceId)}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to delete webhook");
+
+      setWebhookFeedback(`Deleted webhook ${sourceId}.`);
+      await loadWebhooks();
+    } catch (error) {
+      setWebhookFeedback(`Error: ${String(error)}`);
+    } finally {
+      setWebhookSaving(false);
+    }
+  }
+
+  async function setWebhookPaused(sourceId, paused) {
+    setWebhookSaving(true);
+    setWebhookFeedback("");
+    try {
+      const response = await fetch(`/api/webhooks/${encodeURIComponent(sourceId)}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: Boolean(paused) }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to update webhook state");
+
+      setWebhookFeedback(`${paused ? "Paused" : "Resumed"} webhook ${sourceId}.`);
+      await loadWebhooks();
+    } catch (error) {
+      setWebhookFeedback(`Error: ${String(error)}`);
+    } finally {
+      setWebhookSaving(false);
     }
   }
 
@@ -1201,6 +1359,18 @@ function App() {
         setLlmModel={setLlmModel}
         saveLlmConfig={saveLlmConfig}
         loadLlmConfig={loadLlmConfig}
+        webhooks={webhooks}
+        webhookLoading={webhookLoading}
+        webhookSaving={webhookSaving}
+        webhookFeedback={webhookFeedback}
+        webhookDraft={webhookDraft}
+        setWebhookDraft={setWebhookDraft}
+        saveWebhook={saveWebhook}
+        removeWebhook={removeWebhook}
+        setWebhookPaused={setWebhookPaused}
+        loadWebhooks={loadWebhooks}
+        editWebhook={editWebhook}
+        clearWebhookDraft={clearWebhookDraft}
       />
 
       <BootstrapModal

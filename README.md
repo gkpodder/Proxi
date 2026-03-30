@@ -311,3 +311,119 @@ Frontend startup parameters:
 | `PROXI_GATEWAY_URL` | Environment variable | Override gateway base URL (default: `http://127.0.0.1:8765`). |
 | `PROXI_SESSION_ID` | Environment variable | Start the web UI on a specific session id. |
 | `PORT` | Environment variable | React frontend HTTP port (default: `5174`). |
+
+## Webhook Setup And Testing
+
+Use this flow to configure a secure webhook source from the React frontend and verify Proxi receives it.
+
+### 1. Start services
+
+From project root:
+
+```bash
+# Start gateway
+uv run proxi-gateway
+
+# In a second terminal, start frontend
+bun run proxi-react
+```
+
+Verify gateway health:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8765/health"
+```
+
+### 2. Configure webhook source in frontend
+
+In the web UI:
+
+1. Open **Settings**.
+2. Open **Webhooks**.
+3. Create or update a source with values like:
+     - **Source ID**: `external_alert`
+     - **Target Agent**: your agent
+     - **Prompt Template**: `External alert: {{event_type}} from {{system.name}} severity={{severity}} message={{message}}`
+     - **HMAC Secret Env**: `PROXI_CUSTOM_WEBHOOK_SECRET`
+     - **State**: `Running`
+4. Click **Save Webhook**.
+
+### 3. Set required secret env var
+
+Webhook signature verification is enforced. Set the same env var in the gateway process environment:
+
+```powershell
+$env:PROXI_CUSTOM_WEBHOOK_SECRET = "super-secret-123"
+```
+
+If the gateway is already running, restart it after setting env vars.
+
+### 4. Test locally with signed request (PowerShell)
+
+```powershell
+$uri = "http://127.0.0.1:8765/channels/webhook/external_alert"
+$secret = "super-secret-123"
+$body = '{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+
+$hmac = New-Object System.Security.Cryptography.HMACSHA256
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($secret)
+$hash = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($body))
+$hex = -join ($hash | ForEach-Object { $_.ToString("x2") })
+$sig = "sha256=$hex"
+
+Invoke-RestMethod -Method Post `
+    -Uri $uri `
+    -Headers @{ "X-Signature-256" = $sig } `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+Expected response:
+
+```json
+{ "ok": true }
+```
+
+### 5. Optional: test through ngrok public URL
+
+Run tunnel to local gateway (in new terminal):
+
+```bash
+ngrok http 8765
+```
+
+Replace `<NGROK_URL>` with the `https://...ngrok...` forwarding URL and run:
+
+```powershell
+$uri = "<NGROK_URL>/channels/webhook/external_alert"
+$secret = "super-secret-123"
+$body = '{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+
+$hmac = New-Object System.Security.Cryptography.HMACSHA256
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($secret)
+$hash = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($body))
+$hex = -join ($hash | ForEach-Object { $_.ToString("x2") })
+$sig = "sha256=$hex"
+
+Invoke-RestMethod -Method Post `
+    -Uri $uri `
+    -Headers @{ 
+        "X-Signature-256" = $sig
+        "ngrok-skip-browser-warning" = "true"
+    } `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+### 6. Expected Proxi behavior
+
+- API returns `{ "ok": true }` when accepted.
+- Proxi routes the event to the configured target agent/session.
+- The GUI shows webhook-triggered activity and the rendered prompt text.
+
+### Troubleshooting
+
+- `404 Unknown webhook source`: source id in URL does not match saved source.
+- `403 Missing/Invalid webhook signature`: signature mismatch or missing `X-Signature-256`.
+- `403 Webhook secret environment variable ... is not set`: required env var is not set in gateway process.
+- `400 Webhook payload must be valid JSON`: request body is missing or invalid JSON.

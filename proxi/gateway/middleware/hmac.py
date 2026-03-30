@@ -50,10 +50,13 @@ async def verify_webhook_hmac(request: Request, source: SourceConfig) -> None:
     ``X-Signature-256`` header.
     """
     if not source.secret_env:
-        return
+        raise HTTPException(status_code=403, detail="Webhook secret_env is required")
     secret = os.environ.get(source.secret_env, "")
     if not secret:
-        return
+        raise HTTPException(
+            status_code=403,
+            detail=f"Webhook secret environment variable {source.secret_env!r} is not set",
+        )
 
     signature_header = request.headers.get("X-Signature-256", "")
     if not signature_header.startswith("sha256="):
