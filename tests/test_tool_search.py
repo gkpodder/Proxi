@@ -1,8 +1,11 @@
 """Tests for the tool search / deferred loading feature."""
 
+import json
+
 import pytest
 
 from proxi.tools.base import BaseTool, ToolResult
+from proxi.tools.call_tool_tool import CallToolTool
 from proxi.tools.registry import ToolRegistry
 from proxi.tools.search import BM25SearchStrategy, RegexSearchStrategy, build_index
 from proxi.tools.search_tools_tool import SearchToolsTool
@@ -147,29 +150,52 @@ class TestToolRegistryDeferred:
         reg = self._make_registry()
         assert reg.has_deferred_tools() is True
 
-    def test_search_and_load_promotes_tool(self):
+    def test_search_deferred_returns_toolspec(self):
         reg = self._make_registry()
-        loaded = reg.search_and_load("email", top_k=5)
-        assert len(loaded) == 1
-        assert loaded[0].name == "deferred_email"
+        specs = reg.search_deferred("email", top_k=5)
+        assert len(specs) == 1
+        assert specs[0].name == "deferred_email"
+        # Full schema must be present
+        assert specs[0].description
+        assert isinstance(specs[0].parameters, dict)
 
-        # Now it should be in live specs
-        specs = reg.to_specs()
-        names = [s.name for s in specs]
-        assert "deferred_email" in names
-
-    def test_search_and_load_sticky(self):
-        """Loading a tool twice returns empty list on the second call."""
+    def test_search_deferred_does_not_promote(self):
+        """Deferred tools must never be promoted to the live tier."""
         reg = self._make_registry()
-        reg.search_and_load("email", top_k=5)
-        second = reg.search_and_load("email", top_k=5)
+        reg.search_deferred("email", top_k=5)
+        live_names = [s.name for s in reg.to_specs()]
+        assert "deferred_email" not in live_names
+        # Still in deferred tier
+        assert reg.deferred_tool_count() == 2
+
+    def test_search_deferred_deduplicates(self):
+        """Second search for same tool returns empty (schema already injected)."""
+        reg = self._make_registry()
+        first = reg.search_deferred("email", top_k=5)
+        assert len(first) == 1
+        second = reg.search_deferred("email", top_k=5)
         assert second == []
 
-    def test_deferred_count_decreases_after_load(self):
+    @pytest.mark.asyncio
+    async def test_execute_deferred(self):
         reg = self._make_registry()
-        assert reg.deferred_tool_count() == 2
-        reg.search_and_load("email", top_k=1)
-        assert reg.deferred_tool_count() == 1
+        result = await reg.execute_deferred("deferred_email", {})
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_execute_deferred_unknown_returns_error(self):
+        reg = self._make_registry()
+        result = await reg.execute_deferred("nonexistent_tool", {})
+        assert result.success is False
+        assert result.error is not None
+
+    def test_unregister_by_prefix_clears_schema_injected(self):
+        reg = ToolRegistry()
+        reg.register_deferred(make_tool("mcp_deferred", "deferred mcp tool"))
+        reg.search_deferred("mcp", top_k=5)
+        assert "mcp_deferred" in reg._schema_injected
+        reg.unregister_by_prefix("mcp_")
+        assert "mcp_deferred" not in reg._schema_injected
 
     def test_unregister_by_prefix_clears_both_tiers(self):
         reg = ToolRegistry()
@@ -180,10 +206,10 @@ class TestToolRegistryDeferred:
         assert reg.deferred_tool_count() == 0
         assert reg.to_specs() == []
 
-    def test_search_empty_deferred_returns_empty(self):
+    def test_search_deferred_empty_returns_empty(self):
         reg = ToolRegistry()
         reg.register(make_tool("live_x", "something"))
-        assert reg.search_and_load("anything") == []
+        assert reg.search_deferred("anything") == []
 
 
 # ---------------------------------------------------------------------------
@@ -198,20 +224,26 @@ class TestSearchToolsTool:
         return reg
 
     @pytest.mark.asyncio
-    async def test_loads_matching_tool(self):
+    async def test_returns_full_schema_json(self):
         reg = self._make_registry_with_deferred()
         tool = SearchToolsTool(reg)
         result = await tool.execute({"query": "send email"})
         assert result.success is True
         assert "gmail_send" in result.output
+        payload = json.loads(result.output)
+        assert payload["found"] >= 1
+        tool_entry = next(t for t in payload["tools"] if t["name"] == "gmail_send")
+        assert "parameters" in tool_entry
+        assert "call_tool" in payload["note"]
 
     @pytest.mark.asyncio
-    async def test_tool_becomes_live_after_search(self):
+    async def test_tool_stays_deferred_after_search(self):
+        """search_tools must NOT promote tools to the live tier."""
         reg = self._make_registry_with_deferred()
         tool = SearchToolsTool(reg)
         await tool.execute({"query": "email"})
         names = [s.name for s in reg.to_specs()]
-        assert "gmail_send" in names
+        assert "gmail_send" not in names
 
     @pytest.mark.asyncio
     async def test_no_match_returns_helpful_message(self):
@@ -236,6 +268,49 @@ class TestSearchToolsTool:
         result = await tool.execute({})
         assert result.success is False
         assert result.error is not None
+
+
+# ---------------------------------------------------------------------------
+# CallToolTool
+# ---------------------------------------------------------------------------
+
+class TestCallToolTool:
+    def _make_registry_with_deferred(self):
+        reg = ToolRegistry()
+        reg.register_deferred(make_tool("gmail_send", "Send an email via Gmail"))
+        reg.register_deferred(make_tool("calendar_create", "Create a Google Calendar event"))
+        return reg
+
+    @pytest.mark.asyncio
+    async def test_dispatches_deferred_tool(self):
+        reg = self._make_registry_with_deferred()
+        ct = CallToolTool(reg)
+        result = await ct.execute({"tool_name": "gmail_send", "args": {}})
+        assert result.success is True
+
+    @pytest.mark.asyncio
+    async def test_unknown_tool_returns_error(self):
+        reg = self._make_registry_with_deferred()
+        ct = CallToolTool(reg)
+        result = await ct.execute({"tool_name": "nonexistent", "args": {}})
+        assert result.success is False
+        assert result.error is not None
+
+    @pytest.mark.asyncio
+    async def test_missing_tool_name_returns_error(self):
+        reg = self._make_registry_with_deferred()
+        ct = CallToolTool(reg)
+        result = await ct.execute({"args": {}})
+        assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_does_not_dispatch_live_tools(self):
+        """call_tool only dispatches deferred tools, not live ones."""
+        reg = ToolRegistry()
+        reg.register(make_tool("live_tool", "a live tool"))
+        ct = CallToolTool(reg)
+        result = await ct.execute({"tool_name": "live_tool", "args": {}})
+        assert result.success is False
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +344,7 @@ class TestPromptBuilderDeferredHint:
         payload = builder.build(state, tools=[], deferred_tool_count=3)
         assert payload.system is not None
         assert "search_tools" in payload.system
-        assert "MUST call" in payload.system
+        assert "call_tool" in payload.system
 
     def test_hint_absent_when_no_deferred_tools(self):
         from proxi.core.prompt_builder import PromptBuilder

@@ -172,7 +172,9 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
         tool_registry.register_deferred(mcp_tool)
     if tool_registry.has_deferred_tools():
         from proxi.tools.search_tools_tool import SearchToolsTool
+        from proxi.tools.call_tool_tool import CallToolTool
         tool_registry.register(SearchToolsTool(tool_registry))
+        tool_registry.register(CallToolTool(tool_registry))
 
     no_sub_agents = os.environ.get("PROXI_NO_SUB_AGENTS", "").lower() in (
         "1", "true", "yes",

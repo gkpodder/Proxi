@@ -1,13 +1,14 @@
-"""search_tools — on-demand deferred tool loader.
+"""search_tools — on-demand deferred tool discovery.
 
-Exposes deferred tools to the LLM by searching the deferred registry and
-promoting matching tools to the live tier.  The LLM is informed via the
-system prompt that additional tools may exist; it calls this tool with a
-natural-language query to discover and activate them.
+Returns full tool schemas into the message window so the LLM can read the
+parameter contracts and invoke the tools via ``call_tool``.  Deferred tools
+are never promoted into the live tools array, keeping the prompt-cache prefix
+stable for the entire session.
 """
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Any
 
 from proxi.tools.base import BaseTool, ToolResult
@@ -17,24 +18,27 @@ if TYPE_CHECKING:
 
 
 class SearchToolsTool(BaseTool):
-    """Search for and load deferred tools by keyword query.
+    """Discover deferred tools by keyword query.
 
-    The LLM calls this when it needs a capability not available in its
-    current tool list.  Matching tools are permanently added to the live
-    registry for the remainder of the session.
+    The LLM calls this when it needs a capability not in its current tool list.
+    Matching tool schemas are injected into the message window so the LLM can
+    read the parameter contracts.  Use ``call_tool`` to execute any returned
+    tool.
 
-    This tool is always registered as *live* (never deferred) so the LLM
-    can always reach it.
+    Deferred tools are **never** promoted to the live tool list; the tools
+    array stays frozen so the prompt-cache prefix is never invalidated.
+
+    This tool is always registered as *live* (never deferred).
     """
 
     def __init__(self, registry: "ToolRegistry", top_k: int = 5) -> None:
         super().__init__(
             name="search_tools",
             description=(
-                "Load additional tools on demand. "
-                "MUST be called before attempting any action whose specific tool is not in your current tool list. "
-                "For example: to send an email call search_tools('send email') first — do NOT use read_emails to send. "
-                "After calling this, the matched tools become available immediately; proceed with the task using them. "
+                "Discover additional tools by keyword. "
+                "Returns full schemas for matched tools — read the schema then use "
+                "call_tool(tool_name, args) to execute. "
+                "MUST be called before attempting any action whose tool is not in your current list. "
                 "Never assume a tool exists or hallucinate an action — always search first."
             ),
             parameters_schema={
@@ -44,7 +48,7 @@ class SearchToolsTool(BaseTool):
                         "type": "string",
                         "description": (
                             "Short phrase describing the action you need to perform. "
-                            "Examples: 'send email', 'create calendar event', 'write obsidian note', 'notion page'."
+                            "Examples: 'send email', 'create calendar event', 'write obsidian note'."
                         ),
                     },
                 },
@@ -64,20 +68,37 @@ class SearchToolsTool(BaseTool):
                 error="query parameter is required",
             )
 
-        newly_loaded = self._registry.search_and_load(query, top_k=self._top_k)
+        new_specs = self._registry.search_deferred(query, top_k=self._top_k)
 
-        if not newly_loaded:
+        if not new_specs:
             if not self._registry.has_deferred_tools():
                 return ToolResult(
                     success=True,
-                    output="No additional tools are available to load.",
+                    output="No additional tools are available.",
+                )
+            if self._registry._schema_injected:
+                return ToolResult(
+                    success=True,
+                    output=(
+                        f"No new tools matched '{query}'. "
+                        "Previously discovered tools are still callable via call_tool."
+                    ),
                 )
             return ToolResult(
                 success=True,
                 output=f"No tools matched '{query}'. Try different keywords.",
             )
 
-        lines = [f"Loaded {len(newly_loaded)} tool(s). These are now active — use them to complete the task:"]
-        for tool in newly_loaded:
-            lines.append(f"- {tool.name}: {tool.description}")
-        return ToolResult(success=True, output="\n".join(lines))
+        payload = {
+            "found": len(new_specs),
+            "tools": [
+                {
+                    "name": spec.name,
+                    "description": spec.description,
+                    "parameters": spec.parameters,
+                }
+                for spec in new_specs
+            ],
+            "note": "Use call_tool(tool_name, args) to invoke any of these.",
+        }
+        return ToolResult(success=True, output=json.dumps(payload, indent=2))

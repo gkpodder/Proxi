@@ -22,6 +22,11 @@ function prettyInboundSourceType(st: string): string {
 }
 
 function formatToolInvocation(tool: string, args: Record<string, unknown> | undefined): string {
+  // call_tool: show the actual target tool name prominently
+  if (tool === "call_tool") {
+    const target = typeof args?.tool_name === "string" ? args.tool_name : "?";
+    return `call_tool → ${target}`;
+  }
   if (!args || Object.keys(args).length === 0) return `${tool}()`;
   const entries = Object.entries(args);
   if (entries.length === 1) {
