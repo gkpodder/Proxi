@@ -408,10 +408,12 @@ async def main():
                         tool_registry.register(tool)
                         logger.info("mcp_tool_registered", tool=tool.name)
 
-        # Register search_tools if any tools were deferred
+        # Register search_tools + call_tool if any tools were deferred
         if tool_registry.has_deferred_tools():
             from proxi.tools.search_tools_tool import SearchToolsTool
+            from proxi.tools.call_tool_tool import CallToolTool
             tool_registry.register(SearchToolsTool(tool_registry))
+            tool_registry.register(CallToolTool(tool_registry))
             logger.info("search_tools_registered", deferred_count=tool_registry.deferred_tool_count())
 
         # Set up sub-agents

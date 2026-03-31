@@ -308,10 +308,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
         except Exception as e:
             logger.warning("mcp_setup_error", error=str(e))
 
-    # Register search_tools if any tools were deferred
+    # Register search_tools + call_tool if any tools were deferred
     if tool_registry.has_deferred_tools():
         from proxi.tools.search_tools_tool import SearchToolsTool
+        from proxi.tools.call_tool_tool import CallToolTool
         tool_registry.register(SearchToolsTool(tool_registry))
+        tool_registry.register(CallToolTool(tool_registry))
         logger.info("search_tools_registered", deferred_count=tool_registry.deferred_tool_count())
 
     async def refresh_mcp_tools() -> None:
@@ -341,8 +343,9 @@ async def run_bridge(agent_id: str | None = None) -> None:
         removed = tool_registry.unregister_by_prefix("mcp_")
         if removed:
             logger.info("mcp_tools_unregistered", count=removed)
-        # Remove search_tools so it can be re-registered with the updated registry
+        # Remove search_tools + call_tool so they can be re-registered with the updated registry
         tool_registry.unregister_by_prefix("search_tools")
+        tool_registry.unregister_by_prefix("call_tool")
 
         for adapter in mcp_adapters:
             try:
@@ -374,10 +377,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
             except Exception as e:
                 logger.warning("mcp_setup_error", error=str(e))
 
-        # Re-register search_tools if deferred tools exist after refresh
+        # Re-register search_tools + call_tool if deferred tools exist after refresh
         if tool_registry.has_deferred_tools():
             from proxi.tools.search_tools_tool import SearchToolsTool
+            from proxi.tools.call_tool_tool import CallToolTool
             tool_registry.register(SearchToolsTool(tool_registry))
+            tool_registry.register(CallToolTool(tool_registry))
             logger.info("search_tools_re_registered", deferred_count=tool_registry.deferred_tool_count())
 
     async def request_user_input(

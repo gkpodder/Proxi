@@ -17,9 +17,12 @@ class ToolRegistry:
     Tools exist in one of two tiers:
 
     * **Live** (``_tools``): included in ``to_specs()`` and sent to the LLM
-      on every call.
-    * **Deferred** (``_deferred_tools``): hidden from the LLM until the LLM
-      calls ``search_tools``, which promotes matching tools to the live tier.
+      on every call.  This set never changes mid-session so the prompt-cache
+      prefix stays stable.
+    * **Deferred** (``_deferred_tools``): hidden from the LLM.  The LLM
+      discovers them by calling ``search_tools``, which returns full schemas
+      in the *message window*.  Deferred tools are never promoted to the live
+      tier; they are executed via ``call_tool`` / ``execute_deferred``.
     """
 
     def __init__(self, search_strategy: ToolSearchStrategy | None = None):
@@ -29,6 +32,9 @@ class ToolRegistry:
         self._deferred_tools: dict[str, Tool] = {}
         self._deferred_index: list[ToolSearchEntry] = []
         self._search_strategy: ToolSearchStrategy = search_strategy or BM25SearchStrategy()
+        # Names whose full schemas have already been injected into the message
+        # window this session.  Used to deduplicate search_tools results.
+        self._schema_injected: set[str] = set()
 
     def register(self, tool: Tool) -> None:
         """Register a tool in the live tier."""
@@ -51,22 +57,30 @@ class ToolRegistry:
         """Return the number of tools currently in the deferred tier."""
         return len(self._deferred_tools)
 
-    def search_and_load(
+    def search_deferred(
         self,
         query: str,
         top_k: int = 5,
         strategy: ToolSearchStrategy | None = None,
-    ) -> list[Tool]:
-        """Search deferred tools and promote matches to the live tier.
+    ) -> list[ToolSpec]:
+        """Search deferred tools and return their full specs for injection into the message window.
+
+        Deferred tools are **never** promoted to the live tier; the tools array
+        stays frozen so the prompt-cache prefix remains stable.  The returned
+        specs should be included in the ``search_tools`` tool-result message so
+        the LLM can read the schemas and later call them via ``call_tool``.
+
+        Already-injected tools are filtered out to avoid duplicating schemas in
+        the message window across multiple searches in the same session.
 
         Args:
-            query: Keywords describing the capability needed.
-            top_k: Maximum number of tools to load per call.
-            strategy: Override the registry's default search strategy.
+            query: Natural-language description of the capability needed.
+            top_k: Maximum number of tool specs to return.
+            strategy: Override the default BM25 search strategy.
 
         Returns:
-            List of tools that were newly promoted (empty if none matched or
-            no deferred tools remain).
+            List of :class:`ToolSpec` objects for newly matched tools (empty if
+            nothing new matched or no deferred tools exist).
         """
         if not self._deferred_tools:
             return []
@@ -74,22 +88,46 @@ class ToolRegistry:
         active_strategy = strategy or self._search_strategy
         matched = active_strategy.search(query, self._deferred_index, top_k)
 
-        promoted: list[Tool] = []
+        new_specs: list[ToolSpec] = []
         for tool in matched:
-            if tool.name in self._deferred_tools:
-                self._tools[tool.name] = tool
-                del self._deferred_tools[tool.name]
-                promoted.append(tool)
+            if tool.name not in self._schema_injected:
+                self._schema_injected.add(tool.name)
+                new_specs.append(ToolSpec(**tool.to_spec()))
 
-        if promoted:
-            self._rebuild_deferred_index()
+        if new_specs:
             logger.info(
-                "tools_promoted_from_deferred",
-                count=len(promoted),
-                names=[t.name for t in promoted],
+                "deferred_schemas_injected",
+                count=len(new_specs),
+                names=[s.name for s in new_specs],
             )
 
-        return promoted
+        return new_specs
+
+    async def execute_deferred(self, name: str, arguments: dict[str, Any]) -> ToolResult:
+        """Execute a tool from the deferred tier by name.
+
+        This is the execution path for tools discovered via ``search_tools``
+        and invoked by the LLM through ``call_tool``.
+
+        Args:
+            name: Exact tool name as returned by ``search_deferred``.
+            arguments: Argument dict matching the tool's parameters schema.
+
+        Returns:
+            :class:`ToolResult` with the execution output, or an error result
+            if the tool name is not found in the deferred tier.
+        """
+        tool = self._deferred_tools.get(name)
+        if tool is None:
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Tool '{name}' not found in deferred registry. "
+                    "Call search_tools first to discover available tools."
+                ),
+            )
+        return await tool.execute(arguments)
 
     def unregister_by_prefix(self, prefix: str) -> int:
         """Unregister tools whose names start with the given prefix."""
@@ -102,6 +140,10 @@ class ToolRegistry:
             self._deferred_tools.pop(name, None)
         if deferred_remove:
             self._rebuild_deferred_index()
+
+        # Clear injected-schema tracking for removed tools so they can be
+        # re-discovered cleanly after an MCP reload.
+        self._schema_injected -= {*to_remove, *deferred_remove}
 
         return len(to_remove) + len(deferred_remove)
 

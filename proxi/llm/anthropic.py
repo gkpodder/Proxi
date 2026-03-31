@@ -83,9 +83,16 @@ class AnthropicClient:
         }
 
         if system:
-            # Anthropic supports a top-level system prompt field; we keep
-            # messages restricted to user/assistant content.
-            kwargs["system"] = system
+            # Use the structured system format so Anthropic can place a KV
+            # cache breakpoint at the end of the stable prefix.  This ensures
+            # the system prompt + tools array are cached on every turn.
+            kwargs["system"] = [
+                {
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
 
         if anthropic_tools:
             kwargs["tools"] = anthropic_tools

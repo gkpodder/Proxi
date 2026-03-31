@@ -167,20 +167,21 @@ class PromptBuilder:
             parts.append(user_profile_text)
         if deferred_tool_count > 0:
             parts.append(
-                f"## search_tools — {deferred_tool_count} additional tool(s) available on demand\n\n"
+                f"## search_tools + call_tool — {deferred_tool_count} additional tool(s) available on demand\n\n"
                 "Not all tools are loaded at startup. Before attempting any action, check whether the "
-                "required tool is in your current tool list. If it is not, you MUST call `search_tools` "
-                "first — NEVER hallucinate that an action was taken or use a wrong tool as a substitute.\n\n"
+                "required tool is in your current tool list. If it is not, follow this two-step pattern:\n\n"
+                "1. Call `search_tools(query=\"...\")` — returns full schemas for matched tools.\n"
+                "2. Call `call_tool(tool_name=\"...\", args={...})` — executes the discovered tool.\n\n"
                 "Rules:\n"
-                "- You MUST call `search_tools(query=\"...\")` before using any tool that is not already in your tool list.\n"
-                "- Do NOT use a read/list tool to perform a write/send action (e.g. do NOT use `mcp_read_emails` to send email).\n"
-                "- Do NOT tell the user an action was completed if you did not successfully call the correct tool.\n"
-                "- After `search_tools` returns, the matched tools are immediately active — call them in the next step.\n\n"
-                "Examples of when to call search_tools first:\n"
-                "- User wants to send an email → search_tools('send email') → then call mcp_send_email\n"
-                "- User wants to create a calendar event → search_tools('create calendar event') → then call mcp_calendar_create_event\n"
-                "- User wants to write an Obsidian note → search_tools('obsidian note') → then call mcp_obsidian_create_note\n"
-                "- User wants to create a Notion page → search_tools('notion page') → then call mcp_notion_create_page"
+                "- You MUST call `search_tools` before using any tool not already in your tool list.\n"
+                "- Do NOT call deferred tool names directly — always go through `call_tool`.\n"
+                "- Do NOT use a read/list tool to perform a write/send action.\n"
+                "- Do NOT tell the user an action was completed if you did not successfully call `call_tool`.\n\n"
+                "Examples:\n"
+                "- Send an email → search_tools('send email') → call_tool('mcp_send_email', {\"to\": ..., \"subject\": ..., \"body\": ...})\n"
+                "- Create a calendar event → search_tools('create calendar event') → call_tool('mcp_calendar_create_event', {...})\n"
+                "- Write an Obsidian note → search_tools('obsidian note') → call_tool('mcp_obsidian_create_note', {...})\n"
+                "- Create a Notion page → search_tools('notion page') → call_tool('mcp_notion_create_page', {...})"
             )
 
         return "\n\n".join(parts).strip()

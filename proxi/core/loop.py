@@ -441,6 +441,7 @@ class AgentLoop:
         """Make a decision based on current state."""
         tools = self.tool_registry.to_specs()
         deferred_count = self.tool_registry.deferred_tool_count()
+        deferred_specs = self.tool_registry.get_deferred_specs() if deferred_count > 0 else []
         agents = None
         if self.sub_agent_manager:
             agents = self.sub_agent_manager.registry.to_specs()
@@ -451,7 +452,8 @@ class AgentLoop:
 
         stream_cb = stream_callback if emit_stream else None
         decision, usage = await self.planner.decide(
-            state, tools, agents, stream_callback=stream_cb, deferred_tool_count=deferred_count
+            state, tools, agents, stream_callback=stream_cb,
+            deferred_tool_count=deferred_count, deferred_specs=deferred_specs,
         )
         return decision, usage
 
@@ -498,11 +500,11 @@ class AgentLoop:
 
             if self.emitter:
                 if result.output:
-                    first_line = result.output.strip().split("\n")[0].strip()
-                    if first_line and len(first_line) <= 100:
+                    log_line = self._tool_log_summary(tool_name, arguments, result.output)
+                    if log_line:
                         self.emitter.emit({
                             "type": "tool_log",
-                            "content": first_line,
+                            "content": log_line,
                         })
                 self.emitter.emit({
                     "type": "tool_done",
@@ -622,6 +624,31 @@ class AgentLoop:
                 "type": "unknown",
                 "error": f"Unknown decision type: {decision.type}",
             }
+
+    @staticmethod
+    def _tool_log_summary(tool_name: str, arguments: dict[str, Any], output: str) -> str | None:
+        """Return a concise one-line TUI summary for a tool result."""
+        if tool_name == "search_tools":
+            try:
+                payload = json.loads(output)
+                tools = payload.get("tools", [])
+                if tools:
+                    names = ", ".join(t["name"] for t in tools)
+                    return f"Found {len(tools)} tool(s): {names}"
+            except Exception:
+                pass
+        elif tool_name == "call_tool":
+            target = arguments.get("tool_name", "?") if isinstance(arguments, dict) else "?"
+            try:
+                payload = json.loads(output)
+                if isinstance(payload, dict) and "error" in payload:
+                    return f"{target} → error: {payload['error']}"
+            except Exception:
+                pass
+            first = output.strip().split("\n")[0].strip()
+            return f"{target} → {first[:80]}" if first else f"{target} → done"
+        first_line = output.strip().split("\n")[0].strip()
+        return first_line[:100] if first_line else None
 
     async def _handle_ask_user_question(
         self,
