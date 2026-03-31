@@ -103,6 +103,24 @@ class ToolRegistry:
 
         return new_specs
 
+    def suggest_deferred(self, query: str, top_k: int = 3) -> list[tuple[float, "ToolSpec"]]:
+        """Search deferred tools and return (score, ToolSpec) pairs.
+
+        Unlike ``search_deferred``, this never deduplicates or tracks injected
+        schemas — it is purely for surfacing suggestions to the LLM so it can
+        retry with a correct tool name.  Callers are responsible for applying a
+        relevance threshold to avoid returning irrelevant suggestions.
+        """
+        if not self._deferred_tools or not self._deferred_index:
+            return []
+        strategy = self._search_strategy
+        if not hasattr(strategy, "search_with_scores"):
+            # Fallback for strategies that don't expose scores
+            tools = strategy.search(query, self._deferred_index, top_k)
+            return [(1.0, ToolSpec(**t.to_spec())) for t in tools]
+        scored = strategy.search_with_scores(query, self._deferred_index, top_k)  # type: ignore[attr-defined]
+        return [(score, ToolSpec(**tool.to_spec())) for score, tool in scored]
+
     async def execute_deferred(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a tool from the deferred tier by name.
 
@@ -167,6 +185,19 @@ class ToolRegistry:
         """Convert all tools to specifications."""
         tool_specs = [ToolSpec(**tool.to_spec()) for tool in self._tools.values()]
         return tool_specs + self._raw_specs
+
+    def get_deferred_specs(self) -> list[ToolSpec]:
+        """Return lightweight specs (name + description only) for all deferred tools.
+
+        Used to populate the system prompt with stubs so the LLM knows which
+        services are available on demand, without revealing full schemas.
+        Parameters are intentionally omitted — the LLM gets those only after
+        calling ``search_tools``.
+        """
+        return [
+            ToolSpec(name=t.name, description=t.description, parameters={})
+            for t in self._deferred_tools.values()
+        ]
 
     def is_parallel_safe(self, name: str) -> bool:
         """Whether a tool is marked safe to execute in parallel."""

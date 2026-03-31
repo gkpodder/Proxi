@@ -628,23 +628,8 @@ class AgentLoop:
     @staticmethod
     def _tool_log_summary(tool_name: str, arguments: dict[str, Any], output: str) -> str | None:
         """Return a concise one-line TUI summary for a tool result."""
-        if tool_name == "search_tools":
-            try:
-                payload = json.loads(output)
-                tools = payload.get("tools", [])
-                if tools:
-                    names = ", ".join(t["name"] for t in tools)
-                    return f"Found {len(tools)} tool(s): {names}"
-            except Exception:
-                pass
-        elif tool_name == "call_tool":
+        if tool_name == "call_tool":
             target = arguments.get("tool_name", "?") if isinstance(arguments, dict) else "?"
-            try:
-                payload = json.loads(output)
-                if isinstance(payload, dict) and "error" in payload:
-                    return f"{target} → error: {payload['error']}"
-            except Exception:
-                pass
             first = output.strip().split("\n")[0].strip()
             return f"{target} → {first[:80]}" if first else f"{target} → done"
         first_line = output.strip().split("\n")[0].strip()
@@ -739,7 +724,8 @@ class AgentLoop:
             if action_result.get("success"):
                 return f"Tool '{action_result.get('tool')}' executed successfully:\n{action_result.get('output', '')}"
             else:
-                return f"Tool '{action_result.get('tool')}' failed: {action_result.get('error', 'Unknown error')}"
+                err = action_result.get('error') or action_result.get('output') or 'Unknown error'
+                return f"Tool '{action_result.get('tool')}' failed: {err}"
 
         elif result_type == "respond":
             return action_result.get("content", "")

@@ -8,7 +8,6 @@ from proxi.tools.base import BaseTool, ToolResult
 from proxi.tools.call_tool_tool import CallToolTool
 from proxi.tools.registry import ToolRegistry
 from proxi.tools.search import BM25SearchStrategy, RegexSearchStrategy, build_index
-from proxi.tools.search_tools_tool import SearchToolsTool
 
 
 # ---------------------------------------------------------------------------
@@ -213,92 +212,27 @@ class TestToolRegistryDeferred:
 
 
 # ---------------------------------------------------------------------------
-# SearchToolsTool
-# ---------------------------------------------------------------------------
-
-class TestSearchToolsTool:
-    def _make_registry_with_deferred(self):
-        reg = ToolRegistry()
-        reg.register_deferred(make_tool("gmail_send", "Send an email via Gmail"))
-        reg.register_deferred(make_tool("calendar_create", "Create a Google Calendar event"))
-        return reg
-
-    @pytest.mark.asyncio
-    async def test_returns_full_schema_json(self):
-        reg = self._make_registry_with_deferred()
-        tool = SearchToolsTool(reg)
-        result = await tool.execute({"query": "send email"})
-        assert result.success is True
-        assert "gmail_send" in result.output
-        payload = json.loads(result.output)
-        assert payload["found"] >= 1
-        tool_entry = next(t for t in payload["tools"] if t["name"] == "gmail_send")
-        assert "parameters" in tool_entry
-        assert "call_tool" in payload["note"]
-
-    @pytest.mark.asyncio
-    async def test_tool_stays_deferred_after_search(self):
-        """search_tools must NOT promote tools to the live tier."""
-        reg = self._make_registry_with_deferred()
-        tool = SearchToolsTool(reg)
-        await tool.execute({"query": "email"})
-        names = [s.name for s in reg.to_specs()]
-        assert "gmail_send" not in names
-
-    @pytest.mark.asyncio
-    async def test_no_match_returns_helpful_message(self):
-        reg = self._make_registry_with_deferred()
-        tool = SearchToolsTool(reg)
-        result = await tool.execute({"query": "xyzzy_nonexistent"})
-        assert result.success is True
-        assert "No tools matched" in result.output
-
-    @pytest.mark.asyncio
-    async def test_empty_deferred_returns_no_tools_message(self):
-        reg = ToolRegistry()  # no deferred tools
-        tool = SearchToolsTool(reg)
-        result = await tool.execute({"query": "email"})
-        assert result.success is True
-        assert "No additional tools" in result.output
-
-    @pytest.mark.asyncio
-    async def test_missing_query_returns_error(self):
-        reg = self._make_registry_with_deferred()
-        tool = SearchToolsTool(reg)
-        result = await tool.execute({})
-        assert result.success is False
-        assert result.error is not None
-
-
-# ---------------------------------------------------------------------------
-# CallToolTool
+# CallToolTool — merged discovery + execution
 # ---------------------------------------------------------------------------
 
 class TestCallToolTool:
-    def _make_registry_with_deferred(self):
+    def _make_registry(self):
         reg = ToolRegistry()
         reg.register_deferred(make_tool("gmail_send", "Send an email via Gmail"))
         reg.register_deferred(make_tool("calendar_create", "Create a Google Calendar event"))
+        reg.register_deferred(make_tool("obsidian_create_note", "Create a note in Obsidian vault"))
         return reg
 
     @pytest.mark.asyncio
-    async def test_dispatches_deferred_tool(self):
-        reg = self._make_registry_with_deferred()
+    async def test_exact_match_executes(self):
+        reg = self._make_registry()
         ct = CallToolTool(reg)
         result = await ct.execute({"tool_name": "gmail_send", "args": {}})
         assert result.success is True
 
     @pytest.mark.asyncio
-    async def test_unknown_tool_returns_error(self):
-        reg = self._make_registry_with_deferred()
-        ct = CallToolTool(reg)
-        result = await ct.execute({"tool_name": "nonexistent", "args": {}})
-        assert result.success is False
-        assert result.error is not None
-
-    @pytest.mark.asyncio
     async def test_missing_tool_name_returns_error(self):
-        reg = self._make_registry_with_deferred()
+        reg = self._make_registry()
         ct = CallToolTool(reg)
         result = await ct.execute({"args": {}})
         assert result.success is False
@@ -311,6 +245,37 @@ class TestCallToolTool:
         ct = CallToolTool(reg)
         result = await ct.execute({"tool_name": "live_tool", "args": {}})
         assert result.success is False
+
+    @pytest.mark.asyncio
+    async def test_close_name_returns_suggestions_not_execution(self):
+        """Fuzzy name should return suggestions, never auto-execute."""
+        reg = self._make_registry()
+        ct = CallToolTool(reg)
+        # "gmail_send_email" is not an exact name but "gmail_send" is close
+        result = await ct.execute({"tool_name": "gmail_send_email", "args": {}})
+        assert result.success is False
+        # Should suggest gmail_send but NOT have executed it
+        assert "gmail_send" in result.error
+        assert "Did you mean" in result.error
+
+    @pytest.mark.asyncio
+    async def test_completely_unrelated_name_returns_no_match(self):
+        """Totally unrelated query should not suggest unrelated tools."""
+        reg = self._make_registry()
+        ct = CallToolTool(reg)
+        result = await ct.execute({"tool_name": "xyzzy_totally_unrelated_9999", "args": {}})
+        assert result.success is False
+        # Should not suggest email/calendar/obsidian tools
+        assert "Did you mean" not in (result.error or "") and "Did you mean" not in result.output
+
+    @pytest.mark.asyncio
+    async def test_tool_stays_deferred_after_suggestion(self):
+        """Tools must never be promoted to live tier even after suggestion."""
+        reg = self._make_registry()
+        ct = CallToolTool(reg)
+        await ct.execute({"tool_name": "gmail_send_email", "args": {}})
+        live_names = [s.name for s in reg.to_specs()]
+        assert "gmail_send" not in live_names
 
 
 # ---------------------------------------------------------------------------
@@ -343,8 +308,8 @@ class TestPromptBuilderDeferredHint:
         state = self._make_state()
         payload = builder.build(state, tools=[], deferred_tool_count=3)
         assert payload.system is not None
-        assert "search_tools" in payload.system
         assert "call_tool" in payload.system
+        assert "AVAILABLE ON DEMAND" in payload.system
 
     def test_hint_absent_when_no_deferred_tools(self):
         from proxi.core.prompt_builder import PromptBuilder
@@ -353,3 +318,21 @@ class TestPromptBuilderDeferredHint:
         payload = builder.build(state, tools=[], deferred_tool_count=0)
         system = payload.system or ""
         assert "ADDITIONAL TOOLS AVAILABLE" not in system
+
+    def test_deferred_stubs_rendered_in_hint(self):
+        from proxi.core.prompt_builder import PromptBuilder
+        from proxi.llm.schemas import ToolSpec
+        builder = PromptBuilder()
+        state = self._make_state()
+        stubs = [
+            ToolSpec(name="mcp_obsidian_list_notes", description="List notes in Obsidian vault", parameters={}),
+            ToolSpec(name="mcp_send_email", description="Send an email via Gmail", parameters={}),
+        ]
+        payload = builder.build(state, tools=[], deferred_tool_count=2, deferred_specs=stubs)
+        assert payload.system is not None
+        assert "mcp_obsidian_list_notes" in payload.system
+        assert "mcp_send_email" in payload.system
+        assert "AVAILABLE ON DEMAND" in payload.system
+        # Descriptions should NOT appear — names only to save tokens
+        assert "List notes in Obsidian vault" not in payload.system
+        assert "Send an email via Gmail" not in payload.system

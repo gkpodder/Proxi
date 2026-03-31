@@ -172,9 +172,7 @@ class AgentLane:
         for tool in deferred_tools:
             reg.register_deferred(tool)
         if reg.has_deferred_tools():
-            from proxi.tools.search_tools_tool import SearchToolsTool
             from proxi.tools.call_tool_tool import CallToolTool
-            reg.register(SearchToolsTool(reg))
             reg.register(CallToolTool(reg))
 
     def _sync_state_if_history_cleared(self) -> None:
