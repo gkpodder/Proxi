@@ -89,16 +89,19 @@ class SearchToolsTool(BaseTool):
                 output=f"No tools matched '{query}'. Try different keywords.",
             )
 
-        payload = {
-            "found": len(new_specs),
-            "tools": [
-                {
-                    "name": spec.name,
-                    "description": spec.description,
-                    "parameters": spec.parameters,
-                }
-                for spec in new_specs
-            ],
-            "note": "Use call_tool(tool_name, args) to invoke any of these.",
-        }
-        return ToolResult(success=True, output=json.dumps(payload, indent=2))
+        lines: list[str] = [
+            "NEXT STEP: call call_tool(tool_name, args) — do NOT call any other tool first.",
+            "",
+        ]
+        for spec in new_specs:
+            lines.append(f"tool_name: {spec.name}")
+            lines.append(f"  description: {spec.description}")
+            props = spec.parameters.get("properties", {}) if isinstance(spec.parameters, dict) else {}
+            required = set(spec.parameters.get("required", [])) if isinstance(spec.parameters, dict) else set()
+            if props:
+                for pname, pdef in props.items():
+                    ptype = pdef.get("type", "any") if isinstance(pdef, dict) else "any"
+                    req = " (required)" if pname in required else " (optional)"
+                    lines.append(f"  arg {pname}: {ptype}{req}")
+            lines.append("")
+        return ToolResult(success=True, output="\n".join(lines).strip())

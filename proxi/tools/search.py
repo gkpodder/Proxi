@@ -143,3 +143,47 @@ class BM25SearchStrategy:
 
         scores.sort(key=lambda x: x[0], reverse=True)
         return [tool for _, tool in scores[:top_k]]
+
+    def search_with_scores(
+        self,
+        query: str,
+        entries: list[ToolSearchEntry],
+        top_k: int,
+    ) -> "list[tuple[float, Tool]]":
+        """Same as search but returns (score, tool) pairs for threshold filtering."""
+        if not entries:
+            return []
+        query_tokens = _tokenize(query)
+        if not query_tokens:
+            return []
+
+        N = len(entries)
+        avgdl = sum(len(e.tokens) for e in entries) / N
+
+        df: dict[str, int] = {}
+        for entry in entries:
+            for token in set(entry.tokens):
+                df[token] = df.get(token, 0) + 1
+
+        scores: list[tuple[float, "Tool"]] = []
+        for entry in entries:
+            dl = len(entry.tokens)
+            tf_dict: dict[str, int] = {}
+            for tok in entry.tokens:
+                tf_dict[tok] = tf_dict.get(tok, 0) + 1
+
+            score = 0.0
+            for token in query_tokens:
+                if token not in df:
+                    continue
+                tf = tf_dict.get(token, 0)
+                idf = math.log((N - df[token] + 0.5) / (df[token] + 0.5) + 1)
+                denom = tf + self.k1 * (1 - self.b + self.b * dl / avgdl)
+                tf_norm = (tf * (self.k1 + 1)) / denom if denom else 0.0
+                score += idf * tf_norm
+
+            if score > 0:
+                scores.append((score, entry.tool))
+
+        scores.sort(key=lambda x: x[0], reverse=True)
+        return scores[:top_k]

@@ -47,6 +47,9 @@ class MCPClient:
         self._retry_backoff_ms = max(1, int(os.getenv("PROXI_MCP_RETRY_BACKOFF_MS", "200")))
         self._timeout_threshold = max(1, int(os.getenv("PROXI_MCP_CIRCUIT_THRESHOLD", "4")))
         self._circuit_cooldown_s = max(1, int(os.getenv("PROXI_MCP_CIRCUIT_COOLDOWN_S", "10")))
+        # Separate timeouts: tool calls involve network I/O (OAuth + API) so need more headroom
+        self._default_timeout = float(os.getenv("PROXI_MCP_REQUEST_TIMEOUT", "30"))
+        self._tool_call_timeout = float(os.getenv("PROXI_MCP_TOOL_CALL_TIMEOUT", "120"))
         self._consecutive_timeouts = 0
         self._circuit_open_until = 0.0
 
@@ -211,7 +214,12 @@ class MCPClient:
 
         # Wait for response with timeout
         try:
-            wait_timeout = 30.0 if timeout is None else timeout
+            if timeout is not None:
+                wait_timeout = timeout
+            elif method == "tools/call":
+                wait_timeout = self._tool_call_timeout
+            else:
+                wait_timeout = self._default_timeout
             result = await asyncio.wait_for(future, timeout=wait_timeout)
             emit_perf(
                 "perf_mcp_request",

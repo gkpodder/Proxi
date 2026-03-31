@@ -692,11 +692,15 @@ class CombinedMCPServer:
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
             if name == "send_email":
-                to = arguments.get("to")
-                subject = arguments.get("subject")
-                body = arguments.get("body")
+                to = arguments.get("to") or ""
+                subject = arguments.get("subject") or "(no subject)"
+                body = arguments.get("body") or ""
                 cc = arguments.get("cc")
                 bcc = arguments.get("bcc")
+                if not to:
+                    return {"content": [{"type": "text", "text": json.dumps({"error": "Missing required field: 'to'"})}]}
+                if not body:
+                    return {"content": [{"type": "text", "text": json.dumps({"error": "Missing required field: 'body'"})}]}
                 result = await self._get_gmail().send_email(to, subject, body, cc, bcc)
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
@@ -840,8 +844,10 @@ class CombinedMCPServer:
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
             if name == "notion_create_page":
-                title = arguments.get("title")
-                content = arguments.get("content")
+                title = (arguments.get("title") or "").strip()
+                content = arguments.get("content") or None
+                if not title:
+                    return {"content": [{"type": "text", "text": json.dumps({"error": "Missing required field: 'title'"})}]}
                 result = await self._get_notion().create_page(title, content)
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 

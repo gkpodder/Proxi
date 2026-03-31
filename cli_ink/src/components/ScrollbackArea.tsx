@@ -145,7 +145,7 @@ function renderItem(item: ScrollbackItem, index: number, prevItem: ScrollbackIte
         <Box key={index}>
           <Text color={item.success ? theme.mint : theme.rose}>
             {"  🛠️  "}
-            {item.success ? "✓ done" : `✗ failed${item.error ? ` ${item.error}` : ""}`}
+            {item.success ? "✓ done" : `✗ failed${item.error ? ` ${item.error.split("\n")[0]}` : ""}`}
           </Text>
         </Box>
       );

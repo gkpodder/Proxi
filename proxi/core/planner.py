@@ -27,6 +27,7 @@ class Planner:
         agents: list[SubAgentSpec] | None = None,
         stream_callback: Callable[[str], Awaitable[None]] | None = None,
         deferred_tool_count: int = 0,
+        deferred_specs: list[ToolSpec] | None = None,
     ) -> tuple[ModelDecision, dict[str, int]]:
         """
         Make a decision based on current state.
@@ -39,6 +40,9 @@ class Planner:
             deferred_tool_count: Number of tools in the deferred tier; used to
                 inject a hint into the system prefix so the LLM knows to call
                 ``search_tools`` when it needs additional capabilities.
+            deferred_specs: Lightweight stubs (name + description) for all deferred
+                tools, rendered in the system prompt so the LLM knows what is
+                available on demand without revealing full schemas.
 
         Returns:
             Tuple of (Model decision, token usage)
@@ -50,7 +54,11 @@ class Planner:
         )
 
         # Build prompt with static→incremental→volatile structure.
-        payload = self.prompt_builder.build(state, tools=tools, deferred_tool_count=deferred_tool_count)
+        payload = self.prompt_builder.build(
+            state, tools=tools,
+            deferred_tool_count=deferred_tool_count,
+            deferred_specs=deferred_specs or [],
+        )
         session_id = state.workspace.session_id if state.workspace is not None else None
 
         generate_stream = getattr(self.llm_client, "generate_stream", None)
