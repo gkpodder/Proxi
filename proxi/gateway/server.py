@@ -42,6 +42,7 @@ from proxi.gateway.events import GatewayEvent
 from proxi.gateway.lanes.manager import LaneManager
 from proxi.gateway.middleware.auth import verify_bearer_token
 from proxi.gateway.middleware.hmac import (
+    verify_discord_signature,
     verify_telegram_signature,
     verify_webhook_hmac,
     verify_whatsapp_signature,
@@ -389,6 +390,89 @@ async def intake(adapter: TelegramAdapter | WhatsAppAdapter | DiscordAdapter, ra
     await lane_manager.route(event)
 
 
+def _discord_source() -> Any:
+    source = config.sources.get("discord")
+    if source is None or source.source_type not in ("discord", "channel"):
+        raise HTTPException(status_code=404, detail="Discord source is not configured")
+    return source
+
+
+def _discord_channel_id(raw: dict[str, Any]) -> str:
+    channel_id = raw.get("channel_id")
+    if not channel_id and isinstance(raw.get("channel"), dict):
+        channel_id = raw["channel"].get("id")
+    return str(channel_id or "").strip()
+
+
+def _discord_user_id(raw: dict[str, Any]) -> str:
+    author = raw.get("author")
+    if not isinstance(author, dict):
+        return ""
+    return str(author.get("id") or "").strip()
+
+
+def _sanitize_session_token(value: str, fallback: str) -> str:
+    cleaned = "".join(ch for ch in str(value or "") if ch.isalnum() or ch in ("-", "_"))
+    return cleaned or fallback
+
+
+def _discord_agent_for_channel(source: Any, channel_id: str) -> str:
+    overrides = source.extras.get("discord_agent_overrides", {})
+    if isinstance(overrides, dict):
+        override = str(overrides.get(channel_id, "")).strip()
+        if override and override in config.agents:
+            return override
+    return source.target_agent
+
+
+def _resolve_discord_session(source: Any, raw: dict[str, Any]) -> str:
+    channel_id = _discord_channel_id(raw)
+    user_id = _discord_user_id(raw)
+
+    agent_id = _discord_agent_for_channel(source, channel_id)
+    if agent_id not in config.agents:
+        raise HTTPException(status_code=400, detail=f"Unknown Discord target agent: {agent_id}")
+
+    mode = str(source.extras.get("discord_session_mode", "channel")).strip().lower()
+    base_session = str(source.target_session or "").strip()
+    agent_default = config.agents[agent_id].default_session
+
+    if mode == "fixed":
+        session_name = base_session or agent_default
+    elif mode == "user":
+        base = base_session or "discord"
+        session_name = f"{base}-ch-{_sanitize_session_token(channel_id, 'unknown')}-u-{_sanitize_session_token(user_id, 'unknown')}"
+    else:
+        base = base_session or "discord"
+        session_name = f"{base}-ch-{_sanitize_session_token(channel_id, 'unknown')}"
+
+    return f"{agent_id}/{session_name}"
+
+
+def _set_discord_channel_agent(channel_id: str, agent_id: str) -> None:
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get("discord")
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Discord source is not configured")
+    if not isinstance(existing, dict):
+        raise HTTPException(status_code=500, detail="Discord source config is invalid")
+
+    overrides = existing.get("discord_agent_overrides")
+    if not isinstance(overrides, dict):
+        overrides = {}
+    overrides[str(channel_id)] = agent_id
+    existing["discord_agent_overrides"] = overrides
+    sources["discord"] = existing
+    _persist_and_reload_gateway_config(raw)
+
+
+async def _send_discord_message(event: GatewayEvent, text: str) -> None:
+    if event.reply_channel is None:
+        return
+    await event.reply_channel.send(text)
+
+
 # ---------------------------------------------------------------------------
 # Channel webhook endpoints
 # ---------------------------------------------------------------------------
@@ -430,9 +514,96 @@ async def whatsapp_webhook(request: Request) -> dict[str, str]:
 
 
 @app.post("/channels/discord/webhook")
-async def discord_webhook(request: Request) -> dict[str, bool]:
-    await intake(DiscordAdapter(), await request.json())
-    return {"ok": True}
+async def discord_webhook(request: Request) -> dict[str, Any]:
+    await verify_discord_signature(request)
+    raw_payload = await request.json()
+    if not isinstance(raw_payload, dict):
+        raise HTTPException(status_code=400, detail="Discord payload must be an object")
+
+    source = _discord_source()
+    command_prefix = str(source.extras.get("discord_command_prefix", "/proxi") or "/proxi")
+    allow_plain = bool(source.extras.get("discord_allow_plain", False))
+
+    event = await DiscordAdapter(
+        command_prefix=command_prefix,
+        allow_plain=allow_plain,
+    ).parse(raw_payload)
+
+    if event is None:
+        return {"ok": True, "ignored": True}
+
+    command = event.payload.get("command", {})
+    action = str(command.get("action", "start")).strip().lower()
+    session_id = _resolve_discord_session(source, raw_payload)
+
+    if action == "help":
+        await _send_discord_message(
+            event,
+            "Proxi Discord commands:\n"
+            f"{command_prefix} <task>\n"
+            f"{command_prefix} abort\n"
+            f"{command_prefix} status\n"
+            f"{command_prefix} switch <agent_id>",
+        )
+        return {"ok": True, "action": "help"}
+
+    if action == "status":
+        lane = lane_manager.get_lane(session_id)
+        if lane is None:
+            await _send_discord_message(event, f"Session {session_id}: idle (not created yet).")
+        else:
+            await _send_discord_message(
+                event,
+                f"Session {session_id}: running={lane.is_running}, queue_depth={lane.queue_depth}",
+            )
+        return {"ok": True, "action": "status", "session_id": session_id}
+
+    if action == "abort":
+        lane = lane_manager.get_lane(session_id)
+        if lane is None:
+            await _send_discord_message(event, f"No active lane for {session_id}.")
+            return {"ok": True, "action": "abort", "session_id": session_id, "aborted": False}
+        await lane.abort()
+        await _send_discord_message(event, f"Aborted active run for {session_id}.")
+        return {"ok": True, "action": "abort", "session_id": session_id, "aborted": True}
+
+    if action == "switch":
+        next_agent_id = str(command.get("agent_id", "")).strip()
+        if not next_agent_id:
+            raise HTTPException(status_code=400, detail="switch command requires agent id")
+        if next_agent_id not in config.agents:
+            raise HTTPException(status_code=404, detail=f"Unknown agent: {next_agent_id}")
+
+        channel_id = _discord_channel_id(raw_payload)
+        if not channel_id:
+            raise HTTPException(status_code=400, detail="Discord channel_id is required for switch")
+
+        _set_discord_channel_agent(channel_id, next_agent_id)
+        source = _discord_source()
+        switched_session_id = _resolve_discord_session(source, raw_payload)
+        lane_manager._get_or_create(switched_session_id)
+        await _send_discord_message(
+            event,
+            f"Switched this channel to agent {next_agent_id}. Session: {switched_session_id}",
+        )
+        return {
+            "ok": True,
+            "action": "switch",
+            "agent_id": next_agent_id,
+            "session_id": switched_session_id,
+        }
+
+    if action != "start":
+        raise HTTPException(status_code=400, detail=f"Unsupported Discord command action: {action}")
+
+    task = str(event.payload.get("text", "")).strip()
+    if not task:
+        await _send_discord_message(event, f"Provide a task after {command_prefix}.")
+        return {"ok": True, "ignored": True, "reason": "empty_task"}
+
+    event.session_id = session_id
+    await lane_manager.route(event)
+    return {"ok": True, "action": "start", "queued": True, "session_id": session_id}
 
 
 # ---------------------------------------------------------------------------

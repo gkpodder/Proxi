@@ -4,9 +4,12 @@
   "private": true,
   "description": "Proxi agent - TUI script runs from cli_ink",
   "scripts": {
+    "proxi": "bun run scripts/start_proxi.mjs",
     "init-keys-db": "uv run python scripts/init_api_keys_db.py",
     "proxi-tui": "cd cli_ink && bun run dev",
     "proxi-react": "cd react_frontend && bun run start",
-    "proxi-react:existing-gateway": "cd react_frontend && bun run start -- --use-existing-gateway"
+    "proxi-react:existing-gateway": "cd react_frontend && bun run start -- --use-existing-gateway",
+    "proxi-discord-relay": "bun run scripts/start_discord_relay.mjs",
+    "proxi-discord-relay:existing-gateway": "bun run scripts/start_discord_relay.mjs --use-existing-gateway"
   }
 }

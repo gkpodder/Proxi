@@ -42,6 +42,28 @@ async def verify_whatsapp_signature(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Invalid HMAC signature")
 
 
+async def verify_discord_signature(request: Request) -> None:
+    """Validate relay webhook signature using ``DISCORD_WEBHOOK_SECRET``.
+
+    The relay is expected to send ``X-Signature-256: sha256=<hex>``.
+    If ``DISCORD_WEBHOOK_SECRET`` is not set, verification is disabled.
+    """
+    secret = os.environ.get("DISCORD_WEBHOOK_SECRET", "")
+    if not secret:
+        return
+
+    signature_header = request.headers.get("X-Signature-256", "")
+    if not signature_header.startswith("sha256="):
+        raise HTTPException(status_code=403, detail="Missing Discord webhook signature")
+
+    body = await request.body()
+    expected = "sha256=" + hmac.new(
+        secret.encode(), body, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(signature_header, expected):
+        raise HTTPException(status_code=403, detail="Invalid Discord webhook signature")
+
+
 async def verify_webhook_hmac(request: Request, source: SourceConfig) -> None:
     """Generic HMAC-SHA256 verification for inbound webhooks.
 

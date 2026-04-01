@@ -291,6 +291,21 @@ Optional verification:
 
 ## React Frontend (Gateway)
 
+Quick launcher:
+
+```bash
+bun run proxi
+```
+
+This opens an interactive menu to choose:
+
+- TUI
+- React frontend
+- Discord relay
+- Headless (one-shot `proxi-run`)
+
+It auto-detects gateway health and starts a managed gateway when needed.
+
 From project root:
 
 ```bash
@@ -311,6 +326,82 @@ Frontend startup parameters:
 | `PROXI_GATEWAY_URL` | Environment variable | Override gateway base URL (default: `http://127.0.0.1:8765`). |
 | `PROXI_SESSION_ID` | Environment variable | Start the web UI on a specific session id. |
 | `PORT` | Environment variable | React frontend HTTP port (default: `5174`). |
+
+## Discord Integration (Relay -> Gateway)
+
+This integration lets Discord chat act as a command input source for Proxi, similar to the frontend bridge.
+
+### 1. Configure a Discord source in gateway.yml
+
+Add or update a source like:
+
+```yaml
+sources:
+    discord:
+        type: discord
+        target_agent: work
+        target_session: discord
+        priority: 0
+        paused: false
+        # Optional extras (all optional):
+        # discord_command_prefix: /proxi
+        # discord_allow_plain: false
+        # discord_session_mode: channel   # fixed | channel | user
+        # discord_agent_overrides: {}     # auto-managed by /proxi switch <agent_id>
+```
+
+Session mode behavior:
+
+- `fixed`: all Discord messages for this source go to one session (`target_session` or agent default)
+- `channel`: each Discord channel gets its own session
+- `user`: each user in each channel gets its own session
+
+### 2. Set security env vars for signed relay calls
+
+In the gateway process environment:
+
+```powershell
+$env:DISCORD_WEBHOOK_SECRET = "your-shared-secret"
+```
+
+When set, `/channels/discord/webhook` requires `X-Signature-256` HMAC signatures.
+
+### 3. Start the Discord relay service
+
+From project root:
+
+```bash
+cd discord_relay
+bun install
+bun run start
+```
+
+Or via root script:
+
+```bash
+bun run proxi-discord-relay
+```
+
+`proxi-discord-relay` checks gateway health and auto-starts `proxi-gateway` if needed.
+If you want to use an already running gateway only:
+
+```bash
+bun run proxi-discord-relay:existing-gateway
+```
+
+Relay env file: [discord_relay/.env.example](discord_relay/.env.example)
+
+### 4. Discord commands
+
+Default prefix is `/proxi`.
+
+- `/proxi <task>`: enqueue a Proxi task
+- `/proxi status`: show lane status for this channel/user session
+- `/proxi abort`: abort active run in this session
+- `/proxi switch <agent_id>`: route this channel to a different agent
+- `/proxi help`: show command help
+
+Messages can be forwarded without prefix by setting `discord_allow_plain: true` in gateway source config and `PROXI_DISCORD_ALLOW_PLAIN=1` in relay env.
 
 ## Webhook Setup And Testing
 
