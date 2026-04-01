@@ -49,6 +49,11 @@ from proxi.gateway.middleware.hmac import (
 )
 from proxi.gateway.router import EventRouter
 from proxi.interaction.tool import get_ask_user_question_spec
+from proxi.llm.model_registry import (
+    DEFAULT_MODELS,
+    get_model_limits_by_provider,
+    get_supported_models_by_provider,
+)
 from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_user_profile
 from proxi.tools.coding import register_coding_tools
@@ -66,20 +71,9 @@ lane_manager: LaneManager | None = None
 heartbeat_mgr: HeartbeatManager
 scheduler = AsyncIOScheduler()
 
-SUPPORTED_LLM_MODELS: dict[str, list[str]] = {
-    "openai": [
-        "gpt-5-mini-2025-08-07",
-        "gpt-5-2025-08-07",
-        "gpt-4.1-mini",
-    ],
-    "anthropic": [
-        "claude-3-5-sonnet-20241022",
-        "claude-3-7-sonnet-20250219",
-    ],
-}
-DEFAULT_LLM_MODELS: dict[str, str] = {
-    provider: models[0] for provider, models in SUPPORTED_LLM_MODELS.items()
-}
+SUPPORTED_LLM_MODELS: dict[str, list[str]] = get_supported_models_by_provider()
+LLM_MODEL_LIMITS: dict[str, list[dict[str, int | str]]] = get_model_limits_by_provider()
+DEFAULT_LLM_MODELS: dict[str, str] = dict(DEFAULT_MODELS)
 llm_provider: str = "openai"
 llm_model: str = DEFAULT_LLM_MODELS["openai"]
 
@@ -1005,6 +999,7 @@ async def get_llm_config_endpoint() -> dict[str, Any]:
         "model": llm_model,
         "providers": sorted(SUPPORTED_LLM_MODELS.keys()),
         "models": SUPPORTED_LLM_MODELS,
+        "model_limits": LLM_MODEL_LIMITS,
         "defaults": DEFAULT_LLM_MODELS,
     }
 
@@ -1031,6 +1026,7 @@ async def update_llm_config_endpoint(body: LlmConfigUpdateRequest) -> dict[str, 
         "model": llm_model,
         "providers": sorted(SUPPORTED_LLM_MODELS.keys()),
         "models": SUPPORTED_LLM_MODELS,
+        "model_limits": LLM_MODEL_LIMITS,
         "defaults": DEFAULT_LLM_MODELS,
     }
 

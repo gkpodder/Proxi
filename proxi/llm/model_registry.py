@@ -66,3 +66,33 @@ def get_context_window(model: str) -> int:
 def token_budget_for_model(model: str) -> int:
     """Return the recommended input token budget (85% of context window)."""
     return int(get_context_window(model) * _BUDGET_FRACTION)
+
+
+def _provider_for_model(model: str) -> str:
+    """Classify a model id into a provider key used by gateway config."""
+    model_lower = model.lower()
+    if model_lower.startswith("claude"):
+        return "anthropic"
+    return "openai"
+
+
+def get_supported_models_by_provider() -> dict[str, list[str]]:
+    """Return registry model ids grouped by provider."""
+    grouped: dict[str, list[str]] = {"openai": [], "anthropic": []}
+    for model in sorted(_CONTEXT_WINDOWS.keys()):
+        grouped[_provider_for_model(model)].append(model)
+    return grouped
+
+
+def get_model_limits_by_provider() -> dict[str, list[dict[str, int | str]]]:
+    """Return model metadata grouped by provider with context and budget limits."""
+    grouped: dict[str, list[dict[str, int | str]]] = {"openai": [], "anthropic": []}
+    for model in sorted(_CONTEXT_WINDOWS.keys()):
+        grouped[_provider_for_model(model)].append(
+            {
+                "model": model,
+                "context_window": get_context_window(model),
+                "token_budget": token_budget_for_model(model),
+            }
+        )
+    return grouped

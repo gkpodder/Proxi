@@ -266,16 +266,16 @@ Related notes:
 
 ## Development
 
-Run TUI directly with Bun:
+Run TUI with uv:
 
 ```bash
 # From repository root
-bun run proxi-tui
+uv run proxi-tui
 
 # Or inside cli_ink/
 cd cli_ink
-bun run dev
-bun run start
+npm run dev
+npm run start
 ```
 
 Run tests:
@@ -294,7 +294,7 @@ Optional verification:
 Quick launcher:
 
 ```bash
-bun run proxi
+uv run proxi
 ```
 
 This opens an interactive menu to choose:
@@ -304,25 +304,19 @@ This opens an interactive menu to choose:
 - Discord relay
 - Headless (one-shot `proxi-run`)
 
-It auto-detects gateway health and starts a managed gateway when needed.
+It checks gateway health and requires a running gateway.
 
 From project root:
 
 ```bash
-# Default: starts the React frontend and auto-starts gateway if needed
-bun run proxi-react
-
-# Use an already running gateway (do not auto-start)
-bun run proxi-react:existing-gateway
+# Start the React frontend (requires a running gateway)
+uv run proxi-react
 ```
 
 Frontend startup parameters:
 
 | Parameter | Where | Description |
 |----------|-------|-------------|
-| `--use-existing-gateway` | CLI flag to `react_frontend/server.js` | Do not auto-start gateway; require an existing gateway. |
-| `--no-gateway-start` | CLI flag to `react_frontend/server.js` | Alias for `--use-existing-gateway`. |
-| `PROXI_GATEWAY_AUTOSTART=0` | Environment variable | Disable gateway auto-start and use existing gateway only. |
 | `PROXI_GATEWAY_URL` | Environment variable | Override gateway base URL (default: `http://127.0.0.1:8765`). |
 | `PROXI_SESSION_ID` | Environment variable | Start the web UI on a specific session id. |
 | `PORT` | Environment variable | React frontend HTTP port (default: `5174`). |
@@ -372,22 +366,17 @@ From project root:
 
 ```bash
 cd discord_relay
-bun install
-bun run start
+npm install
+npm run start
 ```
 
 Or via root script:
 
 ```bash
-bun run proxi-discord-relay
+uv run proxi-discord-relay
 ```
 
-`proxi-discord-relay` checks gateway health and auto-starts `proxi-gateway` if needed.
-If you want to use an already running gateway only:
-
-```bash
-bun run proxi-discord-relay:existing-gateway
-```
+`proxi-discord-relay` requires a running gateway and exits if gateway is unreachable.
 
 Relay env file: [discord_relay/.env.example](discord_relay/.env.example)
 
@@ -416,7 +405,7 @@ From project root:
 uv run proxi-gateway
 
 # In a second terminal, start frontend
-bun run proxi-react
+uv run proxi-react
 ```
 
 Verify gateway health:
