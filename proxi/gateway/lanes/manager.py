@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -11,6 +12,7 @@ from proxi.gateway.config import GatewayConfig
 from proxi.gateway.events import GatewayEvent
 from proxi.gateway.lanes.budget import LaneBudget
 from proxi.gateway.lanes.lane import AgentLane
+from proxi.llm.model_registry import DEFAULT_MODELS, get_context_window, token_budget_for_model
 from proxi.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -131,12 +133,19 @@ class LaneManager:
             todos_path=str(session_dir / "todos.md"),
         )
 
+        provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
+        model = DEFAULT_MODELS.get(provider, DEFAULT_MODELS["openai"])
+        ctx_window = get_context_window(model)
+
         lane = AgentLane(
             session_id=session_id,
             soul_path=agent.soul_path,
             history_path=history_path,
             workspace_config=workspace_config,
-            budget=LaneBudget(),
+            budget=LaneBudget(
+                token_budget=token_budget_for_model(model),
+                context_window=ctx_window,
+            ),
             _create_loop=self._create_loop,
         )
         asyncio.create_task(lane.start())

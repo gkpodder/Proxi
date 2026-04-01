@@ -19,6 +19,7 @@ import { HitlForm } from "./components/HitlForm.js";
 import { AnswerForm } from "./components/AnswerForm.js";
 import { CommandPalette } from "./components/CommandPalette.js";
 import { PlanTodosOverlay } from "./components/PlanTodosOverlay.js";
+import { UsageOverlay } from "./components/UsageOverlay.js";
 
 type StatusKind = "tool" | "subagent" | "progress" | null;
 
@@ -45,6 +46,13 @@ export default function App() {
   const [streamingContent, setStreamingContent] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [planTodosOverlay, setPlanTodosOverlay] = useState<"plan" | "todos" | null>(null);
+  const [usageOverlay, setUsageOverlay] = useState<{
+    tokens_used: number;
+    token_budget: number;
+    context_window: number;
+    turns_used: number;
+    max_turns: number;
+  } | null>(null);
   const [inputHistory, setInputHistory] = useState<string[]>([]);
   const [bootHint, setBootHint] = useState("Connecting to gateway...");
   const [userSendPending, setUserSendPending] = useState(false);
@@ -66,8 +74,16 @@ export default function App() {
   >(null);
   const bufferRef = useRef("");
   const streamingRef = useRef("");
-  const overlayRef = useRef({ planTodosOverlay, commandPaletteOpen });
-  overlayRef.current = { planTodosOverlay, commandPaletteOpen };
+  const overlayRef = useRef({
+    planTodosOverlay,
+    commandPaletteOpen,
+    usageOverlayOpen: usageOverlay !== null,
+  });
+  overlayRef.current = {
+    planTodosOverlay,
+    commandPaletteOpen,
+    usageOverlayOpen: usageOverlay !== null,
+  };
 
   // Resolved session_id (set from boot_complete)
   const sessionRef = useRef<string>("");
@@ -79,11 +95,12 @@ export default function App() {
   useInput(
     (_, key) => {
       if (!key.escape) return;
-      const { planTodosOverlay: plan, commandPaletteOpen: palette } = overlayRef.current;
+      const { planTodosOverlay: plan, commandPaletteOpen: palette, usageOverlayOpen } = overlayRef.current;
       if (plan) setPlanTodosOverlay(null);
       else if (palette) setCommandPaletteOpen(false);
+      else if (usageOverlayOpen) setUsageOverlay(null);
     },
-    { isActive: planTodosOverlay !== null || commandPaletteOpen }
+    { isActive: planTodosOverlay !== null || commandPaletteOpen || usageOverlay !== null }
   );
 
   const commitStreamToScrollback = useCallback(() => {
@@ -909,6 +926,7 @@ export default function App() {
       if (
         !bootInfo ||
         hitlSpec !== null ||
+        usageOverlay !== null ||
         planTodosOverlay !== null ||
         commandPaletteOpen ||
         tuiActiveDepth <= 0
@@ -921,6 +939,7 @@ export default function App() {
       isActive: Boolean(
         bootInfo &&
           hitlSpec === null &&
+          usageOverlay === null &&
           planTodosOverlay === null &&
           !commandPaletteOpen &&
           tuiActiveDepth > 0
@@ -966,6 +985,7 @@ export default function App() {
           streamingRef.current = "";
           bufferRef.current = "";
           setHitlSpec(null);
+          setUsageOverlay(null);
           agentModeRef.current = false;
           mcpModeRef.current = false;
           deleteModeRef.current = false;
@@ -997,6 +1017,35 @@ export default function App() {
         case "todos":
           setPlanTodosOverlay("todos");
           break;
+        case "usage": {
+          const sid = sessionRef.current;
+          if (!sid) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "No active session.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(sid)}/stats`)
+            .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+            .then((data) => {
+              const stats = data as {
+                tokens_used: number;
+                token_budget: number;
+                context_window: number;
+                turns_used: number;
+                max_turns: number;
+              };
+              setUsageOverlay(stats);
+            })
+            .catch(() => {
+              setScrollback((s) => [
+                ...s,
+                { type: "agent_line", content: "Could not fetch usage stats — start a session first.", isFirst: true, isSystem: true },
+              ]);
+            });
+          break;
+        }
         case "help":
           setScrollback((s) => [
             ...s,
@@ -1007,6 +1056,7 @@ export default function App() {
             { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/plan     - View current plan", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/todos    - View open todos", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/usage    - Show context and turn usage", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/help     - Show all commands", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/exit     - Exit Proxi", isFirst: false, isSystem: true },
           ]);
@@ -1066,6 +1116,11 @@ export default function App() {
           <CommandPalette
             onDismiss={() => setCommandPaletteOpen(false)}
             onCommand={onCommand}
+          />
+        ) : usageOverlay ? (
+          <UsageOverlay
+            stats={usageOverlay}
+            onDismiss={() => setUsageOverlay(null)}
           />
         ) : planTodosOverlay ? (
           <PlanTodosOverlay

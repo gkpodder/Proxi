@@ -718,6 +718,22 @@ async def clear_session_history_endpoint(session_id: str) -> dict[str, str]:
     return {"status": "cleared"}
 
 
+@app.get("/v1/sessions/{session_id:path}/stats")
+async def get_session_stats(session_id: str) -> dict[str, Any]:
+    """Return token and turn usage stats for an active session lane."""
+    lane = lane_manager.get_lane(session_id)
+    if lane is None:
+        raise HTTPException(status_code=404, detail="No active lane for this session")
+    b = lane.budget
+    return {
+        "tokens_used": b.tokens_used,
+        "token_budget": b.token_budget,
+        "context_window": b.context_window,
+        "turns_used": b.turns_used,
+        "max_turns": b.max_turns,
+    }
+
+
 # ---------------------------------------------------------------------------
 # User profile (debug / verification)
 # ---------------------------------------------------------------------------

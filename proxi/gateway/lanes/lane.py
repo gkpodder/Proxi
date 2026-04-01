@@ -329,7 +329,8 @@ class AgentLane:
             result_state = await self._loop.run(text)
 
         self._state = result_state
-        self.budget.record_turn(tokens=result_state.total_tokens - (self.budget.tokens_used or 0))
+        last_turn_tokens = result_state.turns[-1].tokens_used if result_state.turns else 0
+        self.budget.record_turn(context_tokens=last_turn_tokens)
 
         # Signal completion on the SSE channel
         if self._sse_channel is not None:

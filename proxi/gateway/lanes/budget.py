@@ -13,6 +13,7 @@ class BudgetExceeded(RuntimeError):
 class LaneBudget:
     max_turns: int = 25
     token_budget: int = 80000
+    context_window: int = 128_000
     wall_clock_timeout: float = 300.0
 
     turns_used: int = 0
@@ -24,9 +25,9 @@ class LaneBudget:
         if self.tokens_used >= self.token_budget:
             raise BudgetExceeded(f"token budget ({self.token_budget})")
 
-    def record_turn(self, tokens: int = 0) -> None:
+    def record_turn(self, context_tokens: int = 0) -> None:
         self.turns_used += 1
-        self.tokens_used += tokens
+        self.tokens_used = context_tokens  # current context size, not accumulated
         self.check()
 
     def reset(self) -> None:
