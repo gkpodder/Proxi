@@ -17,6 +17,8 @@ Project start: Sep 15, 2025
 
 ## Overview
 
+Watch the [user guide on YouTube](https://www.youtube.com/watch?v=vR8O_09WrnM).
+
 Proxi is a dynamic AI assisstant focused on making computers more accessible for individuals who face barriers with traditional interfaces and for power users who want to get more work done.
 
 Proxi can access virtually any integration such as your google workspace, weather, spotify, browser and do work on your behalf. Feel free to open an issue if you'd like for any other integrations to be added!
@@ -281,3 +283,8 @@ Run tests:
 ```bash
 pytest tests/ -v
 ```
+
+Optional verification:
+
+- **Bridge only:** From project root, run `uv run proxi-bridge`. You should see `{"type":"ready"}`. (Ctrl+C to exit.) This checks that the Python agent bridge starts correctly.
+- **Full flow:** Run `proxi` or `uv run proxi`; you should see the boot sequence, agent selection (if applicable), and a prompt. Type a task and press Enter.
