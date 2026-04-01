@@ -540,7 +540,9 @@ export default function App() {
   const startWorkDirFlow = useCallback(async () => {
     workDirModeRef.current = true;
     try {
-      const res = await fetch(`${GATEWAY}/v1/working-dir`);
+      const agentId = bootInfoRef.current?.agentId;
+      const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
+      const res = await fetch(`${GATEWAY}/v1/working-dir${qs}`);
       const data = res.ok ? (await res.json() as { path?: string }) : { path: "unknown" };
       const current = data.path ?? "unknown";
       setHitlSpec({
@@ -563,10 +565,11 @@ export default function App() {
     const newPath = String(value).trim();
     if (!newPath) return;
     try {
+      const agentId = bootInfoRef.current?.agentId;
       const res = await fetch(`${GATEWAY}/v1/working-dir`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: newPath }),
+        body: JSON.stringify({ path: newPath, agent_id: agentId ?? null }),
       });
       const data = (await res.json()) as { path?: string; detail?: string };
       if (res.ok) {

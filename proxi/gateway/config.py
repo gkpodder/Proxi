@@ -18,6 +18,7 @@ class AgentConfig:
     agent_id: str
     soul_path: Path
     default_session: str = "main"
+    working_dir: Path | None = None
 
 
 @dataclass
@@ -61,10 +62,12 @@ class GatewayConfig:
 
         agents: dict[str, AgentConfig] = {}
         for aid, cfg in (raw.get("agents") or {}).items():
+            raw_wd = cfg.get("working_dir")
             agents[aid] = AgentConfig(
                 agent_id=aid,
                 soul_path=(workspace_root / cfg["soul"]).resolve(),
                 default_session=cfg.get("default_session", "main"),
+                working_dir=Path(raw_wd).expanduser().resolve() if raw_wd else None,
             )
 
         sources: dict[str, SourceConfig] = {}

@@ -134,6 +134,16 @@ class ExecuteCodeTool(BaseTool):
         # Strip any `bash -c "..."` / `bash -lc "..."` wrapper (Unix only).
         command = _unwrap_bash_c(command)
 
+        if not self.working_directory.exists():
+            return ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Working directory does not exist: {self.working_directory}. "
+                    "Create it first or update the agent's working_dir setting."
+                ),
+            )
+
         try:
             if _SHELL_STDIN:
                 # bash / pwsh: pass script via stdin to avoid all quoting issues.
@@ -177,15 +187,24 @@ class ExecuteCodeTool(BaseTool):
             stderr_text = stderr.decode("utf-8", errors="replace")
             return_code = process.returncode
 
+            # Truncate large outputs to prevent context flooding.
+            _MAX_OUTPUT = 50_000
+            truncated = False
+            if len(stdout_text) > _MAX_OUTPUT:
+                stdout_text = stdout_text[:_MAX_OUTPUT]
+                truncated = True
+
             if return_code != 0:
                 return ToolResult(
                     success=False,
-                    output=stdout_text,
+                    output=stdout_text + ("\n[output truncated]" if truncated else ""),
                     error=f"Command failed with exit code {return_code}\n{stderr_text}",
                     metadata={"return_code": return_code},
                 )
 
             output = stdout_text if stdout_text else "(no output)"
+            if truncated:
+                output += "\n[output truncated at 50 000 chars]"
             if stderr_text:
                 output += f"\n[stderr]\n{stderr_text}"
 

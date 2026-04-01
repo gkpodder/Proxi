@@ -99,6 +99,13 @@ class LaneManager:
         for lane in self._lanes.values():
             lane.sync_coding_tools(working_dir)
 
+    def sync_coding_tools_to_agent_loops(self, agent_id: str, working_dir: Path) -> None:
+        """Re-root coding tools only on lanes belonging to the given agent."""
+        prefix = f"{agent_id}/"
+        for sid, lane in self._lanes.items():
+            if sid.startswith(prefix):
+                lane.sync_coding_tools(working_dir)
+
     def _get_or_create(self, session_id: str) -> AgentLane:
         if session_id in self._lanes:
             return self._lanes[session_id]

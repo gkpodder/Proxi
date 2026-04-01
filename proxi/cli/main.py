@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -15,7 +14,7 @@ from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
-from proxi.observability.logging import setup_logging, get_logger, init_log_manager
+from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_key_value
 from proxi.tools.coding import register_coding_tools
 from proxi.tools.filesystem import ReadFileTool, WriteFileTool

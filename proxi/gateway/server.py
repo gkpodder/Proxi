@@ -30,7 +30,6 @@ from proxi.gateway.channels.heartbeat import HeartbeatManager
 from proxi.gateway.channels.http import (
     HttpFormBridge,
     HttpNoopReplyChannel,
-    HttpReplyChannel,
     HttpSseReplyChannel,
     build_http_event,
 )
@@ -72,8 +71,12 @@ _mcp_deferred_tools: list[Any] = []  # deferred MCP tools (loaded via search_too
 _last_mcp_signature: str | None = None
 _mcp_refresh_lock = asyncio.Lock()
 
-# Current working directory for coding tools (mutable at runtime via /v1/working-dir).
+# Global working directory fallback (env var / POST /v1/working-dir with no agent).
 _working_dir: Path = Path(os.environ.get("PROXI_WORKING_DIR", ".")).resolve()
+
+# Per-agent runtime working dirs. Seeded from gateway.yml at startup; overridden
+# by POST /v1/working-dir when the TUI sends an agent_id.
+_agent_working_dirs: dict[str, Path] = {}
 
 
 def _workspace_root() -> Path:
@@ -92,6 +95,10 @@ def _reload_gateway_config() -> None:
     router = EventRouter(config)
     if lane_manager is not None:
         lane_manager.update_config(config)
+    # Seed per-agent working dirs from yaml for agents not yet overridden at runtime.
+    for aid, agent_cfg in config.agents.items():
+        if agent_cfg.working_dir and aid not in _agent_working_dirs:
+            _agent_working_dirs[aid] = agent_cfg.working_dir
 
 
 async def _refresh_mcp_tools() -> None:
@@ -164,7 +171,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
     llm_client = create_llm_client(provider=provider)
 
-    working_dir = _working_dir
+    working_dir = _agent_working_dirs.get(workspace_config.agent_id, _working_dir)
 
     tool_registry = setup_tools(working_directory=working_dir)
     tool_registry.register_raw_spec(get_ask_user_question_spec())
@@ -217,6 +224,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
     config = GatewayConfig.load(workspace_root)
     router = EventRouter(config)
+
+    # Seed per-agent working dirs from gateway.yml.
+    for _aid, _agent_cfg in config.agents.items():
+        if _agent_cfg.working_dir:
+            _agent_working_dirs[_aid] = _agent_cfg.working_dir
 
     # Load MCP adapters once so their tools are available to all lanes.
     await _refresh_mcp_tools()
@@ -291,7 +303,6 @@ async def telegram_webhook(request: Request) -> dict[str, bool]:
 
     if "callback_query" in raw:
         cq = raw["callback_query"]
-        chat_id = str(cq["message"]["chat"]["id"])
         ghost = GatewayEvent(
             source_id="telegram", source_type="telegram", payload={}
         )
@@ -548,18 +559,25 @@ async def toggle_mcp_endpoint(mcp_name: str) -> dict[str, Any]:
 # Working directory management
 # ---------------------------------------------------------------------------
 @app.get("/v1/working-dir")
-async def get_working_dir_endpoint() -> dict[str, str]:
-    """Return the current coding-tools working directory."""
+async def get_working_dir_endpoint(agent_id: str | None = None) -> dict[str, str]:
+    """Return the effective working directory for the given agent (or the global default)."""
+    if agent_id:
+        return {"path": str(_agent_working_dirs.get(agent_id, _working_dir))}
     return {"path": str(_working_dir)}
 
 
 class SetWorkingDirRequest(BaseModel):
     path: str
+    agent_id: str | None = None
 
 
 @app.post("/v1/working-dir")
 async def set_working_dir_endpoint(body: SetWorkingDirRequest) -> dict[str, str]:
-    """Set a new working directory and re-root all coding tools on active lanes."""
+    """Set a new working directory and re-root coding tools on active lanes.
+
+    If agent_id is provided, only that agent's runtime working dir is updated.
+    Otherwise the global fallback is updated and all lanes are re-rooted.
+    """
     global _working_dir
     raw = (body.path or "").strip()
     if not raw:
@@ -569,10 +587,17 @@ async def set_working_dir_endpoint(body: SetWorkingDirRequest) -> dict[str, str]
         raise HTTPException(status_code=400, detail=f"Path does not exist: {new_dir}")
     if not new_dir.is_dir():
         raise HTTPException(status_code=400, detail=f"Path is not a directory: {new_dir}")
-    _working_dir = new_dir
-    if lane_manager is not None:
-        lane_manager.sync_coding_tools_to_loops(new_dir)
-    logger.info("working_dir_changed", path=str(new_dir))
+
+    if body.agent_id:
+        _agent_working_dirs[body.agent_id] = new_dir
+        if lane_manager is not None:
+            lane_manager.sync_coding_tools_to_agent_loops(body.agent_id, new_dir)
+    else:
+        _working_dir = new_dir
+        if lane_manager is not None:
+            lane_manager.sync_coding_tools_to_loops(new_dir)
+
+    logger.info("working_dir_changed", path=str(new_dir), agent_id=body.agent_id)
     return {"path": str(new_dir)}
 
 
