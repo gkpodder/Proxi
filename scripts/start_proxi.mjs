@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
@@ -10,7 +11,9 @@ const projectRoot = path.resolve(__dirname, "..");
 const gatewayBaseUrl = (process.env.PROXI_GATEWAY_URL || `http://127.0.0.1:${process.env.GATEWAY_PORT || 8765}`).replace(/\/$/, "");
 
 let managedGatewayProcess = null;
+let managedGatewayStarted = false;
 let activeChild = null;
+let cleanupStarted = false;
 
 function withTimeout(promise, ms, fallbackValue = null) {
   return new Promise((resolve) => {
@@ -27,6 +30,34 @@ function withTimeout(promise, ms, fallbackValue = null) {
   });
 }
 
+function gatewayCommand() {
+  const pythonCandidates = process.platform === "win32"
+    ? [path.join(projectRoot, ".venv", "Scripts", "python.exe")]
+    : [path.join(projectRoot, ".venv", "bin", "python")];
+
+  for (const pythonPath of pythonCandidates) {
+    if (pythonPath && existsSync(pythonPath)) {
+      return { command: pythonPath, args: ["-m", "proxi.gateway.daemon_cli", "start"] };
+    }
+  }
+
+  return { command: "uv", args: ["run", "proxi-gateway-ctl", "start"] };
+}
+
+function gatewayStopCommand() {
+  const pythonCandidates = process.platform === "win32"
+    ? [path.join(projectRoot, ".venv", "Scripts", "python.exe")]
+    : [path.join(projectRoot, ".venv", "bin", "python")];
+
+  for (const pythonPath of pythonCandidates) {
+    if (pythonPath && existsSync(pythonPath)) {
+      return { command: pythonPath, args: ["-m", "proxi.gateway.daemon_cli", "stop"] };
+    }
+  }
+
+  return { command: "uv", args: ["run", "proxi-gateway-ctl", "stop"] };
+}
+
 async function detectGateway() {
   const response = await withTimeout(fetch(`${gatewayBaseUrl}/health`), 1200, null);
   return Boolean(response && response.ok);
@@ -37,10 +68,12 @@ function startManagedGateway() {
     return managedGatewayProcess;
   }
 
-  managedGatewayProcess = spawn("uv", ["run", "proxi-gateway"], {
+  const gateway = gatewayCommand();
+  managedGatewayStarted = true;
+  managedGatewayProcess = spawn(gateway.command, gateway.args, {
     cwd: projectRoot,
     env: process.env,
-    shell: process.platform === "win32",
+    shell: gateway.command === "uv" && process.platform === "win32",
     stdio: ["ignore", "ignore", "pipe"],
   });
 
@@ -49,6 +82,12 @@ function startManagedGateway() {
     const text = String(chunk || "").trim();
     if (text) {
       console.error(`[gateway] ${text}`);
+    }
+  });
+
+  managedGatewayProcess.on("exit", (code) => {
+    if (code && code !== 0) {
+      console.error(`[gateway] exited with code ${code}`);
     }
   });
 
@@ -61,9 +100,9 @@ async function ensureGatewayReady() {
   console.log(`Gateway not detected at ${gatewayBaseUrl}; starting managed gateway...`);
   startManagedGateway();
 
-  const maxAttempts = 30;
+  const maxAttempts = 60;
   for (let i = 0; i < maxAttempts; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     if (await detectGateway()) {
       console.log("Gateway is ready.");
       return true;
@@ -78,13 +117,31 @@ function stopManagedGateway() {
   managedGatewayProcess.kill();
 }
 
+function stopGatewayDaemon() {
+  if (!managedGatewayStarted) return;
+  const gateway = gatewayStopCommand();
+  spawnSync(gateway.command, gateway.args, {
+    cwd: projectRoot,
+    env: process.env,
+    shell: gateway.command === "uv" && process.platform === "win32",
+    stdio: "ignore",
+  });
+}
+
+function cleanupGateway() {
+  if (cleanupStarted) return;
+  cleanupStarted = true;
+
+  if (activeChild && activeChild.exitCode == null) {
+    activeChild.kill();
+  }
+
+  stopGatewayDaemon();
+  stopManagedGateway();
+}
+
 function attachShutdownHooks() {
-  const shutdown = () => {
-    if (activeChild && activeChild.exitCode == null) {
-      activeChild.kill();
-    }
-    stopManagedGateway();
-  };
+  const shutdown = () => cleanupGateway();
 
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
@@ -149,37 +206,37 @@ async function main() {
   if (choice === "1") {
     await ensureGatewayReady();
     const code = await runCommand("bun", ["run", "proxi-tui"]);
-    stopManagedGateway();
+    cleanupGateway();
     process.exit(code);
   }
 
   if (choice === "2") {
     await ensureGatewayReady();
     const code = await runCommand("bun", ["run", "proxi-react:existing-gateway"]);
-    stopManagedGateway();
+    cleanupGateway();
     process.exit(code);
   }
 
   if (choice === "3") {
     await ensureGatewayReady();
     const code = await runCommand("bun", ["run", "proxi-discord-relay:existing-gateway"]);
-    stopManagedGateway();
+    cleanupGateway();
     process.exit(code);
   }
 
   if (choice === "4") {
     const code = await runHeadless();
-    stopManagedGateway();
+    cleanupGateway();
     process.exit(code);
   }
 
   console.error("Invalid choice. Use 1, 2, 3, or 4.");
-  stopManagedGateway();
+  cleanupGateway();
   process.exit(1);
 }
 
 main().catch((error) => {
   console.error(String(error?.message || error));
-  stopManagedGateway();
+  cleanupGateway();
   process.exit(1);
 });
