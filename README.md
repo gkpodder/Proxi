@@ -8,6 +8,9 @@ Date of project start: Sep. 15 2025
 This project is an AI-powered assistive technology platform designed to make computers more accessible for individuals who face barriers with traditional interfaces, such as people with disabilities, elderly users, or those unfamiliar with digital devices.
 At its core, the system combines speech recognition, natural language understanding, and text-to-speech to allow users to control and interact with a computer entirely through their voice. Instead of navigating menus, using a mouse, or typing, users can simply speak naturally to the system, which responds with clear, human-like speech.
 
+## User Guide Video
+https://www.youtube.com/watch?v=vR8O_09WrnM
+
 ## Core Loop Architecture
 
 Proxi follows a three-layer architecture:
