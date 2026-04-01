@@ -234,19 +234,19 @@ class TestLaneBudget:
 
     def test_turn_limit_exceeded(self) -> None:
         budget = LaneBudget(max_turns=2)
-        budget.record_turn(tokens=10)
+        budget.record_turn(context_tokens=10)
         # 2nd record_turn brings turns_used to 2 == max_turns → raises
         with pytest.raises(BudgetExceeded, match="turn limit"):
-            budget.record_turn(tokens=10)
+            budget.record_turn(context_tokens=10)
 
     def test_token_budget_exceeded(self) -> None:
         budget = LaneBudget(token_budget=100)
         with pytest.raises(BudgetExceeded, match="token budget"):
-            budget.record_turn(tokens=200)
+            budget.record_turn(context_tokens=200)
 
     def test_reset_clears_counters(self) -> None:
         budget = LaneBudget(max_turns=5, token_budget=1000)
-        budget.record_turn(tokens=500)
+        budget.record_turn(context_tokens=500)
         assert budget.turns_used == 1
         assert budget.tokens_used == 500
         budget.reset()
@@ -256,9 +256,9 @@ class TestLaneBudget:
     def test_under_limit_does_not_raise(self) -> None:
         budget = LaneBudget(max_turns=10, token_budget=5000)
         for _ in range(5):
-            budget.record_turn(tokens=100)
+            budget.record_turn(context_tokens=100)
         assert budget.turns_used == 5
-        assert budget.tokens_used == 500
+        assert budget.tokens_used == 100  # SET semantics: reflects latest context size
 
 
 # ═══════════════════════════════════════════════════════════════════════════
