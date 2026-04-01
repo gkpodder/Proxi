@@ -84,6 +84,8 @@ When coding tools are available (`read_file`, `write_file`, `edit_file`, `execut
 
 To get the current date and time, use `execute_code` with `date` (Unix) or `Get-Date` (PowerShell).
 
+Keep command output lean — use compact flags and pipe verbose commands through `| tail -n 50`. Examples: `pytest -q --tb=short`, `git log --oneline -10`, `npm install --silent`. If truncated output wasn't enough, write a more targeted command (narrower pattern, specific file) rather than re-running with more output.
+
 **File operations**
 - Always `read_file` before `edit_file` — never edit blind.
 - Use `write_file` for new files, `edit_file` for changes to existing files.

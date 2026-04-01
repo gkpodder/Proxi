@@ -97,7 +97,13 @@ class ExecuteCodeTool(BaseTool):
                 "The command already runs in the shell.\n"
                 "- To create or overwrite files with content, use the `write_file` tool instead of "
                 "shell heredocs (`<< EOF`). Heredocs break inside shell commands passed to this tool.\n"
-                "- Multiline scripts work fine: use semicolons or newlines to chain commands."
+                "- Multiline scripts work fine: use semicolons or newlines to chain commands.\n\n"
+                "OUTPUT SIZE: Keep output lean by default — prefer compact flags and pipe verbose "
+                "commands through `| tail -n 50` or `| head -n 50`. "
+                "Examples: `pytest -q --tb=short` instead of `pytest -v`, "
+                "`git log --oneline -10` instead of `git log`, `npm install --silent`. "
+                "If truncated output wasn't enough, write a more targeted command "
+                "(narrower pattern, specific file path) rather than re-running with more output."
             ),
             parameters_schema={
                 "type": "object",
@@ -188,7 +194,7 @@ class ExecuteCodeTool(BaseTool):
             return_code = process.returncode
 
             # Truncate large outputs to prevent context flooding.
-            _MAX_OUTPUT = 50_000
+            _MAX_OUTPUT = 15_000
             truncated = False
             if len(stdout_text) > _MAX_OUTPUT:
                 stdout_text = stdout_text[:_MAX_OUTPUT]
