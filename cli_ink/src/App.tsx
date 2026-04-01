@@ -452,6 +452,7 @@ export default function App() {
   // --- MCP management state ---
   const mcpModeRef = useRef(false);
   const deleteModeRef = useRef(false);
+  const workDirModeRef = useRef(false);
 
   const startMcpManagement = useCallback(async () => {
     mcpModeRef.current = true;
@@ -535,6 +536,58 @@ export default function App() {
       await startMcpManagement();
     }
   }, [startMcpManagement]);
+
+  const startWorkDirFlow = useCallback(async () => {
+    workDirModeRef.current = true;
+    try {
+      const res = await fetch(`${GATEWAY}/v1/working-dir`);
+      const data = res.ok ? (await res.json() as { path?: string }) : { path: "unknown" };
+      const current = data.path ?? "unknown";
+      setHitlSpec({
+        type: "user_input_required" as const,
+        method: "text" as const,
+        prompt: `Working dir: ${current}\nEnter new path (leave empty to cancel):`,
+      });
+    } catch {
+      workDirModeRef.current = false;
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: "Could not reach gateway.", isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handleWorkDirSubmit = useCallback(async (value: string | boolean | number) => {
+    workDirModeRef.current = false;
+    setHitlSpec(null);
+    const newPath = String(value).trim();
+    if (!newPath) return;
+    try {
+      const res = await fetch(`${GATEWAY}/v1/working-dir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: newPath }),
+      });
+      const data = (await res.json()) as { path?: string; detail?: string };
+      if (res.ok) {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `Working dir set to: ${data.path}`, isFirst: true, isSystem: true },
+        ]);
+      } else {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `Error: ${data.detail ?? "unknown error"}`, isFirst: true, isSystem: true },
+        ]);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Error: ${msg}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
 
   const handleCreateAgentFlowSubmit = useCallback(
     async (value: string | boolean | number) => {
@@ -774,11 +827,15 @@ export default function App() {
         handleMcpSelection(value);
         return;
       }
+      if (workDirModeRef.current) {
+        void handleWorkDirSubmit(value);
+        return;
+      }
       setUserSendPending(true);
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent]
+    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -810,6 +867,11 @@ export default function App() {
     }
     if (mcpModeRef.current) {
       mcpModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    if (workDirModeRef.current) {
+      workDirModeRef.current = false;
       setHitlSpec(null);
       return;
     }
@@ -892,6 +954,9 @@ export default function App() {
         case "mcps":
           startMcpManagement();
           break;
+        case "work-dir":
+          void startWorkDirFlow();
+          break;
         case "clear":
           setScrollback([]);
           setStreamingContent("");
@@ -932,14 +997,15 @@ export default function App() {
         case "help":
           setScrollback((s) => [
             ...s,
-            { type: "agent_line", content: "/agent - Switch agent or create [+] Create new agent", isFirst: true, isSystem: true },
-            { type: "agent_line", content: "/delete - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/mcps  - Enable/disable MCPs", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/clear - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/plan  - View current plan", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/todos - View open todos", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/help  - Show all commands", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/exit  - Exit Proxi", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/agent    - Switch agent or create [+] Create new agent", isFirst: true, isSystem: true },
+            { type: "agent_line", content: "/delete   - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/mcps     - Enable/disable MCPs", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/work-dir - View or change working directory", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/plan     - View current plan", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/todos    - View open todos", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/help     - Show all commands", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/exit     - Exit Proxi", isFirst: false, isSystem: true },
           ]);
           break;
         case "exit":
@@ -947,7 +1013,7 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent, startMcpManagement, bootInfo]
+    [onSwitchAgent, startMcpManagement, startWorkDirFlow, bootInfo]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);

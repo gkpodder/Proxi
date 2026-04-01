@@ -94,6 +94,11 @@ class LaneManager:
         for lane in self._lanes.values():
             lane.sync_mcp_tools(list(mcp_tools), list(deferred_tools))
 
+    def sync_coding_tools_to_loops(self, working_dir: Path) -> None:
+        """After a working-dir change, re-root coding tools on all active loops."""
+        for lane in self._lanes.values():
+            lane.sync_coding_tools(working_dir)
+
     def _get_or_create(self, session_id: str) -> AgentLane:
         if session_id in self._lanes:
             return self._lanes[session_id]

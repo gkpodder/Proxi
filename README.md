@@ -176,6 +176,31 @@ uv run python -m proxi.security.key_store upsert --key ANTHROPIC_API_KEY --value
 | `PROXI_GATEWAY_HOST` | Gateway bind host (if overridden) |
 | `PROXI_GATEWAY_PORT` | Gateway bind port (if overridden) |
 | `PROXI_GATEWAY_URL` | TUI target URL for an already-running gateway |
+| `PROXI_WORKING_DIR` | Root directory for coding tools (default: current directory) |
+
+### Coding tools
+
+Proxi ships with a built-in coding toolset that enables it to act as a coding agent.  These tools are also useful for general tasks (searching files, running scripts, etc.).
+
+| Tool | Description |
+|---|---|
+| `grep` | Regex search across files (ripgrep when available, Python fallback) |
+| `glob` | Find files by pattern (e.g. `**/*.py`) |
+| `read_file` | Read file contents, supports `offset`/`limit` for line ranges |
+| `edit_file` | Exact-string replacement edit (requires unique match by default) |
+| `write_file` | Write or overwrite a file |
+| `diff` | Show git diff for a file or full working tree |
+| `apply_patch` | Apply a unified diff patch via `git apply` |
+| `execute_code` | Run a shell command in the working directory |
+
+All file and shell tools are path-guarded to `PROXI_WORKING_DIR` when set, preventing reads/writes outside the project root.
+
+**Per-agent configuration** — each agent's `~/.proxi/agents/<id>/config.yaml` controls which tier coding tools are registered at:
+
+```yaml
+tool_sets:
+  coding: live      # live (always in context) | deferred (discovered on demand) | disabled
+```
 
 ## Usage
 

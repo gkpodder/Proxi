@@ -21,6 +21,19 @@ function prettyInboundSourceType(st: string): string {
   return map[st] ?? (st.length ? st.charAt(0).toUpperCase() + st.slice(1) : st);
 }
 
+// Primary arg to surface per tool — the one snippet most useful to see at a glance.
+const TOOL_PRIMARY_ARG: Record<string, string> = {
+  write_file: "path",
+  read_file: "path",
+  edit_file: "file_path",
+  execute_code: "command",
+  grep: "pattern",
+  glob: "pattern",
+  diff: "file_path",
+  apply_patch: "patch",
+  search_tools: "query",
+};
+
 function formatToolInvocation(tool: string, args: Record<string, unknown> | undefined): string {
   // call_tool: show the actual target tool name prominently
   if (tool === "call_tool") {
@@ -28,15 +41,19 @@ function formatToolInvocation(tool: string, args: Record<string, unknown> | unde
     return `call_tool → ${target}`;
   }
   if (!args || Object.keys(args).length === 0) return `${tool}()`;
-  const entries = Object.entries(args);
-  if (entries.length === 1) {
-    const val = entries[0]![1];
-    if (typeof val === "string" && val.length <= 80) {
-      return `${tool}("${String(val).replace(/"/g, '\\"')}")`;
-    }
+
+  // Pick the most informative arg to surface
+  const primaryKey = TOOL_PRIMARY_ARG[tool] ?? Object.keys(args)[0];
+  const primaryVal = primaryKey ? args[primaryKey] : undefined;
+  if (primaryKey && typeof primaryVal === "string") {
+    const truncated = primaryVal.length > 60 ? primaryVal.slice(0, 57) + "…" : primaryVal;
+    const hasMore = Object.keys(args).length > 1;
+    return `${tool}(${truncated}${hasMore ? ", …" : ""})`;
   }
+
+  // Fallback for non-string primary args
   const argsStr = JSON.stringify(args);
-  if (argsStr.length <= 60) return `${tool}(${argsStr})`;
+  if (argsStr.length <= 80) return `${tool}(${argsStr})`;
   return `${tool}(...)`;
 }
 

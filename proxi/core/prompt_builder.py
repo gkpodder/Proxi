@@ -192,7 +192,7 @@ class PromptBuilder:
                 "Rules:\n"
                 "- ONLY use tool names from the AVAILABLE ON DEMAND list above. NEVER invent or guess names.\n"
                 "- Do NOT call deferred tool names directly — they are not in your live tools list.\n"
-                "- Do NOT call unrelated live tools (mcp_read_emails, get_datetime, etc.) before call_tool.\n"
+                "- Do NOT call unrelated live tools (mcp_read_emails, etc.) before call_tool.\n"
                 "- Do NOT use read/list tools to perform write/send actions.\n\n"
                 "Examples:\n"
                 "- List Obsidian notes → call_tool('mcp_obsidian_list_notes', {})\n"

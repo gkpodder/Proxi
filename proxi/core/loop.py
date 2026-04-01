@@ -366,6 +366,43 @@ class AgentLoop:
                         self.logger.error(
                             "turn_error", turn=state.current_turn, error=str(e))
 
+                        # If the exception happened during a tool call, the
+                        # assistant message with tool_calls was already committed
+                        # to history but the tool result(s) were not.  Inject
+                        # synthetic error results so the next LLM call receives a
+                        # valid conversation (OpenAI 400s if any function_call
+                        # lacks a matching tool message).
+                        try:
+                            if decision.type == DecisionType.TOOL_CALL:
+                                answered = {
+                                    m.tool_call_id
+                                    for m in state.history
+                                    if m.role == "tool" and m.tool_call_id
+                                }
+                                for msg in reversed(state.history):
+                                    if msg.role == "assistant" and msg.tool_calls:
+                                        for tc in msg.tool_calls:
+                                            tc_id = (
+                                                tc.get("id", "")
+                                                if isinstance(tc, dict)
+                                                else getattr(tc, "id", "")
+                                            )
+                                            tc_name = (
+                                                tc.get("function", {}).get("name", "")
+                                                if isinstance(tc, dict)
+                                                else getattr(tc, "name", "")
+                                            )
+                                            if tc_id and tc_id not in answered:
+                                                state.add_message(Message(
+                                                    role="tool",
+                                                    content=f"[Tool error: {e}]",
+                                                    name=tc_name,
+                                                    tool_call_id=tc_id,
+                                                ))
+                                        break
+                        except Exception:
+                            pass  # never let recovery logic crash the loop
+
                         if not self.reflector.should_retry(state, turn):
                             state.status = AgentStatus.FAILED
                             break

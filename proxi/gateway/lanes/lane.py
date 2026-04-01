@@ -155,6 +155,42 @@ class AgentLane:
     def is_running(self) -> bool:
         return self._task is not None and not self._task.done()
 
+    def sync_coding_tools(self, working_dir: Path) -> None:
+        """Replace coding tools on an existing loop with ones rooted at *working_dir*."""
+        if self._loop is None:
+            return
+        from proxi.tools.coding import unregister_coding_tools, register_coding_tools, FILESYSTEM_TOOL_NAMES
+        from proxi.tools.filesystem import ReadFileTool, WriteFileTool
+        from proxi.tools.path_guard import PathGuard
+
+        reg = self._loop.tool_registry
+        unregister_coding_tools(reg)
+
+        # Also replace read_file / write_file which were
+        # registered with the old working directory's PathGuard.
+        for name in FILESYSTEM_TOOL_NAMES:
+            reg._tools.pop(name, None)
+            reg._schema_injected.discard(name)
+        guard = PathGuard(working_dir)
+        for tool in (ReadFileTool(guard=guard), WriteFileTool(guard=guard)):
+            reg.register(tool)
+
+        # Re-read tier from agent config so we respect the per-agent setting.
+        try:
+            from proxi.workspace import WorkspaceManager
+
+            ws = self._loop.workspace  # type: ignore[attr-defined]
+            agent_id = ws.agent_id if ws is not None else ""
+            wm = WorkspaceManager(root=self.soul_path.parent.parent.parent)
+            agent_cfg = wm.read_agent_config(agent_id)
+            tier = str(agent_cfg.get("tool_sets", {}).get("coding", "live"))
+        except Exception:
+            tier = "live"
+        register_coding_tools(reg, working_dir=working_dir, tier=tier)
+        # Update workspace so the prompt builder sees the new cwd.
+        if ws is not None:
+            ws.curr_working_dir = str(working_dir)
+
     def sync_mcp_tools(
         self,
         mcp_tools: Sequence[Any],

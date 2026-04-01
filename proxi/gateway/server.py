@@ -50,6 +50,7 @@ from proxi.gateway.router import EventRouter
 from proxi.interaction.tool import get_ask_user_question_spec
 from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_user_profile
+from proxi.tools.coding import register_coding_tools
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.workspace import WorkspaceError, WorkspaceManager
 
@@ -70,6 +71,9 @@ _mcp_tools: list[Any] = []           # live (always-loaded) MCP tools
 _mcp_deferred_tools: list[Any] = []  # deferred MCP tools (loaded via search_tools)
 _last_mcp_signature: str | None = None
 _mcp_refresh_lock = asyncio.Lock()
+
+# Current working directory for coding tools (mutable at runtime via /v1/working-dir).
+_working_dir: Path = Path(os.environ.get("PROXI_WORKING_DIR", ".")).resolve()
 
 
 def _workspace_root() -> Path:
@@ -160,11 +164,21 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
     llm_client = create_llm_client(provider=provider)
 
-    tool_registry = setup_tools()
+    working_dir = _working_dir
+
+    tool_registry = setup_tools(working_directory=working_dir)
     tool_registry.register_raw_spec(get_ask_user_question_spec())
     tool_registry.register(ManagePlanTool(workspace_config))
     tool_registry.register(ManageTodosTool(workspace_config))
     tool_registry.register(ReadSoulTool(workspace_config))
+
+    # Register coding tools based on per-agent config
+    workspace_manager = WorkspaceManager(root=_workspace_root())
+    agent_config = workspace_manager.read_agent_config(workspace_config.agent_id)
+    coding_tier = agent_config.get("tool_sets", {}).get("coding", "live")
+    register_coding_tools(tool_registry, working_dir=working_dir, tier=str(coding_tier))
+
+    workspace_config.curr_working_dir = str(working_dir)
 
     for mcp_tool in _mcp_tools:
         tool_registry.register(mcp_tool)
@@ -528,6 +542,38 @@ async def toggle_mcp_endpoint(mcp_name: str) -> dict[str, Any]:
     await _refresh_mcp_tools()
 
     return {"name": mcp_name, "enabled": new_state}
+
+
+# ---------------------------------------------------------------------------
+# Working directory management
+# ---------------------------------------------------------------------------
+@app.get("/v1/working-dir")
+async def get_working_dir_endpoint() -> dict[str, str]:
+    """Return the current coding-tools working directory."""
+    return {"path": str(_working_dir)}
+
+
+class SetWorkingDirRequest(BaseModel):
+    path: str
+
+
+@app.post("/v1/working-dir")
+async def set_working_dir_endpoint(body: SetWorkingDirRequest) -> dict[str, str]:
+    """Set a new working directory and re-root all coding tools on active lanes."""
+    global _working_dir
+    raw = (body.path or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="path is required")
+    new_dir = Path(raw).expanduser().resolve()
+    if not new_dir.exists():
+        raise HTTPException(status_code=400, detail=f"Path does not exist: {new_dir}")
+    if not new_dir.is_dir():
+        raise HTTPException(status_code=400, detail=f"Path is not a directory: {new_dir}")
+    _working_dir = new_dir
+    if lane_manager is not None:
+        lane_manager.sync_coding_tools_to_loops(new_dir)
+    logger.info("working_dir_changed", path=str(new_dir))
+    return {"path": str(new_dir)}
 
 
 # ---------------------------------------------------------------------------

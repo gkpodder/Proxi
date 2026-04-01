@@ -17,10 +17,10 @@ from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
 from proxi.observability.logging import setup_logging, get_logger, init_log_manager
 from proxi.security.key_store import get_key_value
-from proxi.tools.datetime import DateTimeTool
-from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
+from proxi.tools.coding import register_coding_tools
+from proxi.tools.filesystem import ReadFileTool, WriteFileTool
 from proxi.tools.registry import ToolRegistry
-from proxi.tools.shell import ExecuteCommandTool
+from proxi.tools.shell import ExecuteCodeTool as ExecuteCommandTool  # noqa: F401  (compat alias)
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.workspace import WorkspaceManager
 
@@ -55,15 +55,16 @@ def create_llm_client(provider: str = "openai") -> OpenAIClient | AnthropicClien
 
 def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     """Set up the tool registry with default tools."""
+    from proxi.tools.path_guard import PathGuard
+
     registry = ToolRegistry()
+    guard = PathGuard(working_directory)
 
     builtin_tools = [
-        ReadFileTool(),
-        WriteFileTool(),
-        ListDirectoryTool(),
+        ReadFileTool(guard=guard),
+        WriteFileTool(guard=guard),
         # Shell tool is not registered by default (security)
         # ExecuteCommandTool(working_directory=working_directory),
-        DateTimeTool(),
     ]
     for tool in builtin_tools:
         if getattr(tool, "defer_loading", False):
@@ -364,6 +365,14 @@ async def main():
         tool_registry.register(ManagePlanTool(workspace_config))
         tool_registry.register(ManageTodosTool(workspace_config))
         tool_registry.register(ReadSoulTool(workspace_config))
+
+        # Register coding tools based on per-agent config
+        agent_config = workspace_manager.read_agent_config(agent_info.agent_id)
+        coding_tier = agent_config.get("tool_sets", {}).get("coding", "live")
+        register_coding_tools(tool_registry, working_dir=working_dir, tier=str(coding_tier))
+
+        # Attach working dir to workspace config so tools and prompts can reference it
+        workspace_config.curr_working_dir = str(working_dir)
 
         # Set up MCP adapters (auto-load by default from MCP config)
         if not args.no_mcp:

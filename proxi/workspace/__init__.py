@@ -107,8 +107,8 @@ class WorkspaceManager:
                 "---\n\n"
                 "## The Agent Loop\n\n"
                 "Each turn, choose exactly one action:\n\n"
-                "**RESPOND** — Communicate with the user. Answers, confirmations, status, clarifications.\n\n"
-                "**TOOL_CALL** — Execute a tool. Always tell the user what you're about to do before doing it.\n\n"
+                "**RESPOND** — Deliver the complete final answer to the user. **RESPOND ends the turn immediately — no tool calls will run after it.** Only use RESPOND when you have finished all work and are ready to give the full result. Never use RESPOND to announce what you are about to do — phrases like 'I'll now run X' or 'I'll report back' must not appear in a RESPOND. If you still have work to do, use TOOL_CALL instead (you can narrate your reasoning in the text before the tool call).\n\n"
+                "**TOOL_CALL** — Execute a tool. You may stream reasoning text before the tool call so the user can follow your progress.\n\n"
                 "**SUB_AGENT_CALL** — Delegate to a specialised sub-agent. Synthesise results before returning them — the user talks to you, not the sub-agent.\n\n"
                 "**REQUEST_USER_INPUT** — Call `ask_user_question` when genuinely blocked by missing information.\n\n"
                 "---\n\n"
@@ -151,7 +151,29 @@ class WorkspaceManager:
                 "---\n\n"
                 "## What You're Not\n\n"
                 "You're not a command executor that blindly runs whatever it's told. You're an agent with judgment and a real relationship with the person you serve — which means you sometimes push back, ask questions, or suggest a better path, always in service of what's actually good for them.\n\n"
-                "The measure of a good turn: did the user's situation genuinely improve?"
+                "The measure of a good turn: did the user's situation genuinely improve?\n\n"
+                "---\n\n"
+                "## Coding Agent\n\n"
+                "When coding tools are available (`read_file`, `write_file`, `edit_file`, `execute_code`, `grep`, `glob`, `apply_patch`), follow these rules:\n\n"
+                "To get the current date and time, use `execute_code` with `date` (Unix) or `Get-Date` (PowerShell).\n\n"
+                "**File operations**\n"
+                "- Always `read_file` before `edit_file` — never edit blind.\n"
+                "- Use `write_file` for new files, `edit_file` for changes to existing files.\n"
+                "- Relative paths automatically resolve inside the working directory — use them.\n"
+                "- Never read or write outside the working directory unless the user explicitly instructs it.\n\n"
+                "**Git discipline — high caution**\n"
+                "- Never `git commit`, `git push`, create or delete branches, or `git reset` without explicit user approval for that specific action.\n"
+                "- Never use `--force`, `--no-verify`, or `--force-with-lease` unless the user asks.\n"
+                "- Prefer creating a new commit over amending an existing one.\n"
+                "- Treat uncommitted changes as the user's in-progress work — do not discard them.\n\n"
+                "**Code execution safety**\n"
+                "- Run tests after making changes and report failures before moving on.\n"
+                "- Do not install packages globally (`pip install`, `npm install -g`, `brew install`) without confirming with the user.\n"
+                "- Do not run commands that modify system state or security settings without a `yesno` confirmation.\n\n"
+                "**Task discipline**\n"
+                "- For tasks touching more than three files or requiring more than five tool calls, outline the plan first and confirm before executing.\n"
+                "- After completing a coding task, summarise what changed and whether tests passed — don't just stop.\n"
+                "- If a command fails, diagnose the error before retrying. Don't retry the same failing command blindly."
             )
             path.write_text(content, encoding="utf-8")
         return path
@@ -245,8 +267,10 @@ class WorkspaceManager:
             soul_content = f"Name: {name}\nPersona: {persona}\n"
             soul_path.write_text(soul_content, encoding="utf-8")
 
-        # Placeholder for future config.yaml support
-        (agent_dir / "config.yaml").touch(exist_ok=True)
+        config_path = agent_dir / "config.yaml"
+        if not config_path.exists():
+            config_content = "tool_sets:\n  coding: live  # live | deferred | disabled\n"
+            config_path.write_text(config_content, encoding="utf-8")
 
         if sync_gateway:
             self.register_agent_in_gateway(agent_id, default_session=default_session)
@@ -344,6 +368,20 @@ class WorkspaceManager:
             plan_path=plan_path,
             todos_path=todos_path,
         )
+
+    def read_agent_config(self, agent_id: str) -> dict[str, Any]:
+        """Read and return the parsed config.yaml for an agent.
+
+        Returns an empty dict if the file is missing or unparseable.
+        """
+        config_path = self.agents_dir / agent_id / "config.yaml"
+        if not config_path.exists():
+            return {}
+        try:
+            raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            return raw if isinstance(raw, dict) else {}
+        except Exception:
+            return {}
 
     # --- Workspace context helpers ---------------------------------------
 

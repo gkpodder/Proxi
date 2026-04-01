@@ -4,22 +4,37 @@
  */
 import { printLine, colors } from "./scrollback.js";
 
-/** Format tool args for display: ToolName("arg") or ToolName({"key": "val"}) */
+const TOOL_PRIMARY_ARG: Record<string, string> = {
+  write_file: "path",
+  read_file: "path",
+  edit_file: "file_path",
+  execute_code: "command",
+  grep: "pattern",
+  glob: "pattern",
+  diff: "file_path",
+  apply_patch: "patch",
+  search_tools: "query",
+};
+
+/** Format tool args for display: show the primary meaningful arg truncated. */
 function formatToolInvocation(tool: string, args: Record<string, unknown> | undefined): string {
-  if (!args || Object.keys(args).length === 0) {
-    return `${tool}()`;
+  if (tool === "call_tool") {
+    const target = typeof (args as Record<string, unknown> | undefined)?.tool_name === "string"
+      ? (args as Record<string, unknown>).tool_name as string : "?";
+    return `call_tool → ${target}`;
   }
-  const entries = Object.entries(args);
-  if (entries.length === 1) {
-    const val = entries[0]![1];
-    if (typeof val === "string" && val.length <= 80) {
-      return `${tool}("${String(val).replace(/"/g, '\\"')}")`;
-    }
+  if (!args || Object.keys(args).length === 0) return `${tool}()`;
+
+  const primaryKey = TOOL_PRIMARY_ARG[tool] ?? Object.keys(args)[0];
+  const primaryVal = primaryKey ? args[primaryKey] : undefined;
+  if (primaryKey && typeof primaryVal === "string") {
+    const truncated = primaryVal.length > 60 ? primaryVal.slice(0, 57) + "…" : primaryVal;
+    const hasMore = Object.keys(args).length > 1;
+    return `${tool}(${truncated}${hasMore ? ", …" : ""})`;
   }
+
   const argsStr = JSON.stringify(args);
-  if (argsStr.length <= 60) {
-    return `${tool}(${argsStr})`;
-  }
+  if (argsStr.length <= 80) return `${tool}(${argsStr})`;
   return `${tool}(...)`;
 }
 
