@@ -14,21 +14,36 @@ import httpx
 
 from proxi.gateway.channels.base import ChannelAdapter
 from proxi.gateway.events import GatewayEvent, ReplyChannel
+from proxi.observability.logging import get_logger
+
+_log = get_logger(__name__)
 
 
 class DiscordReplyChannel(ReplyChannel):
     source_type: str = "discord"  # type: ignore[assignment]
 
     async def send(self, text: str) -> None:
+        _log.info("discord_reply_sending", channel=self.destination, text_len=len(text))
         token = os.environ.get("DISCORD_BOT_TOKEN", "")
         if not token:
+            _log.warning("discord_reply_skipped", reason="DISCORD_BOT_TOKEN not set in gateway env")
+            return
+        if not self.destination:
+            _log.warning("discord_reply_skipped", reason="channel_id is empty")
             return
         # destination is channel_id for text channels
         async with httpx.AsyncClient(timeout=15.0) as client:
-            await client.post(
+            resp = await client.post(
                 f"https://discord.com/api/v10/channels/{self.destination}/messages",
                 headers={"Authorization": f"Bot {token}"},
                 json={"content": text[:2000]},
+            )
+        if resp.status_code not in (200, 201):
+            _log.warning(
+                "discord_reply_failed",
+                status=resp.status_code,
+                channel=self.destination,
+                body=resp.text[:200],
             )
 
 

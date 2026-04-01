@@ -31,5 +31,14 @@ def main() -> None:
     env.setdefault("PROXI_GATEWAY_URL", _gateway_url())
 
     command = [node, "server.js"]
-    ret = subprocess.call(command, cwd=str(frontend_dir), env=env)
-    sys.exit(ret if ret is not None else 0)
+    proc = subprocess.Popen(command, cwd=str(frontend_dir), env=env)
+    try:
+        ret = proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        ret = 0
+    sys.exit(ret)

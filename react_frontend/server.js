@@ -512,7 +512,18 @@ async function readJsonBody(req) {
   }
   const text = Buffer.concat(chunks).toString("utf-8").trim();
   if (!text) return {};
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    const err = new Error("Invalid JSON in request body");
+    err.statusCode = 400;
+    throw err;
+  }
+}
+
+function sendError(res, error) {
+  const status = error?.statusCode ?? 500;
+  sendJson(res, status, { error: String(error) });
 }
 
 function sendJson(res, statusCode, body) {
@@ -537,7 +548,7 @@ const server = createServer(async (req, res) => {
       const keys = await listApiKeys();
       sendJson(res, 200, { keys });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -560,7 +571,7 @@ const server = createServer(async (req, res) => {
       await upsertApiKey(keyName, value);
       sendJson(res, 200, { ok: true, keyName });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -570,7 +581,7 @@ const server = createServer(async (req, res) => {
       const mcps = await listMcps();
       sendJson(res, 200, { mcps });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -589,7 +600,7 @@ const server = createServer(async (req, res) => {
       await toggleMcp(mcpName, enabled);
       sendJson(res, 200, { ok: true, mcpName, enabled });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -599,7 +610,7 @@ const server = createServer(async (req, res) => {
       const { profile, updatedAt } = await getUserProfile();
       sendJson(res, 200, { profile, updatedAt });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -616,7 +627,7 @@ const server = createServer(async (req, res) => {
       await upsertUserProfile(profile);
       sendJson(res, 200, { ok: true });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -626,7 +637,7 @@ const server = createServer(async (req, res) => {
       await deleteUserProfile();
       sendJson(res, 200, { ok: true });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -636,7 +647,7 @@ const server = createServer(async (req, res) => {
       const cronJobs = await listCronJobs();
       sendJson(res, 200, { cronJobs });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -646,7 +657,7 @@ const server = createServer(async (req, res) => {
       const agents = await listAgents();
       sendJson(res, 200, { agents });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -656,7 +667,7 @@ const server = createServer(async (req, res) => {
       const config = await getLlmConfig();
       sendJson(res, 200, config);
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -674,7 +685,7 @@ const server = createServer(async (req, res) => {
       const config = await updateLlmConfig(provider, model);
       sendJson(res, 200, config);
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -684,7 +695,7 @@ const server = createServer(async (req, res) => {
       const capabilities = await getCronCapabilities();
       sendJson(res, 200, capabilities);
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -702,7 +713,7 @@ const server = createServer(async (req, res) => {
       const result = await setCronPaused(sourceId, paused);
       sendJson(res, 200, { ok: true, ...result });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -738,7 +749,7 @@ const server = createServer(async (req, res) => {
       });
       sendJson(res, 200, { ok: true, cronJob: saved });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -754,7 +765,7 @@ const server = createServer(async (req, res) => {
       await deleteCronJob(sourceId);
       sendJson(res, 200, { ok: true, sourceId });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -765,7 +776,7 @@ const server = createServer(async (req, res) => {
       const webhooks = await listWebhooks();
       sendJson(res, 200, { webhooks });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -783,7 +794,7 @@ const server = createServer(async (req, res) => {
       const updated = await setWebhookPaused(sourceId, paused);
       sendJson(res, 200, { ok: true, updated });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -817,7 +828,7 @@ const server = createServer(async (req, res) => {
       });
       sendJson(res, 200, { ok: true, webhook: saved });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }
@@ -833,7 +844,7 @@ const server = createServer(async (req, res) => {
       await deleteWebhook(sourceId);
       sendJson(res, 200, { ok: true, sourceId });
     } catch (error) {
-      sendJson(res, 500, { error: String(error) });
+      sendError(res, error);
     }
     return;
   }

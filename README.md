@@ -438,7 +438,24 @@ $env:PROXI_CUSTOM_WEBHOOK_SECRET = "super-secret-123"
 
 If the gateway is already running, restart it after setting env vars.
 
-### 4. Test locally with signed request (PowerShell)
+### 4. Test locally with signed request
+
+**macOS / Linux (bash or zsh)** — `printf '%s'` keeps the JSON byte-for-byte (no trailing newline), matching what the gateway verifies.
+
+```bash
+uri="http://127.0.0.1:8765/channels/webhook/external_alert"
+secret="super-secret-123"
+body='{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+hex=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" | awk '{print $NF}')
+sig="sha256=$hex"
+curl -sS -X POST "$uri" \
+  -H "Content-Type: application/json" \
+  -H "X-Signature-256: $sig" \
+  -d "$body"
+echo
+```
+
+**Windows (PowerShell)**
 
 ```powershell
 $uri = "http://127.0.0.1:8765/channels/webhook/external_alert"
@@ -473,6 +490,24 @@ ngrok http 8765
 ```
 
 Replace `<NGROK_URL>` with the `https://...ngrok...` forwarding URL and run:
+
+**macOS / Linux (bash or zsh)**
+
+```bash
+uri="<NGROK_URL>/channels/webhook/external_alert"
+secret="super-secret-123"
+body='{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+hex=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" | awk '{print $NF}')
+sig="sha256=$hex"
+curl -sS -X POST "$uri" \
+  -H "Content-Type: application/json" \
+  -H "X-Signature-256: $sig" \
+  -H "ngrok-skip-browser-warning: true" \
+  -d "$body"
+echo
+```
+
+**Windows (PowerShell)**
 
 ```powershell
 $uri = "<NGROK_URL>/channels/webhook/external_alert"

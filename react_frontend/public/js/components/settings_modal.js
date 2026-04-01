@@ -109,8 +109,6 @@
     const [scheduleMode, setScheduleMode] = useState("quick");
     const [everyValue, setEveryValue] = useState("30");
     const [everyUnit, setEveryUnit] = useState("minute");
-    const [customStates, setCustomStates] = useState([]);
-    const [customStateInput, setCustomStateInput] = useState("");
     const [editingCron, setEditingCron] = useState(false);
 
     const sectionRefs = useRef({});
@@ -671,54 +669,7 @@
                       >
                         <option value="running">Running</option>
                         <option value="paused">Paused</option>
-                        {customStates.map((state) => (
-                          <option key={state} value={state}>
-                            {state}
-                          </option>
-                        ))}
                       </select>
-                    </label>
-                    <label className="profileField">
-                      <span>Add Custom State</span>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
-                        <input
-                          type="text"
-                          value={customStateInput}
-                          placeholder="e.g., archived, testing"
-                          onChange={(e) => setCustomStateInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && customStateInput.trim()) {
-                              if (!customStates.includes(customStateInput.trim())) {
-                                setCustomStates([...customStates, customStateInput.trim()]);
-                                setCronDraft((prev) => ({
-                                  ...prev,
-                                  paused: true,
-                                  customState: customStateInput.trim(),
-                                }));
-                              }
-                              setCustomStateInput("");
-                            }
-                          }}
-                          style={{ flex: 1 }}
-                        />
-                        <button
-                          onClick={() => {
-                            if (customStateInput.trim() && !customStates.includes(customStateInput.trim())) {
-                              setCustomStates([...customStates, customStateInput.trim()]);
-                              setCronDraft((prev) => ({
-                                ...prev,
-                                paused: false,
-                                customState: customStateInput.trim(),
-                              }));
-                              setCustomStateInput("");
-                            }
-                          }}
-                          disabled={!customStateInput.trim() || customStates.includes(customStateInput.trim())}
-                          style={{ marginBottom: "0" }}
-                        >
-                          Add
-                        </button>
-                      </div>
                     </label>
                   </div>
 

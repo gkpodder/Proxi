@@ -246,6 +246,8 @@ class AgentLane:
                 response = await self._running_task
                 if event.reply_channel and response:
                     await event.reply_channel.send(response)
+                elif event.reply_channel and not response:
+                    logger.warning("lane_reply_skipped_no_response", session=self.session_id, source=event.source_type)
             except asyncio.CancelledError:
                 logger.info("lane_dispatch_aborted", session=self.session_id)
             except BudgetExceeded as exc:
@@ -280,6 +282,11 @@ class AgentLane:
                                 "tui_abortable": self._dispatch_tui_abortable,
                             }
                         )
+                    except Exception:
+                        pass
+                elif event.reply_channel:
+                    try:
+                        await event.reply_channel.send("Sorry, something went wrong processing your request.")
                     except Exception:
                         pass
             finally:
