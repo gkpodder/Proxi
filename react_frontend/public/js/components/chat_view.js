@@ -6,6 +6,8 @@
       chatRef,
       messages,
       activityItems,
+      activityCollapsed,
+      onToggleActivity,
       streaming,
       renderMarkdown,
       bootInfo,
@@ -21,7 +23,7 @@
     } = props;
 
     return (
-      <div className="mainPanels">
+      <div className={`mainPanels ${activityCollapsed ? "activityCollapsed" : ""}`}>
         <div className="panel panelLeft">
           <div className="chat" ref={chatRef}>
             {messages.map((m, i) => {
@@ -93,8 +95,32 @@
           </div>
         </div>
 
+        {activityCollapsed && (
+          <div className="activityDrawerSlot">
+            <button
+              className="activityToggleBtn activityDrawerHandle"
+              onClick={onToggleActivity}
+              title="Show Tool and MCP Activity"
+              aria-label="Show Tool and MCP Activity"
+            >
+              <span aria-hidden="true">◀</span>
+            </button>
+          </div>
+        )}
+
+        {!activityCollapsed && (
         <aside className="panel panelRight activityPanel">
-          <div className="activityHeader">Tool and MCP Activity</div>
+          <div className="activityHeaderRow">
+            <div className="activityHeader">Tool and MCP Activity</div>
+            <button
+              className="activityToggleBtn activityToggleCollapseBtn"
+              onClick={onToggleActivity}
+              title="Hide Tool and MCP Activity"
+              aria-label="Hide Tool and MCP Activity"
+            >
+              <span aria-hidden="true">▶</span>
+            </button>
+          </div>
           <div className="activityList">
             {activityItems.length === 0 && (
               <div className="activityEmpty">No activity yet. Tool calls and model thinking will appear here.</div>
@@ -111,6 +137,7 @@
             ))}
           </div>
         </aside>
+        )}
       </div>
     );
   };

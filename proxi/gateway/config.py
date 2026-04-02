@@ -30,6 +30,7 @@ class SourceConfig:
     pick_agent_at_startup: bool = True
     target_session: str = ""
     priority: int = 0
+    paused: bool = False
     # cron
     schedule: str = ""
     prompt: str = ""
@@ -74,6 +75,7 @@ class GatewayConfig:
         for sid, cfg in (raw.get("sources") or {}).items():
             known_keys = {
                 "type", "target_agent", "target_session", "priority",
+                "paused",
                 "pick_agent_at_startup",
                 "schedule", "prompt", "interval", "deadline_s",
                 "secret_env", "prompt_template",
@@ -86,6 +88,7 @@ class GatewayConfig:
                 pick_agent_at_startup=cfg.get("pick_agent_at_startup", True),
                 target_session=cfg.get("target_session", ""),
                 priority=cfg.get("priority", 0),
+                paused=bool(cfg.get("paused", False)),
                 schedule=cfg.get("schedule", ""),
                 prompt=cfg.get("prompt", ""),
                 interval=cfg.get("interval", 0),

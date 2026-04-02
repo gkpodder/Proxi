@@ -336,10 +336,10 @@ Thumbs.db
 .memory/
 .artifacts/
 
-cli_ink/node_modules/
 # Local secrets and SQLite stores
 config/*.db
 config/google_token.json
 
 test_coding/
 CLAUDE.md
+*/node_modules/

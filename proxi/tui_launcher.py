@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 
 from proxi.gateway.config import GatewayConfig, GatewayConfigError
-from proxi.gateway.daemon import ensure_running, _gateway_url
+from proxi.gateway.daemon import _gateway_url, is_running
 
 
 def _apply_tui_session_from_gateway_yml(env: dict[str, str]) -> None:
@@ -34,11 +34,9 @@ def _apply_tui_session_from_gateway_yml(env: dict[str, str]) -> None:
 
 
 def main() -> None:
-    # Ensure the gateway daemon is up before launching the TUI
-    try:
-        ensure_running(timeout=15.0)
-    except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+    # Require users to start the gateway process explicitly.
+    if not is_running(timeout=1.0):
+        print(f"Gateway is not reachable at {_gateway_url()}. Start it first.", file=sys.stderr)
         sys.exit(1)
 
     # Resolve cli_ink: project root is parent of proxi package

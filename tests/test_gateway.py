@@ -374,12 +374,31 @@ class TestWhatsAppAdapter:
 
 
 class TestDiscordAdapter:
-    async def test_parse_message(self) -> None:
-        raw = {"content": "Hello Discord", "channel_id": "999"}
+    async def test_parse_prefixed_start_command(self) -> None:
+        raw = {"content": "/proxi summarize this issue", "channel_id": "999", "author": {"id": "u1"}}
         event = await DiscordAdapter().parse(raw)
         assert event is not None
-        assert event.payload["text"] == "Hello Discord"
+        assert event.payload["text"] == "summarize this issue"
+        assert event.payload["command"]["action"] == "start"
         assert event.reply_channel.destination == "999"
+
+    async def test_parse_control_command(self) -> None:
+        raw = {"content": "/proxi abort", "channel_id": "999"}
+        event = await DiscordAdapter().parse(raw)
+        assert event is not None
+        assert "text" not in event.payload
+        assert event.payload["command"]["action"] == "abort"
+
+    async def test_parse_non_prefixed_ignored_by_default(self) -> None:
+        raw = {"content": "Hello Discord", "channel_id": "999"}
+        assert await DiscordAdapter().parse(raw) is None
+
+    async def test_parse_allow_plain_message(self) -> None:
+        raw = {"content": "Hello Discord", "channel_id": "999"}
+        event = await DiscordAdapter(allow_plain=True).parse(raw)
+        assert event is not None
+        assert event.payload["text"] == "Hello Discord"
+        assert event.payload["command"]["action"] == "start"
 
     async def test_parse_no_content_returns_none(self) -> None:
         assert await DiscordAdapter().parse({"type": 1}) is None

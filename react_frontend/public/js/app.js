@@ -14,6 +14,7 @@ function App() {
   const [statusLabel, setStatusLabel] = useState("Starting...");
   const [messages, setMessages] = useState([]);
   const [activityItems, setActivityItems] = useState([]);
+  const [activityCollapsed, setActivityCollapsed] = useState(false);
   const [streaming, setStreaming] = useState("");
   const [input, setInput] = useState("");
   const [bootInfo, setBootInfo] = useState(null);
@@ -33,6 +34,44 @@ function App() {
   const [mcpsLoading, setMcpsLoading] = useState(false);
   const [mcpsSaving, setMcpsSaving] = useState(false);
   const [mcpFeedback, setMcpFeedback] = useState("");
+  const [cronJobs, setCronJobs] = useState([]);
+  const [cronLoading, setCronLoading] = useState(false);
+  const [cronSaving, setCronSaving] = useState(false);
+  const [cronFeedback, setCronFeedback] = useState("");
+  const [cronSupportsSixField, setCronSupportsSixField] = useState(false);
+  const [availableAgents, setAvailableAgents] = useState([]);
+    const [webhooks, setWebhooks] = useState([]);
+    const [webhookLoading, setWebhookLoading] = useState(false);
+    const [webhookSaving, setWebhookSaving] = useState(false);
+    const [webhookFeedback, setWebhookFeedback] = useState("");
+    const [webhookDraft, setWebhookDraft] = useState({
+      sourceId: "",
+      promptTemplate: "",
+      targetAgent: "",
+      targetSession: "",
+      priority: "0",
+      paused: false,
+      secretEnv: "",
+    });
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [agentFeedback, setAgentFeedback] = useState("");
+  const [llmProvider, setLlmProvider] = useState("openai");
+  const [llmModel, setLlmModel] = useState("");
+  const [llmProviders, setLlmProviders] = useState([]);
+  const [llmModelsByProvider, setLlmModelsByProvider] = useState({});
+  const [llmDefaults, setLlmDefaults] = useState({});
+  const [llmLoading, setLlmLoading] = useState(false);
+  const [llmSaving, setLlmSaving] = useState(false);
+  const [llmFeedback, setLlmFeedback] = useState("");
+  const [cronDraft, setCronDraft] = useState({
+    sourceId: "",
+    schedule: "",
+    prompt: "",
+    targetAgent: "",
+    targetSession: "",
+    priority: "0",
+    paused: false,
+  });
   const [profile, setProfile] = useState({
     name: "",
     location: "",
@@ -55,6 +94,7 @@ function App() {
   const chatRef = useRef(null);
   const recognizerRef = useRef(null);
   const pendingMcpActivityRef = useRef({});
+  const activeToolRef = useRef(null);
 
   const visibleQuestions = useMemo(() => {
     if (!formUi) return [];
@@ -76,13 +116,13 @@ function App() {
 
     ws.onopen = () => {
       setSocketState("connected");
-      addSystem("Connected to bridge relay.");
+      addSystem("Connected to gateway relay.");
     };
 
     ws.onclose = () => {
       setSocketState("closed");
       commitStream();
-      addSystem("Bridge connection closed.");
+      addSystem("Gateway connection closed.");
     };
 
     ws.onerror = () => {
@@ -111,10 +151,132 @@ function App() {
 
   useEffect(() => {
     if (!settingsOpen) return;
+    loadAgents();
     loadApiKeys();
     loadMcps();
+    loadCronCapabilities();
+    loadCronJobs();
     loadUserProfile();
+    loadWebhooks();
+    loadLlmConfig();
   }, [settingsOpen]);
+
+  useEffect(() => {
+    const activeAgentId = String(bootInfo?.agentId || "").trim();
+    if (!activeAgentId) return;
+    setSelectedAgentId(activeAgentId);
+    setAgentFeedback("");
+  }, [bootInfo?.agentId]);
+
+  async function loadAgents() {
+    try {
+      const response = await fetch("/api/agents");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load agents");
+      const agents = Array.isArray(payload.agents) ? payload.agents.map((a) => String(a || "")).filter(Boolean) : [];
+      setAvailableAgents(agents);
+      setSelectedAgentId((prev) => {
+        if (prev && agents.includes(prev)) return prev;
+        const activeAgentId = String(bootInfo?.agentId || "").trim();
+        if (activeAgentId && agents.includes(activeAgentId)) return activeAgentId;
+        return agents[0] || "";
+      });
+
+      if (agents.length > 0) {
+        setCronDraft((prev) => {
+          if (prev.targetAgent) return prev;
+          return { ...prev, targetAgent: agents[0] };
+        });
+      }
+    } catch {
+      setAvailableAgents([]);
+    }
+  }
+
+  async function loadLlmConfig() {
+    setLlmLoading(true);
+    setLlmFeedback("");
+    try {
+      const response = await fetch("/api/llm-config");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load LLM configuration");
+
+      const provider = String(payload?.provider || "openai").trim().toLowerCase();
+      const providers = Array.isArray(payload?.providers)
+        ? payload.providers.map((entry) => String(entry || "").trim().toLowerCase()).filter(Boolean)
+        : [];
+      const modelsByProvider = payload?.models && typeof payload.models === "object" ? payload.models : {};
+      const defaults = payload?.defaults && typeof payload.defaults === "object" ? payload.defaults : {};
+      const providerModels = Array.isArray(modelsByProvider?.[provider]) ? modelsByProvider[provider] : [];
+      const normalizedModel = String(payload?.model || "").trim() || String(defaults?.[provider] || "").trim() || String(providerModels[0] || "").trim();
+
+      setLlmProvider(provider);
+      setLlmProviders(providers);
+      setLlmModelsByProvider(modelsByProvider);
+      setLlmDefaults(defaults);
+      setLlmModel(normalizedModel);
+    } catch (error) {
+      setLlmFeedback(`Error: ${String(error)}`);
+    } finally {
+      setLlmLoading(false);
+    }
+  }
+
+  function changeLlmProvider(provider) {
+    const normalized = String(provider || "").trim().toLowerCase();
+    const providerModels = Array.isArray(llmModelsByProvider?.[normalized]) ? llmModelsByProvider[normalized] : [];
+    const fallbackModel =
+      String(llmDefaults?.[normalized] || "").trim() ||
+      String(providerModels[0] || "").trim() ||
+      "";
+
+    setLlmProvider(normalized);
+    setLlmModel(fallbackModel);
+    setLlmFeedback("");
+  }
+
+  async function saveLlmConfig() {
+    const provider = String(llmProvider || "").trim().toLowerCase();
+    const model = String(llmModel || "").trim();
+    if (!provider || !model) {
+      setLlmFeedback("Error: provider and model are required.");
+      return;
+    }
+
+    setLlmSaving(true);
+    setLlmFeedback("");
+    try {
+      const response = await fetch("/api/llm-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, model }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to update LLM configuration");
+
+      setLlmProvider(String(payload?.provider || provider).trim().toLowerCase());
+      setLlmModel(String(payload?.model || model).trim());
+      setLlmProviders(Array.isArray(payload?.providers) ? payload.providers : llmProviders);
+      setLlmModelsByProvider(payload?.models && typeof payload.models === "object" ? payload.models : llmModelsByProvider);
+      setLlmDefaults(payload?.defaults && typeof payload.defaults === "object" ? payload.defaults : llmDefaults);
+      setLlmFeedback("LLM updated. Existing sessions were refreshed to use this configuration.");
+    } catch (error) {
+      setLlmFeedback(`Error: ${String(error)}`);
+    } finally {
+      setLlmSaving(false);
+    }
+  }
+
+  async function loadCronCapabilities() {
+    try {
+      const response = await fetch("/api/cron-capabilities");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to read cron capabilities");
+      setCronSupportsSixField(Boolean(payload?.supportsSixField));
+    } catch {
+      setCronSupportsSixField(false);
+    }
+  }
 
   async function loadUserProfile() {
     setProfileLoading(true);
@@ -269,6 +431,307 @@ function App() {
     }
   }
 
+  async function loadCronJobs() {
+    setCronLoading(true);
+    setCronFeedback("");
+    try {
+      const response = await fetch("/api/cron-jobs");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load cron jobs");
+
+      const items = Array.isArray(payload.cronJobs) ? payload.cronJobs : [];
+      setCronJobs(items);
+
+      if (!cronDraft.targetAgent && items.length > 0) {
+        setCronDraft((prev) => ({ ...prev, targetAgent: String(items[0].target_agent || "") }));
+      }
+    } catch (error) {
+      setCronFeedback(`Error: ${String(error)}`);
+    } finally {
+      setCronLoading(false);
+    }
+  }
+
+  function editCronJob(item) {
+    setCronDraft({
+      sourceId: String(item?.source_id || ""),
+      schedule: String(item?.schedule || ""),
+      prompt: String(item?.prompt || ""),
+      targetAgent: String(item?.target_agent || ""),
+      targetSession: String(item?.target_session || ""),
+      priority: String(item?.priority ?? 0),
+      paused: Boolean(item?.paused),
+    });
+    setCronFeedback("Editing cron job. Update fields and click Save Cron Job.");
+  }
+
+  function clearCronDraft() {
+    setCronDraft({
+      sourceId: "",
+      schedule: "",
+      prompt: "",
+      targetAgent: availableAgents[0] ? String(availableAgents[0]) : "",
+      targetSession: "",
+      priority: "0",
+      paused: false,
+    });
+  }
+
+  async function saveCronJob() {
+    const sourceId = cronDraft.sourceId.trim();
+    const schedule = cronDraft.schedule.trim();
+    const prompt = cronDraft.prompt.trim();
+    const targetAgent = cronDraft.targetAgent.trim();
+    const targetSession = cronDraft.targetSession.trim();
+    const priority = Number.parseInt(cronDraft.priority, 10);
+    const paused = Boolean(cronDraft.paused);
+    const scheduleFieldCount = schedule.split(/\s+/).filter(Boolean).length;
+
+    if (!sourceId || !schedule || !prompt || !targetAgent) {
+      setCronFeedback("Error: source id, schedule, prompt, and target agent are required.");
+      return;
+    }
+
+    if (!Number.isFinite(priority)) {
+      setCronFeedback("Error: priority must be an integer.");
+      return;
+    }
+    if (priority < 0 || priority > 5) {
+      setCronFeedback("Error: priority must be between 0 and 5.");
+      return;
+    }
+
+    if (scheduleFieldCount === 6 && !cronSupportsSixField) {
+      setCronFeedback(
+        "Error: this running gateway only supports 5-field cron right now. Restart gateway to enable Seconds schedules, or use Minute/Day/Week/Monthly."
+      );
+      return;
+    }
+
+    setCronSaving(true);
+    setCronFeedback("");
+    try {
+      const response = await fetch(`/api/cron-jobs/${encodeURIComponent(sourceId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schedule,
+          prompt,
+          targetAgent,
+          targetSession,
+          priority,
+          paused,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to save cron job");
+
+      setCronFeedback(`Saved cron job ${sourceId}.`);
+      await loadCronJobs();
+      clearCronDraft();
+    } catch (error) {
+      const errorText = String(error || "");
+      const fieldCount = schedule.split(/\s+/).filter(Boolean).length;
+      const looksLikeOldCronParser = /Expected 5-field cron expression/i.test(errorText);
+      if (looksLikeOldCronParser && fieldCount === 6) {
+        setCronFeedback(
+          "Error: this gateway process only supports 5-field cron in its current runtime. Restart gateway, then retry the Seconds option."
+        );
+      } else {
+        setCronFeedback(`Error: ${errorText}`);
+      }
+    } finally {
+      setCronSaving(false);
+    }
+  }
+
+  async function removeCronJob(sourceId) {
+    const confirmed = window.confirm(`Delete cron job ${sourceId}?`);
+    if (!confirmed) return;
+
+    setCronSaving(true);
+    setCronFeedback("");
+    try {
+      const response = await fetch(`/api/cron-jobs/${encodeURIComponent(sourceId)}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to delete cron job");
+
+      setCronFeedback(`Deleted cron job ${sourceId}.`);
+      await loadCronJobs();
+    } catch (error) {
+      setCronFeedback(`Error: ${String(error)}`);
+    } finally {
+      setCronSaving(false);
+    }
+  }
+
+  async function setCronJobPaused(sourceId, paused) {
+    setCronSaving(true);
+    setCronFeedback("");
+    try {
+      const response = await fetch(`/api/cron-jobs/${encodeURIComponent(sourceId)}/pause`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: Boolean(paused) }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to update cron state");
+
+      setCronFeedback(`${paused ? "Paused" : "Resumed"} cron job ${sourceId}.`);
+      await loadCronJobs();
+    } catch (error) {
+      setCronFeedback(`Error: ${String(error)}`);
+    } finally {
+      setCronSaving(false);
+    }
+  }
+
+  async function loadWebhooks() {
+    setWebhookLoading(true);
+    setWebhookFeedback("");
+    try {
+      const response = await fetch("/api/webhooks");
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to load webhooks");
+
+      const items = Array.isArray(payload.webhooks) ? payload.webhooks : [];
+      setWebhooks(items);
+
+      if (!webhookDraft.targetAgent && availableAgents.length > 0) {
+        setWebhookDraft((prev) => ({ ...prev, targetAgent: String(availableAgents[0] || "") }));
+      }
+    } catch (error) {
+      setWebhookFeedback(`Error: ${String(error)}`);
+    } finally {
+      setWebhookLoading(false);
+    }
+  }
+
+  function editWebhook(item) {
+    setWebhookDraft({
+      sourceId: String(item?.source_id || ""),
+      promptTemplate: String(item?.prompt_template || ""),
+      targetAgent: String(item?.target_agent || ""),
+      targetSession: String(item?.target_session || ""),
+      priority: String(item?.priority ?? 0),
+      paused: Boolean(item?.paused),
+      secretEnv: String(item?.secret_env || ""),
+    });
+    setWebhookFeedback("Editing webhook. Update fields and click Save Webhook.");
+  }
+
+  function clearWebhookDraft() {
+    setWebhookDraft({
+      sourceId: "",
+      promptTemplate: "",
+      targetAgent: availableAgents[0] ? String(availableAgents[0]) : "",
+      targetSession: "",
+      priority: "0",
+      paused: false,
+      secretEnv: "",
+    });
+  }
+
+  async function saveWebhook() {
+    const sourceId = webhookDraft.sourceId.trim();
+    const promptTemplate = webhookDraft.promptTemplate.trim();
+    const targetAgent = webhookDraft.targetAgent.trim();
+    const targetSession = webhookDraft.targetSession.trim();
+    const priority = Number.parseInt(webhookDraft.priority, 10);
+    const paused = Boolean(webhookDraft.paused);
+    const secretEnv = webhookDraft.secretEnv.trim();
+
+    if (!sourceId || !targetAgent) {
+      setWebhookFeedback("Error: source id and target agent are required.");
+      return;
+    }
+    if (!secretEnv) {
+      setWebhookFeedback("Error: HMAC Secret Env is required for webhook security.");
+      return;
+    }
+
+    if (!Number.isFinite(priority)) {
+      setWebhookFeedback("Error: priority must be an integer.");
+      return;
+    }
+    if (priority < 0 || priority > 5) {
+      setWebhookFeedback("Error: priority must be between 0 and 5.");
+      return;
+    }
+
+    setWebhookSaving(true);
+    setWebhookFeedback("");
+    try {
+      const response = await fetch(`/api/webhooks/${encodeURIComponent(sourceId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          promptTemplate,
+          targetAgent,
+          targetSession,
+          priority,
+          paused,
+          secretEnv,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to save webhook");
+
+      setWebhookFeedback(`Saved webhook ${sourceId}.`);
+      await loadWebhooks();
+      clearWebhookDraft();
+    } catch (error) {
+      setWebhookFeedback(`Error: ${String(error)}`);
+    } finally {
+      setWebhookSaving(false);
+    }
+  }
+
+  async function removeWebhook(sourceId) {
+    const confirmed = window.confirm(`Delete webhook ${sourceId}?`);
+    if (!confirmed) return;
+
+    setWebhookSaving(true);
+    setWebhookFeedback("");
+    try {
+      const response = await fetch(`/api/webhooks/${encodeURIComponent(sourceId)}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to delete webhook");
+
+      setWebhookFeedback(`Deleted webhook ${sourceId}.`);
+      await loadWebhooks();
+    } catch (error) {
+      setWebhookFeedback(`Error: ${String(error)}`);
+    } finally {
+      setWebhookSaving(false);
+    }
+  }
+
+  async function setWebhookPaused(sourceId, paused) {
+    setWebhookSaving(true);
+    setWebhookFeedback("");
+    try {
+      const response = await fetch(`/api/webhooks/${encodeURIComponent(sourceId)}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: Boolean(paused) }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Failed to update webhook state");
+
+      setWebhookFeedback(`${paused ? "Paused" : "Resumed"} webhook ${sourceId}.`);
+      await loadWebhooks();
+    } catch (error) {
+      setWebhookFeedback(`Error: ${String(error)}`);
+    } finally {
+      setWebhookSaving(false);
+    }
+  }
+
   async function saveKey(keyName, value) {
     const normalized = (keyName || "").trim().toUpperCase();
     const cleanValue = (value || "").trim();
@@ -337,9 +800,8 @@ function App() {
     return typeof toolName === "string" && toolName.toLowerCase().startsWith("mcp_");
   }
 
-  function recordThinking(content) {
-    if (!content || typeof content !== "string") return;
-    addActivity("thinking", "Model thinking", content);
+  function recordThinking() {
+    return;
   }
 
   function commitStream() {
@@ -359,35 +821,48 @@ function App() {
   }
 
   function onSwitchAgent() {
+    switchAgentToSelected();
+  }
+
+  function switchAgentToSelected() {
     if (isPromptActive) {
       addSystem("Complete the current prompt first.");
       return;
     }
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    if (socketState !== "connected") {
       addError("Bridge is not connected.");
       return;
     }
-    wsRef.current.send(JSON.stringify({ type: "switch_agent" }));
+    const targetAgentId = String(selectedAgentId || "").trim();
+    if (!targetAgentId) {
+      setAgentFeedback("Select an agent before switching.");
+      return;
+    }
+    if (targetAgentId === String(bootInfo?.agentId || "").trim()) {
+      setAgentFeedback("Already using this agent.");
+      return;
+    }
+
+    send({ type: "switch_agent_to", agentId: targetAgentId });
     commitStream();
-    addSystem("Switching agent...");
+    addSystem(`Switching to ${targetAgentId}...`);
     setStatusLabel("Switching...");
+    setAgentFeedback(`Switching to ${targetAgentId}...`);
     setBootInfo(null);
     setBootstrapInput(null);
     setFormUi(null);
   }
 
   function handleMessage(msg) {
-    if (typeof msg?.reasoning === "string" && msg.reasoning.trim()) {
-      recordThinking(msg.reasoning.trim());
-    }
-
     switch (msg.type) {
       case "ready":
-        setStatusLabel("Bridge ready");
-        addSystem("Bridge ready.");
+        setStatusLabel("Gateway ready");
+        addSystem("Gateway ready.");
         break;
       case "boot_complete":
         setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
+        setSelectedAgentId(String(msg.agentId || ""));
+        setAgentFeedback("");
         setBootstrapInput(null);
         break;
       case "text_stream":
@@ -395,18 +870,25 @@ function App() {
         break;
       case "status_update":
         if (msg.status === "running") {
-          setStatusLabel(msg.label ? `Running: ${msg.label}` : "Running...");
           if (msg.label && /thinking|reasoning/i.test(msg.label)) {
-            addActivity("thinking", "Thinking", msg.label);
+            setStatusLabel("Thinking...");
+          } else {
+            setStatusLabel(msg.label ? `Running: ${msg.label}` : "Running...");
           }
         } else if (msg.status === "done") {
-          setStatusLabel("Idle");
+          activeToolRef.current = null;
+          setStatusLabel("Done");
           commitStream();
         }
         break;
       case "tool_start": {
         const toolName = msg.tool || "Unknown tool";
         const argsText = msg.arguments ? JSON.stringify(msg.arguments) : "";
+        activeToolRef.current = {
+          name: toolName,
+          isMcp: isMcpToolName(toolName),
+          startedAt: Date.now(),
+        };
         if (isMcpToolName(toolName)) {
           const mcpId = addActivity("mcp", `Start: ${toolName}`, argsText || "Status: running");
           pendingMcpActivityRef.current[toolName] = mcpId;
@@ -426,6 +908,9 @@ function App() {
       }
       case "tool_done": {
         const toolName = msg.tool || "Unknown tool";
+        if (activeToolRef.current?.name === toolName) {
+          activeToolRef.current = null;
+        }
         const status = msg.success ? "success" : "error";
         if (isMcpToolName(toolName)) {
           const pendingId = pendingMcpActivityRef.current[toolName];
@@ -461,18 +946,31 @@ function App() {
       case "thinking":
       case "reasoning":
       case "thinking_stream":
-        recordThinking(msg.content || msg.text || "");
+        setStatusLabel("Thinking...");
         break;
+      case "inbound_turn": {
+        const sourceType = String(msg.source_type || "").toLowerCase();
+        if (sourceType === "cron") {
+          const sourceId = msg.source_id || "cron";
+          const prompt = msg.prompt || "Scheduled job triggered.";
+          addActivity("cron", `Cron triggered: ${sourceId}`, prompt);
+        } else if (sourceType === "webhook") {
+          const sourceId = msg.source_id || "webhook";
+          const prompt = msg.prompt || "Webhook received.";
+          addActivity("webhook", `Webhook arrived: ${sourceId}`, prompt);
+        }
+        break;
+      }
       case "user_input_required":
         commitStream();
         handleUserInputRequired(msg);
         break;
       case "bridge_stderr":
-        addError(`Bridge stderr: ${msg.content}`);
+        addError(`Gateway error: ${msg.content}`);
         break;
       case "bridge_exit":
-        addError(`Bridge exited (code=${msg.code ?? "null"}).`);
-        setStatusLabel("Bridge stopped");
+        addError(`Gateway stream stopped (code=${msg.code ?? "null"}).`);
+        setStatusLabel("Gateway stopped");
         break;
       default:
         break;
@@ -720,14 +1218,14 @@ function App() {
             title={darkMode ? "Switch to light theme" : "Switch to dark theme"}
             aria-label={darkMode ? "Switch to light theme" : "Switch to dark theme"}
           >
-            <i className={`fa-solid ${darkMode ? "fa-sun" : "fa-moon"}`} aria-hidden="true"></i>
+            <span aria-hidden="true">{darkMode ? "☾" : "☀"}</span>
           </button>
           <button
             className="switchAgentBtn"
-            onClick={onSwitchAgent}
+            onClick={() => setSettingsOpen(true)}
             disabled={socketState !== "connected" || isPromptActive}
-            title="Switch to a different agent"
-            aria-label="Switch to a different agent"
+            title="Open settings to switch agent"
+            aria-label="Open settings to switch agent"
           >
             <i className="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
           </button>
@@ -742,6 +1240,8 @@ function App() {
         chatRef={chatRef}
         messages={messages}
         activityItems={activityItems}
+        activityCollapsed={activityCollapsed}
+        onToggleActivity={() => setActivityCollapsed((prev) => !prev)}
         streaming={streaming}
         renderMarkdown={renderMarkdown}
         bootInfo={bootInfo}
@@ -763,6 +1263,10 @@ function App() {
         socketState={socketState}
         isPromptActive={isPromptActive}
         onSwitchAgent={onSwitchAgent}
+        selectedAgentId={selectedAgentId}
+        setSelectedAgentId={setSelectedAgentId}
+        agentFeedback={agentFeedback}
+        switchAgentToSelected={switchAgentToSelected}
         profile={profile}
         profileLoading={profileLoading}
         profileSaving={profileSaving}
@@ -789,6 +1293,43 @@ function App() {
         mcps={mcps}
         toggleMcp={toggleMcp}
         loadMcps={loadMcps}
+        cronJobs={cronJobs}
+        cronLoading={cronLoading}
+        cronSaving={cronSaving}
+        cronFeedback={cronFeedback}
+        cronSupportsSixField={cronSupportsSixField}
+        availableAgents={availableAgents}
+        cronDraft={cronDraft}
+        setCronDraft={setCronDraft}
+        saveCronJob={saveCronJob}
+        removeCronJob={removeCronJob}
+        setCronJobPaused={setCronJobPaused}
+        loadCronJobs={loadCronJobs}
+        editCronJob={editCronJob}
+        clearCronDraft={clearCronDraft}
+        llmProvider={llmProvider}
+        llmModel={llmModel}
+        llmProviders={llmProviders}
+        llmModelsByProvider={llmModelsByProvider}
+        llmLoading={llmLoading}
+        llmSaving={llmSaving}
+        llmFeedback={llmFeedback}
+        changeLlmProvider={changeLlmProvider}
+        setLlmModel={setLlmModel}
+        saveLlmConfig={saveLlmConfig}
+        loadLlmConfig={loadLlmConfig}
+        webhooks={webhooks}
+        webhookLoading={webhookLoading}
+        webhookSaving={webhookSaving}
+        webhookFeedback={webhookFeedback}
+        webhookDraft={webhookDraft}
+        setWebhookDraft={setWebhookDraft}
+        saveWebhook={saveWebhook}
+        removeWebhook={removeWebhook}
+        setWebhookPaused={setWebhookPaused}
+        loadWebhooks={loadWebhooks}
+        editWebhook={editWebhook}
+        clearWebhookDraft={clearWebhookDraft}
       />
 
       <BootstrapModal

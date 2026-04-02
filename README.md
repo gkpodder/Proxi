@@ -93,7 +93,6 @@ Decision types:
 | `SUB_AGENT_CALL` | Delegate work to a sub-agent |
 | `REQUEST_USER_INPUT` | Request structured user input via a collaborative form |
 
-> Note: `proxi-bridge` still exists for compatibility/debugging but is deprecated in favor of gateway transport.
 
 ## Workspace Layout
 
@@ -162,8 +161,8 @@ uv run python scripts/init_api_keys_db.py
 Set keys via CLI:
 
 ```bash
-uv run python -m proxi.security.key_store upsert --key OPENAI_API_KEY --value "your-key-here"
-uv run python -m proxi.security.key_store upsert --key ANTHROPIC_API_KEY --value "your-key-here"
+uv run proxi keys upsert --key OPENAI_API_KEY --value "your-key-here"
+uv run proxi keys upsert --key ANTHROPIC_API_KEY --value "your-key-here"
 ```
 
 ### Useful environment variables
@@ -220,27 +219,28 @@ This starts the TUI and connects it to the gateway (starting the gateway daemon 
 
 ```bash
 # Default provider
-uv run proxi-run "Your task here"
+uv run proxi run "Your task here"
 
 # Explicit provider
-uv run proxi-run --provider anthropic "Your task here"
+uv run proxi run --provider anthropic "Your task here"
 
 # Extra options
-uv run proxi-run --max-turns 30 --log-level DEBUG "Your task here"
+uv run proxi run --max-turns 30 --log-level DEBUG "Your task here"
 
 # Filesystem MCP shortcut
-uv run proxi-run --mcp-filesystem "." "List all files in the current directory"
+uv run proxi run --mcp-filesystem "." "List all files in the current directory"
 
 # Custom MCP command
-uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
+uv run proxi run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
 ```
 
 ### Gateway management
 
 ```bash
-uv run proxi-gateway-ctl start
-uv run proxi-gateway-ctl status
-uv run proxi-gateway-ctl stop
+uv run proxi gateway start
+uv run proxi gateway status
+uv run proxi gateway stop
+uv run proxi gateway restart
 ```
 
 ## TUI Slash Commands
@@ -266,25 +266,262 @@ Related notes:
 
 ## Development
 
-Run TUI directly with Bun:
+Run TUI with uv:
 
 ```bash
 # From repository root
-bun run proxi-tui
+uv run proxi
 
-# Or inside cli_ink/
+# Or inside cli_ink/ directly
 cd cli_ink
-bun run dev
-bun run start
+npm run dev
+npm run start
 ```
 
 Run tests:
 
 ```bash
-pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 Optional verification:
 
-- **Bridge only:** From project root, run `uv run proxi-bridge`. You should see `{"type":"ready"}`. (Ctrl+C to exit.) This checks that the Python agent bridge starts correctly.
-- **Full flow:** Run `proxi` or `uv run proxi`; you should see the boot sequence, agent selection (if applicable), and a prompt. Type a task and press Enter.
+- **Gateway only:** Run `uv run proxi gateway start`, then open `http://127.0.0.1:8765/health` and verify `{"status":"ok", ...}`.
+- **Full flow:** Run `uv run proxi`; the gateway auto-starts, then the TUI launches. Type a task and press Enter.
+
+## React Frontend (Gateway)
+
+```bash
+# Start the React frontend (requires a running gateway)
+uv run proxi frontend
+```
+
+Frontend startup parameters:
+
+| Parameter | Where | Description |
+|----------|-------|-------------|
+| `PROXI_GATEWAY_URL` | Environment variable | Override gateway base URL (default: `http://127.0.0.1:8765`). |
+| `PROXI_SESSION_ID` | Environment variable | Start the web UI on a specific session id. |
+| `PORT` | Environment variable | React frontend HTTP port (default: `5174`). |
+
+## Discord Integration (Relay -> Gateway)
+
+This integration lets Discord chat act as a command input source for Proxi, similar to the frontend bridge.
+
+### 1. Configure a Discord source in gateway.yml
+
+Add or update a source like:
+
+```yaml
+sources:
+    discord:
+        type: discord
+        target_agent: work
+        target_session: discord
+        priority: 0
+        paused: false
+        # Optional extras (all optional):
+        # discord_command_prefix: /proxi
+        # discord_allow_plain: false
+        # discord_session_mode: channel   # fixed | channel | user
+        # discord_agent_overrides: {}     # auto-managed by /proxi switch <agent_id>
+```
+
+Session mode behavior:
+
+- `fixed`: all Discord messages for this source go to one session (`target_session` or agent default)
+- `channel`: each Discord channel gets its own session
+- `user`: each user in each channel gets its own session
+
+### 2. Set security env vars for signed relay calls
+
+In the gateway process environment:
+
+```powershell
+$env:DISCORD_WEBHOOK_SECRET = "your-shared-secret"
+```
+
+When set, `/channels/discord/webhook` requires `X-Signature-256` HMAC signatures.
+
+### 3. Start the Discord relay service
+
+From project root:
+
+```bash
+cd discord_relay
+npm install
+npm run start
+```
+
+Or via the unified CLI:
+
+```bash
+uv run proxi discord
+```
+
+`proxi discord` requires a running gateway and exits if gateway is unreachable.
+
+Relay env file: [discord_relay/.env.example](discord_relay/.env.example)
+
+### 4. Discord commands
+
+Default prefix is `/proxi`.
+
+- `/proxi <task>`: enqueue a Proxi task
+- `/proxi status`: show lane status for this channel/user session
+- `/proxi abort`: abort active run in this session
+- `/proxi switch <agent_id>`: route this channel to a different agent
+- `/proxi help`: show command help
+
+Messages can be forwarded without prefix by setting `discord_allow_plain: true` in gateway source config and `PROXI_DISCORD_ALLOW_PLAIN=1` in relay env.
+
+## Webhook Setup And Testing
+
+Use this flow to configure a secure webhook source from the React frontend and verify Proxi receives it.
+
+### 1. Start services
+
+From project root:
+
+```bash
+# Start gateway daemon
+uv run proxi gateway start
+
+# In a second terminal, start frontend
+uv run proxi frontend
+```
+
+Verify gateway health:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8765/health"
+```
+
+### 2. Configure webhook source in frontend
+
+In the web UI:
+
+1. Open **Settings**.
+2. Open **Webhooks**.
+3. Create or update a source with values like:
+     - **Source ID**: `external_alert`
+     - **Target Agent**: your agent
+     - **Prompt Template**: `External alert: {{event_type}} from {{system.name}} severity={{severity}} message={{message}}`
+     - **HMAC Secret Env**: `PROXI_CUSTOM_WEBHOOK_SECRET`
+     - **State**: `Running`
+4. Click **Save Webhook**.
+
+### 3. Set required secret env var
+
+Webhook signature verification is enforced. Set the same env var in the gateway process environment:
+
+```powershell
+$env:PROXI_CUSTOM_WEBHOOK_SECRET = "super-secret-123"
+```
+
+If the gateway is already running, restart it after setting env vars.
+
+### 4. Test locally with signed request
+
+**macOS / Linux (bash or zsh)** — `printf '%s'` keeps the JSON byte-for-byte (no trailing newline), matching what the gateway verifies.
+
+```bash
+uri="http://127.0.0.1:8765/channels/webhook/external_alert"
+secret="super-secret-123"
+body='{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+hex=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" | awk '{print $NF}')
+sig="sha256=$hex"
+curl -sS -X POST "$uri" \
+  -H "Content-Type: application/json" \
+  -H "X-Signature-256: $sig" \
+  -d "$body"
+echo
+```
+
+**Windows (PowerShell)**
+
+```powershell
+$uri = "http://127.0.0.1:8765/channels/webhook/external_alert"
+$secret = "super-secret-123"
+$body = '{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+
+$hmac = New-Object System.Security.Cryptography.HMACSHA256
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($secret)
+$hash = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($body))
+$hex = -join ($hash | ForEach-Object { $_.ToString("x2") })
+$sig = "sha256=$hex"
+
+Invoke-RestMethod -Method Post `
+    -Uri $uri `
+    -Headers @{ "X-Signature-256" = $sig } `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+Expected response:
+
+```json
+{ "ok": true }
+```
+
+### 5. Optional: test through ngrok public URL
+
+Run tunnel to local gateway (in new terminal):
+
+```bash
+ngrok http 8765
+```
+
+Replace `<NGROK_URL>` with the `https://...ngrok...` forwarding URL and run:
+
+**macOS / Linux (bash or zsh)**
+
+```bash
+uri="<NGROK_URL>/channels/webhook/external_alert"
+secret="super-secret-123"
+body='{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+hex=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" | awk '{print $NF}')
+sig="sha256=$hex"
+curl -sS -X POST "$uri" \
+  -H "Content-Type: application/json" \
+  -H "X-Signature-256: $sig" \
+  -H "ngrok-skip-browser-warning: true" \
+  -d "$body"
+echo
+```
+
+**Windows (PowerShell)**
+
+```powershell
+$uri = "<NGROK_URL>/channels/webhook/external_alert"
+$secret = "super-secret-123"
+$body = '{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+
+$hmac = New-Object System.Security.Cryptography.HMACSHA256
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($secret)
+$hash = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($body))
+$hex = -join ($hash | ForEach-Object { $_.ToString("x2") })
+$sig = "sha256=$hex"
+
+Invoke-RestMethod -Method Post `
+    -Uri $uri `
+    -Headers @{ 
+        "X-Signature-256" = $sig
+        "ngrok-skip-browser-warning" = "true"
+    } `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+### 6. Expected Proxi behavior
+
+- API returns `{ "ok": true }` when accepted.
+- Proxi routes the event to the configured target agent/session.
+- The GUI shows webhook-triggered activity and the rendered prompt text.
+
+### Troubleshooting
+
+- `404 Unknown webhook source`: source id in URL does not match saved source.
+- `403 Missing/Invalid webhook signature`: signature mismatch or missing `X-Signature-256`.
+- `403 Webhook secret environment variable ... is not set`: required env var is not set in gateway process.
+- `400 Webhook payload must be valid JSON`: request body is missing or invalid JSON.

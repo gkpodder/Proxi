@@ -4,8 +4,10 @@
   "private": true,
   "description": "Proxi agent - TUI script runs from cli_ink",
   "scripts": {
+    "proxi": "uv run proxi",
     "init-keys-db": "uv run python scripts/init_api_keys_db.py",
-    "proxi-tui": "cd cli_ink && bun run dev",
-    "proxi-react": "cd react_frontend && bun run start"
+    "proxi-tui": "uv run proxi-tui",
+    "proxi-react": "uv run proxi-react",
+    "proxi-discord-relay": "uv run proxi-discord-relay"
   }
 }

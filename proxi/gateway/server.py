@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
+import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -24,7 +25,7 @@ from proxi.cli.main import (
 )
 from proxi.core.loop import AgentLoop
 from proxi.core.state import WorkspaceConfig
-from proxi.gateway.channels.cron import CronRegistry
+from proxi.gateway.channels.cron import CronRegistry, _parse_cron
 from proxi.gateway.channels.discord import DiscordAdapter
 from proxi.gateway.channels.heartbeat import HeartbeatManager
 from proxi.gateway.channels.http import (
@@ -41,12 +42,18 @@ from proxi.gateway.events import GatewayEvent
 from proxi.gateway.lanes.manager import LaneManager
 from proxi.gateway.middleware.auth import verify_bearer_token
 from proxi.gateway.middleware.hmac import (
+    verify_discord_signature,
     verify_telegram_signature,
     verify_webhook_hmac,
     verify_whatsapp_signature,
 )
 from proxi.gateway.router import EventRouter
 from proxi.interaction.tool import get_ask_user_question_spec
+from proxi.llm.model_registry import (
+    DEFAULT_MODELS,
+    get_model_limits_by_provider,
+    get_supported_models_by_provider,
+)
 from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_user_profile
 from proxi.tools.coding import register_coding_tools
@@ -63,6 +70,12 @@ router: EventRouter
 lane_manager: LaneManager | None = None
 heartbeat_mgr: HeartbeatManager
 scheduler = AsyncIOScheduler()
+
+SUPPORTED_LLM_MODELS: dict[str, list[str]] = get_supported_models_by_provider()
+LLM_MODEL_LIMITS: dict[str, list[dict[str, int | str]]] = get_model_limits_by_provider()
+DEFAULT_LLM_MODELS: dict[str, str] = dict(DEFAULT_MODELS)
+llm_provider: str = "openai"
+llm_model: str = DEFAULT_LLM_MODELS["openai"]
 
 # MCP adapters loaded once at startup; their tools are injected into each lane.
 _mcp_adapters: list[Any] = []
@@ -99,6 +112,70 @@ def _reload_gateway_config() -> None:
     for aid, agent_cfg in config.agents.items():
         if agent_cfg.working_dir and aid not in _agent_working_dirs:
             _agent_working_dirs[aid] = agent_cfg.working_dir
+
+
+def _gateway_config_path() -> Path:
+    return _workspace_root() / "gateway.yml"
+
+
+def _load_gateway_raw_config() -> dict[str, Any]:
+    path = _gateway_config_path()
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"gateway.yml not found at {path}")
+
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=500, detail="gateway.yml must be a YAML mapping")
+
+    if not isinstance(raw.get("agents"), dict):
+        raw["agents"] = {}
+    if not isinstance(raw.get("sources"), dict):
+        raw["sources"] = {}
+    return raw
+
+
+def _write_gateway_raw_config(raw: dict[str, Any]) -> None:
+    path = _gateway_config_path()
+    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+
+
+def _reload_cron_registry() -> None:
+    # Scheduler in this gateway process only hosts cron jobs.
+    for job in scheduler.get_jobs():
+        scheduler.remove_job(job.id)
+
+    if lane_manager is None:
+        return
+
+    CronRegistry(config, lane_manager, router).load_all(scheduler)
+
+
+def _persist_and_reload_gateway_config(raw: dict[str, Any]) -> None:
+    _write_gateway_raw_config(raw)
+    _reload_gateway_config()
+    _reload_cron_registry()
+
+
+def _normalize_provider(provider: str | None) -> str:
+    normalized = (provider or "").strip().lower()
+    if normalized not in SUPPORTED_LLM_MODELS:
+        raise ValueError(
+            f"Unsupported provider: {provider}. Expected one of: {', '.join(sorted(SUPPORTED_LLM_MODELS))}",
+        )
+    return normalized
+
+
+def _resolve_model(provider: str, model: str | None) -> str:
+    requested = (model or "").strip()
+    if not requested:
+        return DEFAULT_LLM_MODELS[provider]
+
+    allowed = SUPPORTED_LLM_MODELS.get(provider, [])
+    if requested not in allowed:
+        raise ValueError(f"Unsupported model for {provider}: {requested}")
+    return requested
 
 
 async def _refresh_mcp_tools() -> None:
@@ -168,8 +245,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     (plan, todos, soul) resolve to the correct session paths.
     MCP tools loaded at gateway startup are shared across all lanes.
     """
-    provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
-    llm_client = create_llm_client(provider=provider)
+    llm_client = create_llm_client(provider=llm_provider, model=llm_model)
 
     working_dir = _agent_working_dirs.get(workspace_config.agent_id, _working_dir)
 
@@ -218,6 +294,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     global config, router, lane_manager, heartbeat_mgr
     global _mcp_adapters, _mcp_tools
+    global llm_provider, llm_model
 
     workspace_root = _workspace_root()
     WorkspaceManager(root=workspace_root).ensure_global_system_prompt()
@@ -229,6 +306,20 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     for _aid, _agent_cfg in config.agents.items():
         if _agent_cfg.working_dir:
             _agent_working_dirs[_aid] = _agent_cfg.working_dir
+
+    env_provider_raw = os.environ.get("PROXI_PROVIDER", "openai")
+    try:
+        env_provider = _normalize_provider(env_provider_raw)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
+    env_model = os.environ.get("PROXI_MODEL", "") or os.environ.get(
+        f"PROXI_{env_provider.upper()}_MODEL", ""
+    )
+    llm_provider = env_provider
+    try:
+        llm_model = _resolve_model(env_provider, env_model)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
 
     # Load MCP adapters once so their tools are available to all lanes.
     await _refresh_mcp_tools()
@@ -293,6 +384,89 @@ async def intake(adapter: TelegramAdapter | WhatsAppAdapter | DiscordAdapter, ra
     await lane_manager.route(event)
 
 
+def _discord_source() -> Any:
+    source = config.sources.get("discord")
+    if source is None or source.source_type not in ("discord", "channel"):
+        raise HTTPException(status_code=404, detail="Discord source is not configured")
+    return source
+
+
+def _discord_channel_id(raw: dict[str, Any]) -> str:
+    channel_id = raw.get("channel_id")
+    if not channel_id and isinstance(raw.get("channel"), dict):
+        channel_id = raw["channel"].get("id")
+    return str(channel_id or "").strip()
+
+
+def _discord_user_id(raw: dict[str, Any]) -> str:
+    author = raw.get("author")
+    if not isinstance(author, dict):
+        return ""
+    return str(author.get("id") or "").strip()
+
+
+def _sanitize_session_token(value: str, fallback: str) -> str:
+    cleaned = "".join(ch for ch in str(value or "") if ch.isalnum() or ch in ("-", "_"))
+    return cleaned or fallback
+
+
+def _discord_agent_for_channel(source: Any, channel_id: str) -> str:
+    overrides = source.extras.get("discord_agent_overrides", {})
+    if isinstance(overrides, dict):
+        override = str(overrides.get(channel_id, "")).strip()
+        if override and override in config.agents:
+            return override
+    return source.target_agent
+
+
+def _resolve_discord_session(source: Any, raw: dict[str, Any]) -> str:
+    channel_id = _discord_channel_id(raw)
+    user_id = _discord_user_id(raw)
+
+    agent_id = _discord_agent_for_channel(source, channel_id)
+    if agent_id not in config.agents:
+        raise HTTPException(status_code=400, detail=f"Unknown Discord target agent: {agent_id}")
+
+    mode = str(source.extras.get("discord_session_mode", "channel")).strip().lower()
+    base_session = str(source.target_session or "").strip()
+    agent_default = config.agents[agent_id].default_session
+
+    if mode == "fixed":
+        session_name = base_session or agent_default
+    elif mode == "user":
+        base = base_session or "discord"
+        session_name = f"{base}-ch-{_sanitize_session_token(channel_id, 'unknown')}-u-{_sanitize_session_token(user_id, 'unknown')}"
+    else:
+        base = base_session or "discord"
+        session_name = f"{base}-ch-{_sanitize_session_token(channel_id, 'unknown')}"
+
+    return f"{agent_id}/{session_name}"
+
+
+def _set_discord_channel_agent(channel_id: str, agent_id: str) -> None:
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get("discord")
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Discord source is not configured")
+    if not isinstance(existing, dict):
+        raise HTTPException(status_code=500, detail="Discord source config is invalid")
+
+    overrides = existing.get("discord_agent_overrides")
+    if not isinstance(overrides, dict):
+        overrides = {}
+    overrides[str(channel_id)] = agent_id
+    existing["discord_agent_overrides"] = overrides
+    sources["discord"] = existing
+    _persist_and_reload_gateway_config(raw)
+
+
+async def _send_discord_message(event: GatewayEvent, text: str) -> None:
+    if event.reply_channel is None:
+        return
+    await event.reply_channel.send(text)
+
+
 # ---------------------------------------------------------------------------
 # Channel webhook endpoints
 # ---------------------------------------------------------------------------
@@ -334,9 +508,96 @@ async def whatsapp_webhook(request: Request) -> dict[str, str]:
 
 
 @app.post("/channels/discord/webhook")
-async def discord_webhook(request: Request) -> dict[str, bool]:
-    await intake(DiscordAdapter(), await request.json())
-    return {"ok": True}
+async def discord_webhook(request: Request) -> dict[str, Any]:
+    await verify_discord_signature(request)
+    raw_payload = await request.json()
+    if not isinstance(raw_payload, dict):
+        raise HTTPException(status_code=400, detail="Discord payload must be an object")
+
+    source = _discord_source()
+    command_prefix = str(source.extras.get("discord_command_prefix", "/proxi") or "/proxi")
+    allow_plain = bool(source.extras.get("discord_allow_plain", False))
+
+    event = await DiscordAdapter(
+        command_prefix=command_prefix,
+        allow_plain=allow_plain,
+    ).parse(raw_payload)
+
+    if event is None:
+        return {"ok": True, "ignored": True}
+
+    command = event.payload.get("command", {})
+    action = str(command.get("action", "start")).strip().lower()
+    session_id = _resolve_discord_session(source, raw_payload)
+
+    if action == "help":
+        await _send_discord_message(
+            event,
+            "Proxi Discord commands:\n"
+            f"{command_prefix} <task>\n"
+            f"{command_prefix} abort\n"
+            f"{command_prefix} status\n"
+            f"{command_prefix} switch <agent_id>",
+        )
+        return {"ok": True, "action": "help"}
+
+    if action == "status":
+        lane = lane_manager.get_lane(session_id)
+        if lane is None:
+            await _send_discord_message(event, f"Session {session_id}: idle (not created yet).")
+        else:
+            await _send_discord_message(
+                event,
+                f"Session {session_id}: running={lane.is_running}, queue_depth={lane.queue_depth}",
+            )
+        return {"ok": True, "action": "status", "session_id": session_id}
+
+    if action == "abort":
+        lane = lane_manager.get_lane(session_id)
+        if lane is None:
+            await _send_discord_message(event, f"No active lane for {session_id}.")
+            return {"ok": True, "action": "abort", "session_id": session_id, "aborted": False}
+        await lane.abort()
+        await _send_discord_message(event, f"Aborted active run for {session_id}.")
+        return {"ok": True, "action": "abort", "session_id": session_id, "aborted": True}
+
+    if action == "switch":
+        next_agent_id = str(command.get("agent_id", "")).strip()
+        if not next_agent_id:
+            raise HTTPException(status_code=400, detail="switch command requires agent id")
+        if next_agent_id not in config.agents:
+            raise HTTPException(status_code=404, detail=f"Unknown agent: {next_agent_id}")
+
+        channel_id = _discord_channel_id(raw_payload)
+        if not channel_id:
+            raise HTTPException(status_code=400, detail="Discord channel_id is required for switch")
+
+        _set_discord_channel_agent(channel_id, next_agent_id)
+        source = _discord_source()
+        switched_session_id = _resolve_discord_session(source, raw_payload)
+        lane_manager._get_or_create(switched_session_id)
+        await _send_discord_message(
+            event,
+            f"Switched this channel to agent {next_agent_id}. Session: {switched_session_id}",
+        )
+        return {
+            "ok": True,
+            "action": "switch",
+            "agent_id": next_agent_id,
+            "session_id": switched_session_id,
+        }
+
+    if action != "start":
+        raise HTTPException(status_code=400, detail=f"Unsupported Discord command action: {action}")
+
+    task = str(event.payload.get("text", "")).strip()
+    if not task:
+        await _send_discord_message(event, f"Provide a task after {command_prefix}.")
+        return {"ok": True, "ignored": True, "reason": "empty_task"}
+
+    event.session_id = session_id
+    await lane_manager.route(event)
+    return {"ok": True, "action": "start", "queued": True, "session_id": session_id}
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +610,12 @@ async def generic_webhook(source_id: str, request: Request) -> dict[str, bool]:
         raise HTTPException(status_code=404, detail="Unknown webhook source")
 
     await verify_webhook_hmac(request, source)
-    raw = await request.json()
+    try:
+        raw_payload = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Webhook payload must be valid JSON") from exc
+
+    raw = raw_payload if isinstance(raw_payload, dict) else {"_raw": raw_payload}
 
     event = build_webhook_event(source, raw)
     event.session_id = router.resolve(event)
@@ -680,6 +946,37 @@ class SwitchAgentRequest(BaseModel):
     agent_id: str
 
 
+class LlmConfigUpdateRequest(BaseModel):
+    provider: str
+    model: str = ""
+
+
+class CronJobUpsertRequest(BaseModel):
+    schedule: str
+    prompt: str
+    target_agent: str
+    priority: int = 0
+    paused: bool = False
+    target_session: str = ""
+
+
+class CronPauseRequest(BaseModel):
+    paused: bool
+
+
+class WebhookUpsertRequest(BaseModel):
+    prompt_template: str = ""
+    target_agent: str
+    priority: int = 0
+    paused: bool = False
+    target_session: str = ""
+    secret_env: str = ""
+
+
+class WebhookPauseRequest(BaseModel):
+    paused: bool
+
+
 @app.post("/v1/sessions/switch")
 async def switch_agent_endpoint(body: SwitchAgentRequest) -> dict[str, Any]:
     """Switch the TUI to a different agent.
@@ -693,6 +990,324 @@ async def switch_agent_endpoint(body: SwitchAgentRequest) -> dict[str, Any]:
     new_session_id = f"{agent.agent_id}/{agent.default_session}"
     lane_manager._get_or_create(new_session_id)
     return {"session_id": new_session_id, "agent_id": agent.agent_id}
+
+
+@app.get("/v1/llm-config")
+async def get_llm_config_endpoint() -> dict[str, Any]:
+    return {
+        "provider": llm_provider,
+        "model": llm_model,
+        "providers": sorted(SUPPORTED_LLM_MODELS.keys()),
+        "models": SUPPORTED_LLM_MODELS,
+        "model_limits": LLM_MODEL_LIMITS,
+        "defaults": DEFAULT_LLM_MODELS,
+    }
+
+
+@app.put("/v1/llm-config")
+async def update_llm_config_endpoint(body: LlmConfigUpdateRequest) -> dict[str, Any]:
+    global llm_provider, llm_model
+
+    try:
+        provider = _normalize_provider(body.provider)
+        model = _resolve_model(provider, body.model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    llm_provider = provider
+    llm_model = model
+
+    if lane_manager is not None:
+        await lane_manager.reset_all_loops()
+
+    logger.info("llm_config_updated", provider=provider, model=model)
+    return {
+        "provider": llm_provider,
+        "model": llm_model,
+        "providers": sorted(SUPPORTED_LLM_MODELS.keys()),
+        "models": SUPPORTED_LLM_MODELS,
+        "model_limits": LLM_MODEL_LIMITS,
+        "defaults": DEFAULT_LLM_MODELS,
+    }
+
+
+@app.get("/v1/cron-jobs")
+async def list_cron_jobs_endpoint() -> dict[str, Any]:
+    """List cron jobs defined in ``gateway.yml`` sources."""
+    jobs: list[dict[str, Any]] = []
+    for source_id, source in config.sources.items():
+        if source.source_type != "cron":
+            continue
+        jobs.append(
+            {
+                "source_id": source_id,
+                "schedule": source.schedule,
+                "prompt": source.prompt,
+                "target_agent": source.target_agent,
+                "target_session": source.target_session,
+                "priority": source.priority,
+                "paused": source.paused,
+            }
+        )
+
+    jobs.sort(key=lambda item: item["source_id"])
+    return {"cron_jobs": jobs}
+
+
+@app.get("/v1/cron-capabilities")
+async def cron_capabilities_endpoint() -> dict[str, Any]:
+    """Return cron parser capabilities for UI compatibility checks."""
+    supports_six_field = True
+    try:
+        _parse_cron("*/15 * * * * *")
+    except ValueError:
+        supports_six_field = False
+
+    return {
+        "supports_six_field": supports_six_field,
+        "accepted_formats": [
+            "minute hour day month day_of_week",
+            "second minute hour day month day_of_week",
+        ] if supports_six_field else [
+            "minute hour day month day_of_week",
+        ],
+    }
+
+
+@app.put("/v1/cron-jobs/{source_id}")
+async def upsert_cron_job_endpoint(source_id: str, body: CronJobUpsertRequest) -> dict[str, Any]:
+    """Create or update a cron source in ``gateway.yml`` and hot-reload scheduler jobs."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    schedule = (body.schedule or "").strip()
+    prompt = (body.prompt or "").strip()
+    target_agent = (body.target_agent or "").strip()
+    target_session = (body.target_session or "").strip()
+
+    if not schedule:
+        raise HTTPException(status_code=400, detail="schedule is required")
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    if not target_agent:
+        raise HTTPException(status_code=400, detail="target_agent is required")
+    if target_agent not in config.agents:
+        raise HTTPException(status_code=400, detail=f"Unknown agent: {target_agent}")
+    if body.priority < 0 or body.priority > 5:
+        raise HTTPException(status_code=400, detail="priority must be between 0 and 5")
+
+    try:
+        _parse_cron(schedule)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+
+    existing = sources.get(sid)
+    if existing is None:
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    existing["type"] = "cron"
+    existing["schedule"] = schedule
+    existing["prompt"] = prompt
+    existing["target_agent"] = target_agent
+    existing["priority"] = int(body.priority)
+    existing["paused"] = bool(body.paused)
+    if target_session:
+        existing["target_session"] = target_session
+    elif "target_session" in existing:
+        del existing["target_session"]
+
+    sources[sid] = existing
+
+    _persist_and_reload_gateway_config(raw)
+
+    return {
+        "source_id": sid,
+        "schedule": schedule,
+        "prompt": prompt,
+        "target_agent": target_agent,
+        "target_session": target_session,
+        "priority": int(body.priority),
+        "paused": bool(body.paused),
+    }
+
+
+@app.post("/v1/cron-jobs/{source_id}/pause")
+async def pause_cron_job_endpoint(source_id: str, body: CronPauseRequest) -> dict[str, Any]:
+    """Pause or resume a cron source and hot-reload scheduler jobs."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get(sid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
+    if not isinstance(existing, dict) or existing.get("type") != "cron":
+        raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+
+    existing["paused"] = bool(body.paused)
+    sources[sid] = existing
+
+    _persist_and_reload_gateway_config(raw)
+    return {"status": "updated", "source_id": sid, "paused": bool(body.paused)}
+
+
+@app.delete("/v1/cron-jobs/{source_id}")
+async def delete_cron_job_endpoint(source_id: str) -> dict[str, Any]:
+    """Delete a cron source from ``gateway.yml`` and hot-reload scheduler jobs."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get(sid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
+    if not isinstance(existing, dict) or existing.get("type") != "cron":
+        raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+
+    del sources[sid]
+    _persist_and_reload_gateway_config(raw)
+    return {"status": "deleted", "source_id": sid}
+
+
+
+# Webhook Sources
+# ---------------------------------------------------------------------------
+@app.get("/v1/webhooks")
+async def list_webhooks_endpoint() -> dict[str, Any]:
+    """List webhook sources defined in ``gateway.yml``."""
+    webhooks: list[dict[str, Any]] = []
+    for source_id, source in config.sources.items():
+        if source.source_type != "webhook":
+            continue
+        webhooks.append(
+            {
+                "source_id": source_id,
+                "prompt_template": source.prompt_template or "",
+                "target_agent": source.target_agent,
+                "target_session": source.target_session,
+                "priority": source.priority,
+                "paused": source.paused,
+                "has_secret": bool(source.secret_env),
+                "secret_env": source.secret_env or "",
+            }
+        )
+
+    webhooks.sort(key=lambda item: item["source_id"])
+    return {"webhooks": webhooks}
+
+
+@app.put("/v1/webhooks/{source_id}")
+async def upsert_webhook_endpoint(source_id: str, body: WebhookUpsertRequest) -> dict[str, Any]:
+    """Create or update a webhook source in ``gateway.yml``."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    target_agent = (body.target_agent or "").strip()
+    target_session = (body.target_session or "").strip()
+    secret_env = (body.secret_env or "").strip()
+
+    if not target_agent:
+        raise HTTPException(status_code=400, detail="target_agent is required")
+    if not secret_env:
+        raise HTTPException(status_code=400, detail="secret_env is required for webhook security")
+    if target_agent not in config.agents:
+        raise HTTPException(status_code=400, detail=f"Unknown agent: {target_agent}")
+    if body.priority < 0 or body.priority > 5:
+        raise HTTPException(status_code=400, detail="priority must be between 0 and 5")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+
+    existing = sources.get(sid)
+    if existing is None:
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    existing["type"] = "webhook"
+    existing["target_agent"] = target_agent
+    existing["priority"] = int(body.priority)
+    existing["paused"] = bool(body.paused)
+    
+    if body.prompt_template:
+        existing["prompt_template"] = body.prompt_template
+    elif "prompt_template" in existing:
+        del existing["prompt_template"]
+
+    if target_session:
+        existing["target_session"] = target_session
+    elif "target_session" in existing:
+        del existing["target_session"]
+
+    existing["secret_env"] = secret_env
+
+    sources[sid] = existing
+
+    _persist_and_reload_gateway_config(raw)
+
+    return {
+        "source_id": sid,
+        "prompt_template": body.prompt_template or "",
+        "target_agent": target_agent,
+        "target_session": target_session,
+        "priority": int(body.priority),
+        "paused": bool(body.paused),
+        "has_secret": True,
+        "secret_env": secret_env,
+    }
+
+
+@app.post("/v1/webhooks/{source_id}/pause")
+async def pause_webhook_endpoint(source_id: str, body: WebhookPauseRequest) -> dict[str, Any]:
+    """Pause or resume a webhook source."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get(sid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Webhook source not found: {sid}")
+    if not isinstance(existing, dict) or existing.get("type") != "webhook":
+        raise HTTPException(status_code=400, detail=f"Source is not a webhook: {sid}")
+
+    existing["paused"] = bool(body.paused)
+    sources[sid] = existing
+
+    _persist_and_reload_gateway_config(raw)
+    return {"status": "updated", "source_id": sid, "paused": bool(body.paused)}
+
+
+@app.delete("/v1/webhooks/{source_id}")
+async def delete_webhook_endpoint(source_id: str) -> dict[str, Any]:
+    """Delete a webhook source from ``gateway.yml``."""
+    sid = source_id.strip()
+    if not sid:
+        raise HTTPException(status_code=400, detail="source_id is required")
+
+    raw = _load_gateway_raw_config()
+    sources = raw["sources"]
+    existing = sources.get(sid)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Webhook source not found: {sid}")
+    if not isinstance(existing, dict) or existing.get("type") != "webhook":
+        raise HTTPException(status_code=400, detail=f"Source is not a webhook: {sid}")
+
+    del sources[sid]
+    _persist_and_reload_gateway_config(raw)
+    return {"status": "deleted", "source_id": sid}
 
 
 # ---------------------------------------------------------------------------

@@ -14,20 +14,33 @@ logger = get_logger(__name__)
 
 
 def _parse_cron(expr: str) -> dict[str, str]:
-    """Convert a five-field cron expression into APScheduler keyword args.
+    """Convert a cron expression into APScheduler keyword args.
 
-    Format: ``minute hour day month day_of_week``
+    Supported formats:
+    - ``minute hour day month day_of_week``
+    - ``second minute hour day month day_of_week``
     """
     parts = expr.strip().split()
-    if len(parts) != 5:
-        raise ValueError(f"Expected 5-field cron expression, got: {expr!r}")
-    return {
-        "minute": parts[0],
-        "hour": parts[1],
-        "day": parts[2],
-        "month": parts[3],
-        "day_of_week": parts[4],
-    }
+    if len(parts) == 5:
+        return {
+            "minute": parts[0],
+            "hour": parts[1],
+            "day": parts[2],
+            "month": parts[3],
+            "day_of_week": parts[4],
+        }
+
+    if len(parts) == 6:
+        return {
+            "second": parts[0],
+            "minute": parts[1],
+            "hour": parts[2],
+            "day": parts[3],
+            "month": parts[4],
+            "day_of_week": parts[5],
+        }
+
+    raise ValueError(f"Expected 5 or 6-field cron expression, got: {expr!r}")
 
 
 class CronRegistry:
@@ -44,6 +57,9 @@ class CronRegistry:
     def load_all(self, scheduler: AsyncIOScheduler) -> None:
         for source_id, source in self._config.sources.items():
             if source.source_type != "cron":
+                continue
+            if source.paused:
+                logger.info("cron_job_skipped_paused", source=source_id)
                 continue
             try:
                 cron_fields = _parse_cron(source.schedule)

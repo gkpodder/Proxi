@@ -87,6 +87,11 @@ class LaneManager:
             if lane is not None:
                 await lane.stop()
 
+    async def reset_all_loops(self) -> None:
+        """Reset all in-memory loops so runtime config changes apply to active sessions."""
+        for lane in self._lanes.values():
+            await lane.reset_loop()
+
     def sync_mcp_tools_to_loops(
         self,
         mcp_tools: Sequence[Any],
@@ -135,7 +140,6 @@ class LaneManager:
 
         provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
         model = DEFAULT_MODELS.get(provider, DEFAULT_MODELS["openai"])
-        ctx_window = get_context_window(model)
 
         lane = AgentLane(
             session_id=session_id,
@@ -144,7 +148,7 @@ class LaneManager:
             workspace_config=workspace_config,
             budget=LaneBudget(
                 token_budget=token_budget_for_model(model),
-                context_window=ctx_window,
+                context_window=get_context_window(model),
             ),
             _create_loop=self._create_loop,
         )
