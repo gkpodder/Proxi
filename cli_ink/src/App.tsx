@@ -60,6 +60,7 @@ export default function App() {
   const [lastTuiAbortableStatus, setLastTuiAbortableStatus] = useState(false);
   const [btwMode, setBtwMode] = useState(false);
   const btwReturnSessionRef = useRef<string>("");
+  const btwSavedScrollbackRef = useRef<ScrollbackItem[]>([]);
 
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
@@ -872,11 +873,13 @@ export default function App() {
     if (!returnSession || !btwMode) return;
     setBtwMode(false);
     btwReturnSessionRef.current = "";
+    const savedScrollback = btwSavedScrollbackRef.current;
+    btwSavedScrollbackRef.current = [];
     if (abortRef.current) abortRef.current.abort();
     sessionRef.current = returnSession;
     setBootInfo(null);
     setBridgeReady(false);
-    setScrollback([]);
+    setScrollback(savedScrollback);
     setStreamingContent("");
     streamingRef.current = "";
     bufferRef.current = "";
@@ -910,6 +913,7 @@ export default function App() {
       }
       const result = (await res.json()) as { btw_session_id: string; return_session_id: string };
       btwReturnSessionRef.current = result.return_session_id;
+      btwSavedScrollbackRef.current = scrollback;
       setBtwMode(true);
       if (abortRef.current) abortRef.current.abort();
       sessionRef.current = result.btw_session_id;
@@ -931,7 +935,7 @@ export default function App() {
         { type: "agent_line", content: `BTW error: ${err.message ?? String(err)}`, isFirst: true, isSystem: true },
       ]);
     }
-  }, [connectSse]);
+  }, [connectSse, scrollback]);
 
   const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
     if (!task.trim()) return;
