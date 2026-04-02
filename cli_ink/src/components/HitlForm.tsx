@@ -20,6 +20,13 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
 
   const options = spec.options ?? [];
   const maxIndex = Math.max(0, options.length - 1);
+  const workDirMatch =
+    spec.method === "text"
+      ? (spec.prompt ?? "").match(
+          /^Working dir:\s*(.+)\nEnter new path \(leave empty to cancel\):$/
+        )
+      : null;
+  const currentWorkDir = workDirMatch?.[1] ?? "";
 
   useEffect(() => {
     setTextValue("");
@@ -114,6 +121,47 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
   }
 
   if (spec.method === "text") {
+    if (workDirMatch) {
+      return (
+        <Box
+          paddingX={1}
+          flexDirection="column"
+          flexShrink={0}
+          borderStyle="round"
+          borderColor={theme.purpleDim}
+        >
+          <Box marginBottom={1}>
+            <Text color={theme.purple} bold>
+              Working Directory
+            </Text>
+          </Box>
+          <Box marginBottom={1}>
+            <Text color={theme.mist}>Current</Text>
+            <Text color={theme.purple}>  </Text>
+            <Text color={theme.white} backgroundColor={theme.purpleFaint}>
+              {` ${currentWorkDir} `}
+            </Text>
+          </Box>
+          <Box marginBottom={0}>
+            <Text color={theme.lavender}>New path</Text>
+          </Box>
+          <Box marginBottom={1}>
+            <Text color={theme.purple}>&gt;</Text>
+            <Text color={theme.purple}> </Text>
+            <TextInput
+              key={spec.prompt ?? "text"}
+              value={textValue}
+              onChange={setTextValue}
+              onSubmit={() => handleSubmit()}
+              placeholder="Enter absolute or relative path..."
+              showCursor
+            />
+          </Box>
+          <Text color={theme.mist}>Enter to save · Esc to cancel</Text>
+        </Box>
+      );
+    }
+
     return (
       <Box
         paddingX={1}

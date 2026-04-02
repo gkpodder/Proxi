@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -11,6 +12,7 @@ from proxi.gateway.config import GatewayConfig
 from proxi.gateway.events import GatewayEvent
 from proxi.gateway.lanes.budget import LaneBudget
 from proxi.gateway.lanes.lane import AgentLane
+from proxi.llm.model_registry import DEFAULT_MODELS, get_context_window, token_budget_for_model
 from proxi.observability.logging import get_logger
 
 logger = get_logger(__name__)
@@ -85,10 +87,31 @@ class LaneManager:
             if lane is not None:
                 await lane.stop()
 
-    def sync_mcp_tools_to_loops(self, mcp_tools: Sequence[Any]) -> None:
+    async def reset_all_loops(self) -> None:
+        """Reset all in-memory loops so runtime config changes apply to active sessions."""
+        for lane in self._lanes.values():
+            await lane.reset_loop()
+
+    def sync_mcp_tools_to_loops(
+        self,
+        mcp_tools: Sequence[Any],
+        deferred_tools: Sequence[Any] = (),
+    ) -> None:
         """After gateway MCP refresh, update tool registries on running loops."""
         for lane in self._lanes.values():
-            lane.sync_mcp_tools(list(mcp_tools))
+            lane.sync_mcp_tools(list(mcp_tools), list(deferred_tools))
+
+    def sync_coding_tools_to_loops(self, working_dir: Path) -> None:
+        """After a working-dir change, re-root coding tools on all active loops."""
+        for lane in self._lanes.values():
+            lane.sync_coding_tools(working_dir)
+
+    def sync_coding_tools_to_agent_loops(self, agent_id: str, working_dir: Path) -> None:
+        """Re-root coding tools only on lanes belonging to the given agent."""
+        prefix = f"{agent_id}/"
+        for sid, lane in self._lanes.items():
+            if sid.startswith(prefix):
+                lane.sync_coding_tools(working_dir)
 
     def _get_or_create(self, session_id: str) -> AgentLane:
         if session_id in self._lanes:
@@ -115,12 +138,18 @@ class LaneManager:
             todos_path=str(session_dir / "todos.md"),
         )
 
+        provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
+        model = DEFAULT_MODELS.get(provider, DEFAULT_MODELS["openai"])
+
         lane = AgentLane(
             session_id=session_id,
             soul_path=agent.soul_path,
             history_path=history_path,
             workspace_config=workspace_config,
-            budget=LaneBudget(),
+            budget=LaneBudget(
+                token_budget=token_budget_for_model(model),
+                context_window=get_context_window(model),
+            ),
             _create_loop=self._create_loop,
         )
         asyncio.create_task(lane.start())

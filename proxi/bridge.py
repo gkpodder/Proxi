@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from proxi.interaction.tool import get_show_collaborative_form_spec
+from proxi.interaction.tool import get_ask_user_question_spec
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.cli.main import (
     auto_load_mcp_servers,
@@ -186,7 +186,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
 
     logger.info("setting_up_tools")
     tool_registry = setup_tools(working_directory=working_dir)
-    tool_registry.register_raw_spec(get_show_collaborative_form_spec())
+    tool_registry.register_raw_spec(get_ask_user_question_spec())
     if no_sub_agents:
         sub_agent_manager = None
     else:
@@ -245,7 +245,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
                     "tool_call_id": tool_call_id,
                     "goal": form_request.goal,
                     "title": form_request.title,
-                    "questions": [q.model_dump() for q in form_request.questions],
+                    "questions": [q.model_dump(exclude_none=True) for q in form_request.questions],
                     "allow_skip": form_request.allow_skip,
                 },
             })
@@ -308,6 +308,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
         except Exception as e:
             logger.warning("mcp_setup_error", error=str(e))
 
+    # Register call_tool if any tools were deferred
+    if tool_registry.has_deferred_tools():
+        from proxi.tools.call_tool_tool import CallToolTool
+        tool_registry.register(CallToolTool(tool_registry))
+        logger.info("call_tool_registered", deferred_count=tool_registry.deferred_tool_count())
+
     async def refresh_mcp_tools() -> None:
         """Reload MCP tools from currently enabled MCPs without restarting bridge."""
         nonlocal mcp_adapters
@@ -331,10 +337,13 @@ async def run_bridge(agent_id: str | None = None) -> None:
             return
         last_mcp_signature = signature
 
-        # Remove previously registered MCP tools, then re-load and re-register.
+        # Remove previously registered MCP tools (and search_tools), then re-load.
         removed = tool_registry.unregister_by_prefix("mcp_")
         if removed:
             logger.info("mcp_tools_unregistered", count=removed)
+        # Remove search_tools + call_tool so they can be re-registered with the updated registry
+        tool_registry.unregister_by_prefix("search_tools")
+        tool_registry.unregister_by_prefix("call_tool")
 
         for adapter in mcp_adapters:
             try:
@@ -365,6 +374,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 logger.warning("mcp_setup_timeout", server=mcp_server)
             except Exception as e:
                 logger.warning("mcp_setup_error", error=str(e))
+
+        # Re-register call_tool if deferred tools exist after refresh
+        if tool_registry.has_deferred_tools():
+            from proxi.tools.call_tool_tool import CallToolTool
+            tool_registry.register(CallToolTool(tool_registry))
+            logger.info("call_tool_re_registered", deferred_count=tool_registry.deferred_tool_count())
 
     async def request_user_input(
         method: str,

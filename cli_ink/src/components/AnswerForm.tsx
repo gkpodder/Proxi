@@ -7,7 +7,7 @@ import React, { useState, useCallback, useRef, useMemo, useEffect } from "react"
 import { Box, Text, useInput, useFocusManager } from "ink";
 import TextInput from "ink-text-input";
 import { theme } from "../theme.js";
-import type { CollaborativeFormPayload, Question } from "../protocol.js";
+import type { AskUserQuestionPayload, Question } from "../protocol.js";
 
 const OTHER_OPTION = "Other (type your own)";
 
@@ -31,6 +31,13 @@ function getVisibleQuestions(
   return questions.filter((q) => evaluateShowIf(q.show_if ?? undefined, answers));
 }
 
+/** Resolved answer: typed text, or placeholder when blank (placeholders often carry the suggested default). */
+function effectiveTextAnswer(q: Question, textValue: string): string {
+  const typed = textValue.trim();
+  if (typed) return typed;
+  return (q.placeholder?.trim() ?? "") || "";
+}
+
 function getOptionsWithOther(
   q: Question
 ): string[] {
@@ -42,7 +49,7 @@ function getOptionsWithOther(
 }
 
 type Props = {
-  payload: CollaborativeFormPayload;
+  payload: AskUserQuestionPayload;
   onSubmit: (result: {
     tool_call_id: string;
     answers: Record<string, unknown>;
@@ -145,7 +152,7 @@ export function AnswerForm({ payload, onSubmit }: Props) {
     }
 
     if (currentQ.type === "text") {
-      const val = textValue.trim();
+      const val = effectiveTextAnswer(currentQ, textValue);
       const isLastQuestion = currentIndex >= totalVisible - 1;
       if (isLastQuestion && currentQ.required !== false && val === "") return;
       setAnswers((a) => ({ ...a, [currentQ.id]: val }));
@@ -161,7 +168,7 @@ export function AnswerForm({ payload, onSubmit }: Props) {
           .map((i) => optionsWithOther[i])
           .filter(Boolean);
       else if (currentQ.type === "text")
-        finalVal = textValue.trim();
+        finalVal = effectiveTextAnswer(currentQ, textValue);
       else
         finalVal = null;
       const finalAnswers = { ...answers, [currentQ.id]: finalVal };

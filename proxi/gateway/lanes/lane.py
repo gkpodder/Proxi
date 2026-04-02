@@ -115,7 +115,7 @@ class AgentLane:
                 pass
 
     def try_resolve_pending_form_with_text(self, text: str) -> bool:
-        """If the agent is blocked on ``show_collaborative_form``, map chat text to answers."""
+        """If the agent is blocked on ``ask_user_question``, map chat text to answers."""
         fb = self._form_bridge
         if fb is None or not hasattr(fb, "consume_chat_as_form_reply"):
             return False
@@ -155,14 +155,61 @@ class AgentLane:
     def is_running(self) -> bool:
         return self._task is not None and not self._task.done()
 
-    def sync_mcp_tools(self, mcp_tools: Sequence[Any]) -> None:
+    def sync_coding_tools(self, working_dir: Path) -> None:
+        """Replace coding tools on an existing loop with ones rooted at *working_dir*."""
+        if self._loop is None:
+            return
+        from proxi.tools.coding import unregister_coding_tools, register_coding_tools, FILESYSTEM_TOOL_NAMES
+        from proxi.tools.filesystem import ReadFileTool, WriteFileTool
+        from proxi.tools.path_guard import PathGuard
+
+        reg = self._loop.tool_registry
+        unregister_coding_tools(reg)
+
+        # Also replace read_file / write_file which were
+        # registered with the old working directory's PathGuard.
+        for name in FILESYSTEM_TOOL_NAMES:
+            reg._tools.pop(name, None)
+            reg._schema_injected.discard(name)
+        guard = PathGuard(working_dir)
+        for tool in (ReadFileTool(guard=guard), WriteFileTool(guard=guard)):
+            reg.register(tool)
+
+        # Re-read tier from agent config so we respect the per-agent setting.
+        try:
+            from proxi.workspace import WorkspaceManager
+
+            ws = self._loop.workspace  # type: ignore[attr-defined]
+            agent_id = ws.agent_id if ws is not None else ""
+            wm = WorkspaceManager(root=self.soul_path.parent.parent.parent)
+            agent_cfg = wm.read_agent_config(agent_id)
+            tier = str(agent_cfg.get("tool_sets", {}).get("coding", "live"))
+        except Exception:
+            tier = "live"
+        register_coding_tools(reg, working_dir=working_dir, tier=tier)
+        # Update workspace so the prompt builder sees the new cwd.
+        if ws is not None:
+            ws.curr_working_dir = str(working_dir)
+
+    def sync_mcp_tools(
+        self,
+        mcp_tools: Sequence[Any],
+        deferred_tools: Sequence[Any] = (),
+    ) -> None:
         """Replace MCP-backed tools on an existing loop (stdio clients are per-refresh)."""
         if self._loop is None:
             return
         reg = self._loop.tool_registry
         reg.unregister_by_prefix("mcp_")
+        reg.unregister_by_prefix("search_tools")
+        reg.unregister_by_prefix("call_tool")
         for tool in mcp_tools:
             reg.register(tool)
+        for tool in deferred_tools:
+            reg.register_deferred(tool)
+        if reg.has_deferred_tools():
+            from proxi.tools.call_tool_tool import CallToolTool
+            reg.register(CallToolTool(reg))
 
     def _sync_state_if_history_cleared(self) -> None:
         """Align memory with disk when history.jsonl is empty (e.g. /clear raced ahead of _state reset)."""
@@ -185,6 +232,11 @@ class AgentLane:
         self.budget.reset()
         self._loop = None
 
+    async def reset_loop(self) -> None:
+        """Recreate the runtime loop while keeping session history in memory."""
+        await self.abort()
+        self._loop = None
+
     async def _drain(self) -> None:
         """Core loop — processes events one at a time, serialising within the session."""
         while True:
@@ -194,6 +246,8 @@ class AgentLane:
                 response = await self._running_task
                 if event.reply_channel and response:
                     await event.reply_channel.send(response)
+                elif event.reply_channel and not response:
+                    logger.warning("lane_reply_skipped_no_response", session=self.session_id, source=event.source_type)
             except asyncio.CancelledError:
                 logger.info("lane_dispatch_aborted", session=self.session_id)
             except BudgetExceeded as exc:
@@ -228,6 +282,11 @@ class AgentLane:
                                 "tui_abortable": self._dispatch_tui_abortable,
                             }
                         )
+                    except Exception:
+                        pass
+                elif event.reply_channel:
+                    try:
+                        await event.reply_channel.send("Sorry, something went wrong processing your request.")
                     except Exception:
                         pass
             finally:
@@ -282,7 +341,8 @@ class AgentLane:
             result_state = await self._loop.run(text)
 
         self._state = result_state
-        self.budget.record_turn(tokens=result_state.total_tokens - (self.budget.tokens_used or 0))
+        last_turn_tokens = result_state.turns[-1].tokens_used if result_state.turns else 0
+        self.budget.record_turn(context_tokens=last_turn_tokens)
 
         # Signal completion on the SSE channel
         if self._sse_channel is not None:

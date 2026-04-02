@@ -39,18 +39,35 @@ class PromptBuilder:
         self._cached_key: str | None = None
         self._cached_system_prefix: str | None = None
 
-    def build(self, state: AgentState, tools: Sequence[ToolSpec] | None = None) -> PromptPayload:
+    def build(
+        self,
+        state: AgentState,
+        tools: Sequence[ToolSpec] | None = None,
+        deferred_tool_count: int = 0,
+        deferred_specs: Sequence[ToolSpec] | None = None,
+    ) -> PromptPayload:
         """Build a PromptPayload from agent state and tools.
 
         Messages are passed through unmodified to preserve prompt-cache
         stability.  Workspace context (plan/todos) is NOT injected here;
         the agent pulls it on demand via tool calls.
+
+        Args:
+            state: Current agent state.
+            tools: Live tool specs to include in the system prefix.
+            deferred_tool_count: Number of tools currently in the deferred
+                tier.  When non-zero, a hint is appended to the system prefix
+                instructing the LLM to call ``search_tools`` to load them.
+            deferred_specs: Lightweight stubs for deferred tools rendered in
+                the system prompt so the LLM knows what is available on demand.
         """
         workspace = state.workspace
 
         system_prefix = None
         if workspace is not None:
-            system_prefix = self._get_cached_system_prefix(workspace, tools or [])
+            system_prefix = self._get_cached_system_prefix(
+                workspace, tools or [], deferred_tool_count, deferred_specs or []
+            )
 
         if not state.history:
             return PromptPayload(messages=[], system=system_prefix)
@@ -59,17 +76,29 @@ class PromptBuilder:
 
     # --- Internal helpers -------------------------------------------------
 
-    def _get_cached_system_prefix(self, workspace, tools: Sequence[ToolSpec]) -> str:
-        """Build system prefix with a cache keyed by workspace and tool signature."""
-        key = self._system_prefix_cache_key(workspace, tools)
+    def _get_cached_system_prefix(
+        self,
+        workspace,
+        tools: Sequence[ToolSpec],
+        deferred_tool_count: int = 0,
+        deferred_specs: Sequence[ToolSpec] | None = None,
+    ) -> str:
+        """Build system prefix with a cache keyed by workspace, tools, and deferred count."""
+        key = self._system_prefix_cache_key(workspace, tools, deferred_tool_count, deferred_specs or [])
         if self._cached_key == key and self._cached_system_prefix is not None:
             return self._cached_system_prefix
-        rendered = self._build_system_prefix(workspace, tools)
+        rendered = self._build_system_prefix(workspace, tools, deferred_tool_count, deferred_specs or [])
         self._cached_key = key
         self._cached_system_prefix = rendered
         return rendered
 
-    def _system_prefix_cache_key(self, workspace, tools: Sequence[ToolSpec]) -> str:
+    def _system_prefix_cache_key(
+        self,
+        workspace,
+        tools: Sequence[ToolSpec],
+        deferred_tool_count: int = 0,
+        deferred_specs: Sequence[ToolSpec] | None = None,
+    ) -> str:
         """Deterministic cache key that invalidates on file/tool changes."""
         global_path = Path(workspace.global_system_prompt_path)
         soul_path = Path(workspace.soul_path)
@@ -85,6 +114,10 @@ class PromptBuilder:
             }
             for tool in sorted(tools, key=lambda t: t.name)
         ]
+        deferred_stubs = [
+            {"name": s.name, "description": s.description}
+            for s in sorted(deferred_specs or [], key=lambda s: s.name)
+        ]
         payload = {
             "agent_id": workspace.agent_id,
             "global_system_prompt_path": str(global_path),
@@ -94,11 +127,19 @@ class PromptBuilder:
             "db_path": str(db_path),
             "db_mtime_ns": db_mtime,
             "tools": tools_shape,
+            "deferred_tool_count": deferred_tool_count,
+            "deferred_stubs": deferred_stubs,
         }
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def _build_system_prefix(self, workspace, tools: Sequence[ToolSpec]) -> str:
+    def _build_system_prefix(
+        self,
+        workspace,
+        tools: Sequence[ToolSpec],
+        deferred_tool_count: int = 0,
+        deferred_specs: Sequence[ToolSpec] | None = None,
+    ) -> str:
         """Assemble the static system prefix: global + soul + tool definitions."""
         global_text = ""
         soul_text = ""
@@ -117,41 +158,10 @@ class PromptBuilder:
         except Exception:
             soul_text = ""
 
-        tools_block_lines: list[str] = []
+        live_tools_line = ""
         if tools:
-            tools_block_lines.append("AVAILABLE TOOLS:")
-            for tool in sorted(tools, key=lambda t: t.name):
-                tools_block_lines.append(f"- {tool.name}: {tool.description}")
-        tools_block = "\n".join(tools_block_lines)
-
-        tool_names = {t.name for t in tools} if tools else set()
-        form_guidance = ""
-        if "show_collaborative_form" in tool_names:
-            form_guidance = """
-## show_collaborative_form — When and How to Use
-
-Call `show_collaborative_form` when:
-- The task is calendar/event scheduling and missing details would cause a wrong event action
-- You need specific information from the user not present in the conversation history
-- The missing information would materially change your approach or the output you produce
-- You cannot make a reasonable assumption and proceeding without it risks a wrong result
-
-Do NOT call `show_collaborative_form` when:
-- The task is not calendar-related (e.g., Obsidian, files, search, notes, code help)
-- You can make a reasonable assumption and state it in your response
-- The information is already present in the conversation
-- You need minor clarification — use RESPOND to ask conversationally instead
-- You want to confirm something trivial
-
-When building the questions array:
-- Set `goal` to one sentence: what you are trying to determine
-- Set `hint` on each question to a plain-language explanation of why it matters (shown to user)
-- Set `why` to your internal reasoning about how the answer affects your next steps (used by Reflector, not shown to user)
-- Prefer `yesno` and `choice` over `text` wherever possible
-- Keep the question list minimal — only ask what you cannot infer
-- Do NOT include an "Other" or custom option in `options` arrays — the TUI adds it automatically
-- Do NOT use types "number" or "file" — only "choice", "multiselect", "yesno", "text" are supported
-"""
+            names = ", ".join(t.name for t in sorted(tools, key=lambda t: t.name))
+            live_tools_line = f"LIVE TOOLS (call directly): {names}"
 
         user_profile_text = self._build_user_profile_context()
 
@@ -160,12 +170,37 @@ When building the questions array:
             parts.append(global_text.strip())
         if soul_text:
             parts.append("YOUR IDENTITY:\n" + soul_text.strip())
-        if tools_block:
-            parts.append(tools_block)
-        if form_guidance:
-            parts.append(form_guidance.strip())
+        if live_tools_line:
+            parts.append(live_tools_line)
         if user_profile_text:
             parts.append(user_profile_text)
+        if deferred_tool_count > 0:
+            stubs_lines = ""
+            if deferred_specs:
+                stubs_lines = "\n".join(
+                    f"  - {s.name}"
+                    for s in sorted(deferred_specs, key=lambda s: s.name)
+                )
+                stubs_lines = "\nAVAILABLE ON DEMAND:\n" + stubs_lines + "\n"
+            parts.append(
+                f"## call_tool — {deferred_tool_count} additional tool(s) available on demand\n"
+                f"{stubs_lines}\n"
+                "To use any tool from the AVAILABLE ON DEMAND list above, call:\n"
+                "  call_tool(tool_name=\"<exact name>\", args={{...}})\n\n"
+                "call_tool will execute the tool if the name matches, or return the correct schema "
+                "and suggestions if the name is wrong or args are missing — retry based on what it returns.\n\n"
+                "Rules:\n"
+                "- ONLY use tool names from the AVAILABLE ON DEMAND list above. NEVER invent or guess names.\n"
+                "- Do NOT call deferred tool names directly — they are not in your live tools list.\n"
+                "- Do NOT call unrelated live tools (mcp_read_emails, etc.) before call_tool.\n"
+                "- Do NOT use read/list tools to perform write/send actions.\n\n"
+                "Examples:\n"
+                "- List Obsidian notes → call_tool('mcp_obsidian_list_notes', {})\n"
+                "- Create Obsidian note → call_tool('mcp_obsidian_create_note', {\"note_path\": \"Jokes/Funny.md\", \"content\": \"...\"})\n"
+                "- Send email → call_tool('mcp_send_email', {\"to\": \"...\", \"subject\": \"...\", \"body\": \"...\"})\n"
+                "- Create calendar event → call_tool('mcp_calendar_create_event', {\"summary\": \"...\", \"start\": \"...\", \"end\": \"...\"})\n"
+                "- Create Notion page → call_tool('mcp_notion_create_page', {\"title\": \"...\", \"content\": \"...\"})"
+            )
 
         return "\n\n".join(parts).strip()
 

@@ -18,9 +18,11 @@ const COMMANDS: Omit<CommandDef, "handler">[] = [
   { id: "agent", name: "/agent", description: "Switch active agent" },
   { id: "delete", name: "/delete", description: "Delete current agent (gateway + disk)" },
   { id: "mcps", name: "/mcps", description: "Enable or disable MCPs" },
+  { id: "work-dir", name: "/work-dir", description: "View or change working directory" },
   { id: "clear", name: "/clear", description: "Clear UI + disk history (fresh session)" },
   { id: "plan", name: "/plan", description: "View current plan" },
   { id: "todos", name: "/todos", description: "View open todos" },
+  { id: "usage", name: "/usage", description: "Show context and turn usage" },
   { id: "help", name: "/help", description: "Show all commands" },
   { id: "exit", name: "/exit", description: "Exit Proxi" },
 ];

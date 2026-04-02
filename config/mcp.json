@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "proxi": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--",
+        "python",
+        "-m",
+        "proxi.mcp.servers.server"
+      ],
+      "description": "Default local Proxi MCP server (gmail, calendar, notion, weather, obsidian)",
+      "defer_loading": true,
+      "always_load": [
+        "read_emails",
+        "calendar_list_events",
+        "weather_get_current"
+      ]
+    }
+  },
+  "imports": []
+}

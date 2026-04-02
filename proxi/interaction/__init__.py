@@ -1,4 +1,4 @@
-"""Collaborative form interaction for structured user input collection."""
+"""ask_user_question interaction for structured user input collection."""
 
 from proxi.interaction.models import (
     FormRequest,
@@ -7,8 +7,8 @@ from proxi.interaction.models import (
     Question,
 )
 from proxi.interaction.tool import (
-    SHOW_COLLABORATIVE_FORM_TOOL,
-    get_show_collaborative_form_spec,
+    ASK_USER_QUESTION_TOOL,
+    get_ask_user_question_spec,
     parse_form_tool_call,
 )
 
@@ -17,7 +17,7 @@ __all__ = [
     "FormResponse",
     "InteractionRecord",
     "Question",
-    "SHOW_COLLABORATIVE_FORM_TOOL",
-    "get_show_collaborative_form_spec",
+    "ASK_USER_QUESTION_TOOL",
+    "get_ask_user_question_spec",
     "parse_form_tool_call",
 ]

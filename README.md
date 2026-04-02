@@ -1,16 +1,75 @@
 # Proxi
 
-Developer Names: Gourob, Ajay, Aman, Savinay
+Developer names: Gourob, Ajay, Aman, Savinay  
+Project start: Sep 15, 2025
 
-Date of project start: Sep. 15 2025
+## Table Of Contents
 
-## Project Description
-This project is an AI-powered assistive technology platform designed to make computers more accessible for individuals who face barriers with traditional interfaces, such as people with disabilities, elderly users, or those unfamiliar with digital devices.
-At its core, the system combines speech recognition, natural language understanding, and text-to-speech to allow users to control and interact with a computer entirely through their voice. Instead of navigating menus, using a mouse, or typing, users can simply speak naturally to the system, which responds with clear, human-like speech.
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Workspace Layout](#workspace-layout)
+- [Tech Stack](#tech-stack)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [TUI Slash Commands](#tui-slash-commands)
+- [Development](#development)
 
-## Core Loop Architecture
+## Overview
 
-Proxi follows a three-layer architecture:
+Watch the [user guide on YouTube](https://www.youtube.com/watch?v=vR8O_09WrnM).
+
+Proxi is a dynamic AI assisstant focused on making computers more accessible for individuals who face barriers with traditional interfaces and for power users who want to get more work done.
+
+Proxi can access virtually any integration such as your google workspace, weather, spotify, browser and do work on your behalf. Feel free to open an issue if you'd like for any other integrations to be added!
+
+Proxi can be accessed via a terminal TUI, our own GUI(react_frontend) or a supported channel like whatsapp or discord. Currently the GUI is the only way to access the setup wizard and play with settings and setup cron jobs etc. 
+
+## Architecture
+
+Proxi is now interfaced via the **Gateway**:
+
+```mermaid
+flowchart LR
+  subgraph inputs
+    TG[Telegram WA Discord]
+    WH[Webhook]
+    CR[Cron]
+    HB[Heartbeat]
+    HTTP[HTTP invoke / TUI]
+  end
+  subgraph gateway
+    API[FastAPI endpoints]
+    R[EventRouter]
+    LM[LaneManager]
+  end
+  subgraph Proxi_Session_Main
+    L[AgentLane queue]
+    AL[AgentLoop]  
+  end
+    subgraph Boi_Session_Main
+    L2[AgentLane queue]
+    AL2[AgentLoop]  
+  end
+  TG --> API
+  WH --> API
+  CR --> LM
+  HB --> LM
+  HTTP --> API
+  API --> R
+  R --> LM
+  LM --> L
+  L --> AL
+  LM --> L2
+  L2 --> AL2
+```
+
+- `proxi` launches the Ink TUI.
+- The launcher ensures `proxi-gateway` is running.
+- The TUI communicates with the gateway over HTTP/SSE.
+- The gateway manages agent lanes, session state, MCP availability, and streaming responses.
+
+Core agent loop:
 
 ```
 User Goal
@@ -23,110 +82,130 @@ Primary Agent (Planner / Orchestrator)
 └──────────────┴──────────────┴──────────────┴─────────────────────────┘
 ```
 
-The agent loop follows: **REASON → DECIDE → ACT → OBSERVE → REFLECT → LOOP**
+**REASON -> DECIDE -> ACT -> OBSERVE -> REFLECT -> LOOP**
 
-Each turn progresses through states: `PENDING` → `DECIDING` → `ACTING` → `OBSERVING` → `REFLECTING` → `COMPLETED`. The **DECIDE** step produces exactly one of:
+Decision types:
 
 | Decision Type | Description |
-|---------------|-------------|
-| `RESPOND` | Communicate with the user (answers, confirmations, clarifications) |
-| `TOOL_CALL` | Execute a tool (including MCP tools) |
-| `SUB_AGENT_CALL` | Delegate to a specialised sub-agent |
-| `REQUEST_USER_INPUT` | Call `show_collaborative_form` when blocked by missing information |
+|---|---|
+| `RESPOND` | Send a normal assistant response |
+| `TOOL_CALL` | Execute a tool (including MCP-backed tools) |
+| `SUB_AGENT_CALL` | Delegate work to a sub-agent |
+| `REQUEST_USER_INPUT` | Request structured user input via a collaborative form |
 
-**TUI integration:** The loop emits events via a `BridgeEmitter` (JSON lines to stdout) for streaming text, tool/subagent status, and status updates. When the agent needs structured input, a `FormBridge` sends `user_input_required` to the TUI and awaits `user_input_response` before continuing.
-
-**Workspace context:** Each session is attached to a `WorkspaceConfig` that provides paths for `Soul.md`, `plan.md`, `todos.md`, and `history.jsonl`. Workspace-scoped tools (`manage_plan`, `manage_todos`, `read_soul`) operate on these files.
 
 ## Workspace Layout
 
-Proxi uses a filesystem-backed workspace under `~/.proxi/` (or `$PROXI_HOME`):
+Default workspace root is `~/.proxi` (overridable with `PROXI_HOME`):
 
-```
+```text
 ~/.proxi/
 ├── global/
-│   └── system_prompt.md      # Global instructions for all agents
-└── agents/
-    └── <agent_id>/
-        ├── Soul.md           # Agent name and persona
-        ├── config.yaml       # (reserved for future use)
-        └── sessions/
-            └── <session_id>/
-                ├── history.jsonl
-                ├── plan.md    # Created via manage_plan tool
-                └── todos.md   # Created via manage_todos tool
+│   └── system_prompt.md
+├── agents/
+│   └── <agent_id>/
+│       ├── Soul.md
+│       ├── config.yaml
+│       └── sessions/
+│           └── <session_id>/
+│               ├── history.jsonl
+│               ├── plan.md
+│               └── todos.md
+└── gateway.yml
 ```
 
-On TUI startup, the bridge runs an interactive bootstrap: select an existing agent or create a new one. A single ephemeral session is created per agent. Use `/agent` in the TUI to switch agents.
+`gateway.yml` is the source of truth for configured agents and channel/source settings.
 
 ## Tech Stack
 
-- **Python 3.12+** with UV for build system and package management
-- asyncio for async operations
-- Pydantic for data validation
-- Structlog for structured logging
-- **Bun** and **Ink** (React) for the TUI — scrollback-native, no alt-screen
+- Python 3.12+
+- `uv` for Python environment and task execution
+- FastAPI + Uvicorn for gateway server runtime
+- Pydantic + asyncio + structlog
+- Bun + Ink for the terminal TUI
+- React for GUI frontent
 
 ## Installation
 
-**Prerequisites**
+Prerequisites:
 
-- **Python 3.12+** and [uv](https://docs.astral.sh/uv/) (install with `curl -LsSf https://astral.sh/uv/install.sh | sh` or your package manager).
-- For the **TUI**: **Bun** (see installation instructions at https://bun.sh).
+- Python 3.12+
+- [`uv`](https://docs.astral.sh/uv/)
+- [`bun`](https://bun.sh) (for TUI dependencies)
 
-**Steps**
-
-From the project root:
+From the repository root:
 
 ```bash
-# Install Python dependencies and register CLI commands
 uv sync
 ```
 
-To use the **interactive TUI**, install the frontend dependencies once with Bun:
+Install TUI dependencies once:
 
 ```bash
-# Install JS dependencies for the Ink TUI
-cd cli_ink/
+cd cli_ink
 bun install
 ```
 
-You can run `proxi` via `uv run proxi` (no global install) or, after `uv sync`, use the `proxi` script if your environment has the project’s virtualenv on `PATH`.
+## Configuration
 
-## Usage
+### API keys
 
-**API keys** (required for the agent):
+API keys are stored in `config/api_keys.db`.
 
-Proxi now stores API keys in a local SQLite database at `config/api_keys.db`.
-
-Initialize the table manually (optional, this is run automatically by the React frontend startup scripts):
+Initialize explicitly (optional; many flows do this automatically):
 
 ```bash
 uv run python scripts/init_api_keys_db.py
 ```
 
-Manage keys from the React frontend key manager (`🔐` button in the top bar), or via CLI:
+Set keys via CLI:
 
 ```bash
-uv run python -m proxi.security.key_store upsert --key OPENAI_API_KEY --value "your-key-here"
-# or
-uv run python -m proxi.security.key_store upsert --key ANTHROPIC_API_KEY --value "your-key-here"
+uv run proxi keys upsert --key OPENAI_API_KEY --value "your-key-here"
+uv run proxi keys upsert --key ANTHROPIC_API_KEY --value "your-key-here"
 ```
 
-**Optional environment variables**
+### Useful environment variables
 
 | Variable | Description |
-|----------|-------------|
-| `PROXI_HOME` | Override workspace root (default: `~/.proxi`) |
-| `PROXI_WORKING_DIR` | Working directory for the bridge (default: `.`) |
-| `PROXI_PROVIDER` | LLM provider: `openai` or `anthropic` (default: `openai`) |
-| `PROXI_MAX_TURNS` | Max turns per task (default: `20`) |
-| `PROXI_MCP_SERVER` | MCP server command (e.g. `npx:@modelcontextprotocol/server-filesystem /path`) |
-| `PROXI_NO_SUB_AGENTS` | Set to `1` to disable sub-agents |
+|---|---|
+| `PROXI_HOME` | Override workspace root (default `~/.proxi`) |
+| `PROXI_PROVIDER` | Default provider for `proxi-run` (`openai` or `anthropic`) |
+| `PROXI_MAX_TURNS` | Max turns for one-shot tasks |
+| `PROXI_MCP_SERVER` | Default MCP server command for one-shot runs |
+| `PROXI_NO_SUB_AGENTS` | Set `1` to disable sub-agent delegation |
+| `PROXI_GATEWAY_HOST` | Gateway bind host (if overridden) |
+| `PROXI_GATEWAY_PORT` | Gateway bind port (if overridden) |
+| `PROXI_GATEWAY_URL` | TUI target URL for an already-running gateway |
+| `PROXI_WORKING_DIR` | Root directory for coding tools (default: current directory) |
 
-**Interactive TUI (default)**
+### Coding tools
 
-From the project root:
+Proxi ships with a built-in coding toolset that enables it to act as a coding agent.  These tools are also useful for general tasks (searching files, running scripts, etc.).
+
+| Tool | Description |
+|---|---|
+| `grep` | Regex search across files (ripgrep when available, Python fallback) |
+| `glob` | Find files by pattern (e.g. `**/*.py`) |
+| `read_file` | Read file contents, supports `offset`/`limit` for line ranges |
+| `edit_file` | Exact-string replacement edit (requires unique match by default) |
+| `write_file` | Write or overwrite a file |
+| `diff` | Show git diff for a file or full working tree |
+| `apply_patch` | Apply a unified diff patch via `git apply` |
+| `execute_code` | Run a shell command in the working directory |
+
+All file and shell tools are path-guarded to `PROXI_WORKING_DIR` when set, preventing reads/writes outside the project root.
+
+**Per-agent configuration** — each agent's `~/.proxi/agents/<id>/config.yaml` controls which tier coding tools are registered at:
+
+```yaml
+tool_sets:
+  coding: live      # live (always in context) | deferred (discovered on demand) | disabled
+```
+
+## Usage
+
+### Interactive TUI (default)
 
 ```bash
 proxi
@@ -134,54 +213,315 @@ proxi
 uv run proxi
 ```
 
-This starts the Ink TUI and the agent bridge so you can chat and run tasks in the terminal. The TUI runs the same agent loop (tools, MCP, sub-agents, collaborative forms) behind the scenes. The bridge communicates with the TUI via JSON lines over stdin/stdout.
+This starts the TUI and connects it to the gateway (starting the gateway daemon if needed).
 
-**One-shot agent (CLI)**
-
-To run a single task from the command line without the TUI:
+### One-shot CLI task
 
 ```bash
-# Using OpenAI (default)
-uv run proxi-run "Your task here"
+# Default provider
+uv run proxi run "Your task here"
 
-# Using Anthropic
-uv run proxi-run --provider anthropic "Your task here"
+# Explicit provider
+uv run proxi run --provider anthropic "Your task here"
 
-# With options
-uv run proxi-run --max-turns 30 --log-level DEBUG "Your task here"
+# Extra options
+uv run proxi run --max-turns 30 --log-level DEBUG "Your task here"
 
-# With MCP server (filesystem example)
-uv run proxi-run --mcp-filesystem "." "List all files in the current directory"
+# Filesystem MCP shortcut
+uv run proxi run --mcp-filesystem "." "List all files in the current directory"
 
-# With custom MCP server
-uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
+# Custom MCP command
+uv run proxi run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
 ```
 
-
-**TUI features:**
-
-- **Scrollback-native layout** — conversation prints into the terminal's native scrollback buffer; only the status bar and input area are Ink-managed. Preserves native scroll, Cmd+F search, and text selection.
-- **Command palette** — type `/` to open. Commands: `/agent` (switch agent), `/mcps` (enable/disable MCPs), `/clear` (clear conversation), `/plan` (view plan.md), `/todos` (view todos.md), `/help`, `/exit`.
-- **Collaborative forms** — when the agent calls `show_collaborative_form`, a form overlay appears for structured input (choice, multiselect, yesno, text). Supports `show_if` for conditional questions.
-- **Plan / Todos overlay** — `/plan` and `/todos` display the current session's `plan.md` and `todos.md` in an overlay (Esc to close).
-- **Agent bootstrap** — on first run (or when no agents exist), you're prompted to create an agent (name, persona). With existing agents, you select one or create new.
-- **Input history** — up/down arrows when the input is empty cycle through previous messages.
-
-To run the TUI directly with Bun (without going through the `proxi` CLI wrapper):
+### Gateway management
 
 ```bash
-# From project root, using the helper script
-bun run proxi-tui
+uv run proxi gateway start
+uv run proxi gateway status
+uv run proxi gateway stop
+uv run proxi gateway restart
+```
 
-# Or from inside cli_ink/ for development
+## TUI Slash Commands
+
+Type `/` in the input box to open the command palette.
+
+| Command | What it does |
+|---|---|
+| `/agent` | Switch the active agent or create a new one |
+| `/delete` | Delete the current agent (removes agent from `gateway.yml` and deletes its workspace directory) |
+| `/mcps` | Open MCP toggle flow to enable/disable integrations |
+| `/clear` | Clear current chat UI and clear active session history |
+| `/plan` | Open the current session plan view (`plan.md`) |
+| `/todos` | Open the current session todos view (`todos.md`) |
+| `/help` | Print the command reference in chat |
+| `/exit` | Exit the TUI |
+
+Related notes:
+
+- `/switch-agent` is accepted as an alias for `/agent`.
+- Up/down arrows in an empty input field cycle input history.
+- Collaborative forms appear when the agent requests structured input.
+
+## Development
+
+Run TUI with uv:
+
+```bash
+# From repository root
+uv run proxi
+
+# Or inside cli_ink/ directly
 cd cli_ink
-bun run dev        # runs the TUI in watch mode via tsx
-
-# Or run the built CLI
-bun run start      # runs: bun run build && bun dist/index.js
+npm run dev
+npm run start
 ```
 
-**Optional verification**
+Run tests:
 
-- **Bridge only:** From project root, run `uv run proxi-bridge`. You should see `{"type":"ready"}`. (Ctrl+C to exit.) This checks that the Python agent bridge starts correctly.
-- **Full flow:** Run `proxi`; you should see the boot sequence, agent selection (if applicable), and a prompt. Type a task and press Enter.
+```bash
+uv run pytest tests/ -v
+```
+
+Optional verification:
+
+- **Gateway only:** Run `uv run proxi gateway start`, then open `http://127.0.0.1:8765/health` and verify `{"status":"ok", ...}`.
+- **Full flow:** Run `uv run proxi`; the gateway auto-starts, then the TUI launches. Type a task and press Enter.
+
+## React Frontend (Gateway)
+
+```bash
+# Start the React frontend (requires a running gateway)
+uv run proxi frontend
+```
+
+Frontend startup parameters:
+
+| Parameter | Where | Description |
+|----------|-------|-------------|
+| `PROXI_GATEWAY_URL` | Environment variable | Override gateway base URL (default: `http://127.0.0.1:8765`). |
+| `PROXI_SESSION_ID` | Environment variable | Start the web UI on a specific session id. |
+| `PORT` | Environment variable | React frontend HTTP port (default: `5174`). |
+
+## Discord Integration (Relay -> Gateway)
+
+This integration lets Discord chat act as a command input source for Proxi, similar to the frontend bridge.
+
+### 1. Configure a Discord source in gateway.yml
+
+Add or update a source like:
+
+```yaml
+sources:
+    discord:
+        type: discord
+        target_agent: work
+        target_session: discord
+        priority: 0
+        paused: false
+        # Optional extras (all optional):
+        # discord_command_prefix: /proxi
+        # discord_allow_plain: false
+        # discord_session_mode: channel   # fixed | channel | user
+        # discord_agent_overrides: {}     # auto-managed by /proxi switch <agent_id>
+```
+
+Session mode behavior:
+
+- `fixed`: all Discord messages for this source go to one session (`target_session` or agent default)
+- `channel`: each Discord channel gets its own session
+- `user`: each user in each channel gets its own session
+
+### 2. Set security env vars for signed relay calls
+
+In the gateway process environment:
+
+```powershell
+$env:DISCORD_WEBHOOK_SECRET = "your-shared-secret"
+```
+
+When set, `/channels/discord/webhook` requires `X-Signature-256` HMAC signatures.
+
+### 3. Start the Discord relay service
+
+From project root:
+
+```bash
+cd discord_relay
+npm install
+npm run start
+```
+
+Or via the unified CLI:
+
+```bash
+uv run proxi discord
+```
+
+`proxi discord` requires a running gateway and exits if gateway is unreachable.
+
+Relay env file: [discord_relay/.env.example](discord_relay/.env.example)
+
+### 4. Discord commands
+
+Default prefix is `/proxi`.
+
+- `/proxi <task>`: enqueue a Proxi task
+- `/proxi status`: show lane status for this channel/user session
+- `/proxi abort`: abort active run in this session
+- `/proxi switch <agent_id>`: route this channel to a different agent
+- `/proxi help`: show command help
+
+Messages can be forwarded without prefix by setting `discord_allow_plain: true` in gateway source config and `PROXI_DISCORD_ALLOW_PLAIN=1` in relay env.
+
+## Webhook Setup And Testing
+
+Use this flow to configure a secure webhook source from the React frontend and verify Proxi receives it.
+
+### 1. Start services
+
+From project root:
+
+```bash
+# Start gateway daemon
+uv run proxi gateway start
+
+# In a second terminal, start frontend
+uv run proxi frontend
+```
+
+Verify gateway health:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8765/health"
+```
+
+### 2. Configure webhook source in frontend
+
+In the web UI:
+
+1. Open **Settings**.
+2. Open **Webhooks**.
+3. Create or update a source with values like:
+     - **Source ID**: `external_alert`
+     - **Target Agent**: your agent
+     - **Prompt Template**: `External alert: {{event_type}} from {{system.name}} severity={{severity}} message={{message}}`
+     - **HMAC Secret Env**: `PROXI_CUSTOM_WEBHOOK_SECRET`
+     - **State**: `Running`
+4. Click **Save Webhook**.
+
+### 3. Set required secret env var
+
+Webhook signature verification is enforced. Set the same env var in the gateway process environment:
+
+```powershell
+$env:PROXI_CUSTOM_WEBHOOK_SECRET = "super-secret-123"
+```
+
+If the gateway is already running, restart it after setting env vars.
+
+### 4. Test locally with signed request
+
+**macOS / Linux (bash or zsh)** — `printf '%s'` keeps the JSON byte-for-byte (no trailing newline), matching what the gateway verifies.
+
+```bash
+uri="http://127.0.0.1:8765/channels/webhook/external_alert"
+secret="super-secret-123"
+body='{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+hex=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" | awk '{print $NF}')
+sig="sha256=$hex"
+curl -sS -X POST "$uri" \
+  -H "Content-Type: application/json" \
+  -H "X-Signature-256: $sig" \
+  -d "$body"
+echo
+```
+
+**Windows (PowerShell)**
+
+```powershell
+$uri = "http://127.0.0.1:8765/channels/webhook/external_alert"
+$secret = "super-secret-123"
+$body = '{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+
+$hmac = New-Object System.Security.Cryptography.HMACSHA256
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($secret)
+$hash = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($body))
+$hex = -join ($hash | ForEach-Object { $_.ToString("x2") })
+$sig = "sha256=$hex"
+
+Invoke-RestMethod -Method Post `
+    -Uri $uri `
+    -Headers @{ "X-Signature-256" = $sig } `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+Expected response:
+
+```json
+{ "ok": true }
+```
+
+### 5. Optional: test through ngrok public URL
+
+Run tunnel to local gateway (in new terminal):
+
+```bash
+ngrok http 8765
+```
+
+Replace `<NGROK_URL>` with the `https://...ngrok...` forwarding URL and run:
+
+**macOS / Linux (bash or zsh)**
+
+```bash
+uri="<NGROK_URL>/channels/webhook/external_alert"
+secret="super-secret-123"
+body='{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+hex=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$secret" | awk '{print $NF}')
+sig="sha256=$hex"
+curl -sS -X POST "$uri" \
+  -H "Content-Type: application/json" \
+  -H "X-Signature-256: $sig" \
+  -H "ngrok-skip-browser-warning: true" \
+  -d "$body"
+echo
+```
+
+**Windows (PowerShell)**
+
+```powershell
+$uri = "<NGROK_URL>/channels/webhook/external_alert"
+$secret = "super-secret-123"
+$body = '{"event_type":"incident","system":{"name":"billing-api"},"severity":"high","message":"Latency above threshold"}'
+
+$hmac = New-Object System.Security.Cryptography.HMACSHA256
+$hmac.Key = [Text.Encoding]::UTF8.GetBytes($secret)
+$hash = $hmac.ComputeHash([Text.Encoding]::UTF8.GetBytes($body))
+$hex = -join ($hash | ForEach-Object { $_.ToString("x2") })
+$sig = "sha256=$hex"
+
+Invoke-RestMethod -Method Post `
+    -Uri $uri `
+    -Headers @{ 
+        "X-Signature-256" = $sig
+        "ngrok-skip-browser-warning" = "true"
+    } `
+    -ContentType "application/json" `
+    -Body $body
+```
+
+### 6. Expected Proxi behavior
+
+- API returns `{ "ok": true }` when accepted.
+- Proxi routes the event to the configured target agent/session.
+- The GUI shows webhook-triggered activity and the rendered prompt text.
+
+### Troubleshooting
+
+- `404 Unknown webhook source`: source id in URL does not match saved source.
+- `403 Missing/Invalid webhook signature`: signature mismatch or missing `X-Signature-256`.
+- `403 Webhook secret environment variable ... is not set`: required env var is not set in gateway process.
+- `400 Webhook payload must be valid JSON`: request body is missing or invalid JSON.

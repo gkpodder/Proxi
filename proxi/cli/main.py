@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -15,12 +14,12 @@ from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
-from proxi.observability.logging import setup_logging, get_logger, init_log_manager
+from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_key_value
-from proxi.tools.datetime import DateTimeTool
-from proxi.tools.filesystem import ListDirectoryTool, ReadFileTool, WriteFileTool
+from proxi.tools.coding import register_coding_tools
+from proxi.tools.filesystem import ReadFileTool, WriteFileTool
 from proxi.tools.registry import ToolRegistry
-from proxi.tools.shell import ExecuteCommandTool
+from proxi.tools.shell import ExecuteCodeTool as ExecuteCommandTool  # noqa: F401  (compat alias)
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
 from proxi.workspace import WorkspaceManager
 
@@ -39,34 +38,47 @@ DEFAULT_MCP_CONFIG: dict[str, Any] = {
 }
 
 
-def create_llm_client(provider: str = "openai") -> OpenAIClient | AnthropicClient:
+def create_llm_client(
+    provider: str = "openai",
+    model: str | None = None,
+) -> OpenAIClient | AnthropicClient:
     """Create an LLM client based on provider."""
     if provider.lower() == "anthropic":
         api_key = get_key_value("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY is not set in SQLite key store. Use the React frontend (🔐 button) to add it.")
-        return AnthropicClient(api_key=api_key)
+        return AnthropicClient(
+            api_key=api_key,
+            model=(model or "claude-3-5-sonnet-20241022"),
+        )
     else:
         api_key = get_key_value("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY is not set in SQLite key store. Use the React frontend (🔐 button) to add it.")
-        return OpenAIClient(api_key=api_key)
+        return OpenAIClient(
+            api_key=api_key,
+            model=(model or "gpt-5-mini-2025-08-07"),
+        )
 
 
 def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     """Set up the tool registry with default tools."""
+    from proxi.tools.path_guard import PathGuard
+
     registry = ToolRegistry()
+    guard = PathGuard(working_directory)
 
-    # Filesystem tools
-    registry.register(ReadFileTool())
-    registry.register(WriteFileTool())
-    registry.register(ListDirectoryTool())
-
-    # Shell tool (not registered right now as it is not safe)
-    # registry.register(ExecuteCommandTool(working_directory=working_directory))
-
-    # Datetime tool
-    registry.register(DateTimeTool())
+    builtin_tools = [
+        ReadFileTool(guard=guard),
+        WriteFileTool(guard=guard),
+        # Shell tool is not registered by default (security)
+        # ExecuteCommandTool(working_directory=working_directory),
+    ]
+    for tool in builtin_tools:
+        if getattr(tool, "defer_loading", False):
+            registry.register_deferred(tool)
+        else:
+            registry.register(tool)
 
     return registry
 
@@ -101,14 +113,23 @@ async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]
             logger.info("mcp_server_skipped_not_enabled", server=server_name)
             continue
 
+        defer_server = bool(mcp_servers[server_name].get("defer_loading", False))
+        always_load: set[str] = set(mcp_servers[server_name].get("always_load", []))
+
         try:
             logger.info("auto_loading_mcp_server", server=server_name)
             adapter = await setup_mcp_from_config(server_name)
             if adapter:
                 mcp_tools = await adapter.get_tools()
                 for tool in mcp_tools:
-                    tool_registry.register(tool)
-                    logger.info("mcp_tool_registered", server=server_name, tool=tool.name)
+                    # MCPToolAdapter.mcp_tool_name is the original unprefixed name
+                    unprefixed = getattr(tool, "mcp_tool_name", tool.name)
+                    if defer_server and unprefixed not in always_load:
+                        tool_registry.register_deferred(tool)
+                        logger.info("mcp_tool_deferred", server=server_name, tool=tool.name)
+                    else:
+                        tool_registry.register(tool)
+                        logger.info("mcp_tool_registered", server=server_name, tool=tool.name)
                 loaded_adapters.append(adapter)
         except Exception as e:
             logger.warning("auto_load_mcp_server_error", server=server_name, error=str(e))
@@ -353,6 +374,14 @@ async def main():
         tool_registry.register(ManageTodosTool(workspace_config))
         tool_registry.register(ReadSoulTool(workspace_config))
 
+        # Register coding tools based on per-agent config
+        agent_config = workspace_manager.read_agent_config(agent_info.agent_id)
+        coding_tier = agent_config.get("tool_sets", {}).get("coding", "live")
+        register_coding_tools(tool_registry, working_dir=working_dir, tier=str(coding_tier))
+
+        # Attach working dir to workspace config so tools and prompts can reference it
+        workspace_config.curr_working_dir = str(working_dir)
+
         # Set up MCP adapters (auto-load by default from MCP config)
         if not args.no_mcp:
             # Auto-load all configured MCP servers from MCP config
@@ -395,6 +424,12 @@ async def main():
                     for tool in mcp_tools:
                         tool_registry.register(tool)
                         logger.info("mcp_tool_registered", tool=tool.name)
+
+        # Register call_tool if any tools were deferred
+        if tool_registry.has_deferred_tools():
+            from proxi.tools.call_tool_tool import CallToolTool
+            tool_registry.register(CallToolTool(tool_registry))
+            logger.info("call_tool_registered", deferred_count=tool_registry.deferred_tool_count())
 
         # Set up sub-agents
         sub_agent_manager = None

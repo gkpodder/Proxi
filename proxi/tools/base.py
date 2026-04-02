@@ -40,6 +40,15 @@ class Tool(Protocol):
 class BaseTool:
     """Base implementation for tools."""
 
+    defer_loading: bool = False
+    """Set to True on a subclass to opt into deferred (on-demand) loading.
+
+    Deferred tools are hidden from the LLM's tool list at startup and are
+    only exposed after the LLM calls ``search_tools``.  Subclasses override
+    this at the class level; it can also be set per-instance via the
+    ``defer_loading`` kwarg to ``__init__``.
+    """
+
     def __init__(
         self,
         name: str,
@@ -47,12 +56,15 @@ class BaseTool:
         parameters_schema: dict[str, Any],
         *,
         parallel_safe: bool = False,
+        defer_loading: bool | None = None,
     ):
         """Initialize the tool."""
         self.name = name
         self.description = description
         self.parameters_schema = parameters_schema
         self.parallel_safe = parallel_safe
+        if defer_loading is not None:
+            self.defer_loading = defer_loading
 
     def to_spec(self) -> dict[str, Any]:
         """Convert to tool specification."""

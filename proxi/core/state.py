@@ -111,6 +111,11 @@ class WorkspaceConfig(BaseModel):
     plan_path: Annotated[str, Field(description="Path to sessions/<session_id>/plan.md (optional)")]
     todos_path: Annotated[str, Field(description="Path to sessions/<session_id>/todos.md (optional)")]
 
+    curr_working_dir: Annotated[
+        str | None,
+        Field(default=None, description="Root directory for file and shell tool operations"),
+    ]
+
 
 @dataclass
 class TurnState:

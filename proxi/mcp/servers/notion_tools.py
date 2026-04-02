@@ -74,12 +74,13 @@ class NotionTools:
                 },
             })
 
+        safe_title = (title or "").strip() or "Untitled"
         page = self.client.pages.create(
             parent={"page_id": self.parent_page_id},
             properties={
                 "title": {
                     "title": [
-                        {"type": "text", "text": {"content": title}}
+                        {"type": "text", "text": {"content": safe_title}}
                     ]
                 }
             },

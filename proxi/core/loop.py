@@ -366,6 +366,43 @@ class AgentLoop:
                         self.logger.error(
                             "turn_error", turn=state.current_turn, error=str(e))
 
+                        # If the exception happened during a tool call, the
+                        # assistant message with tool_calls was already committed
+                        # to history but the tool result(s) were not.  Inject
+                        # synthetic error results so the next LLM call receives a
+                        # valid conversation (OpenAI 400s if any function_call
+                        # lacks a matching tool message).
+                        try:
+                            if decision.type == DecisionType.TOOL_CALL:
+                                answered = {
+                                    m.tool_call_id
+                                    for m in state.history
+                                    if m.role == "tool" and m.tool_call_id
+                                }
+                                for msg in reversed(state.history):
+                                    if msg.role == "assistant" and msg.tool_calls:
+                                        for tc in msg.tool_calls:
+                                            tc_id = (
+                                                tc.get("id", "")
+                                                if isinstance(tc, dict)
+                                                else getattr(tc, "id", "")
+                                            )
+                                            tc_name = (
+                                                tc.get("function", {}).get("name", "")
+                                                if isinstance(tc, dict)
+                                                else getattr(tc, "name", "")
+                                            )
+                                            if tc_id and tc_id not in answered:
+                                                state.add_message(Message(
+                                                    role="tool",
+                                                    content=f"[Tool error: {e}]",
+                                                    name=tc_name,
+                                                    tool_call_id=tc_id,
+                                                ))
+                                        break
+                        except Exception:
+                            pass  # never let recovery logic crash the loop
+
                         if not self.reflector.should_retry(state, turn):
                             state.status = AgentStatus.FAILED
                             break
@@ -440,6 +477,8 @@ class AgentLoop:
     ) -> tuple[ModelDecision, dict[str, int]]:
         """Make a decision based on current state."""
         tools = self.tool_registry.to_specs()
+        deferred_count = self.tool_registry.deferred_tool_count()
+        deferred_specs = self.tool_registry.get_deferred_specs() if deferred_count > 0 else []
         agents = None
         if self.sub_agent_manager:
             agents = self.sub_agent_manager.registry.to_specs()
@@ -450,7 +489,8 @@ class AgentLoop:
 
         stream_cb = stream_callback if emit_stream else None
         decision, usage = await self.planner.decide(
-            state, tools, agents, stream_callback=stream_cb
+            state, tools, agents, stream_callback=stream_cb,
+            deferred_tool_count=deferred_count, deferred_specs=deferred_specs,
         )
         return decision, usage
 
@@ -464,9 +504,9 @@ class AgentLoop:
             tool_call_id = payload.get("id", "")
             arguments = payload.get("arguments", {})
 
-            # Intercept show_collaborative_form — never execute via registry
-            if tool_name == "show_collaborative_form":
-                return await self._handle_show_collaborative_form(
+            # Intercept ask_user_question — never execute via registry
+            if tool_name == "ask_user_question":
+                return await self._handle_ask_user_question(
                     state, tool_call_id, arguments, turn
                 )
 
@@ -497,11 +537,11 @@ class AgentLoop:
 
             if self.emitter:
                 if result.output:
-                    first_line = result.output.strip().split("\n")[0].strip()
-                    if first_line and len(first_line) <= 100:
+                    log_line = self._tool_log_summary(tool_name, arguments, result.output)
+                    if log_line:
                         self.emitter.emit({
                             "type": "tool_log",
-                            "content": first_line,
+                            "content": log_line,
                         })
                 self.emitter.emit({
                     "type": "tool_done",
@@ -622,14 +662,24 @@ class AgentLoop:
                 "error": f"Unknown decision type: {decision.type}",
             }
 
-    async def _handle_show_collaborative_form(
+    @staticmethod
+    def _tool_log_summary(tool_name: str, arguments: dict[str, Any], output: str) -> str | None:
+        """Return a concise one-line TUI summary for a tool result."""
+        if tool_name == "call_tool":
+            target = arguments.get("tool_name", "?") if isinstance(arguments, dict) else "?"
+            first = output.strip().split("\n")[0].strip()
+            return f"{target} → {first[:80]}" if first else f"{target} → done"
+        first_line = output.strip().split("\n")[0].strip()
+        return first_line[:100] if first_line else None
+
+    async def _handle_ask_user_question(
         self,
         state: AgentState,
         tool_call_id: str,
         arguments: dict[str, Any] | str,
         turn: TurnState,
     ) -> dict[str, Any]:
-        """Intercept show_collaborative_form: validate, emit to TUI, await response."""
+        """Intercept ask_user_question: validate, emit to TUI, await response."""
         from pydantic import ValidationError
 
         from proxi.interaction.models import FormResponse
@@ -645,35 +695,16 @@ class AgentLoop:
         except (ValidationError, json.JSONDecodeError) as e:
             return {
                 "type": "tool_call",
-                "tool": "show_collaborative_form",
+                "tool": "ask_user_question",
                 "success": False,
                 "output": "",
                 "error": f"Schema validation error — fix and retry:\n{e}",
                 "metadata": {},
             }
-        # TODO: implement proper policy for when to allow forms vs conversational follow-ups. For now, block all non-calendar forms with a helpful message.
-        if not self._is_calendar_form_request(form_request):
-            self.logger.info(
-                "form_request_blocked_non_calendar",
-                goal=form_request.goal,
-            )
-            return {
-                "type": "tool_call",
-                "tool": "show_collaborative_form",
-                "success": True,
-                "output": (
-                    "Policy: show_collaborative_form is restricted to calendar clarification workflows. "
-                    "For non-calendar tasks, continue without form input and ask at most one concise follow-up "
-                    "in a normal response only if absolutely necessary."
-                ),
-                "error": None,
-                "metadata": {},
-            }
-
         if self.form_bridge is None:
             return {
                 "type": "tool_call",
-                "tool": "show_collaborative_form",
+                "tool": "ask_user_question",
                 "success": False,
                 "output": "",
                 "error": "Form input not available in headless mode. Use TUI/bridge to enable collaborative forms.",
@@ -715,7 +746,7 @@ class AgentLoop:
 
         return {
             "type": "tool_call",
-            "tool": "show_collaborative_form",
+            "tool": "ask_user_question",
             "success": True,
             "output": content,
             "error": None,
@@ -730,7 +761,8 @@ class AgentLoop:
             if action_result.get("success"):
                 return f"Tool '{action_result.get('tool')}' executed successfully:\n{action_result.get('output', '')}"
             else:
-                return f"Tool '{action_result.get('tool')}' failed: {action_result.get('error', 'Unknown error')}"
+                err = action_result.get('error') or action_result.get('output') or 'Unknown error'
+                return f"Tool '{action_result.get('tool')}' failed: {err}"
 
         elif result_type == "respond":
             return action_result.get("content", "")
@@ -747,32 +779,3 @@ class AgentLoop:
         else:
             return f"Unknown action result type: {result_type}"
 
-    # REMOVE THIS ITS TEMPORARY, make it better
-    @staticmethod
-    def _is_calendar_form_request(form_request: Any) -> bool:
-        """Return True when a form request is clearly calendar-related."""
-        calendar_keywords = {
-            "calendar",
-            "event",
-            "meeting",
-            "schedule",
-            "attendee",
-            "invite",
-            "availability",
-            "timezone",
-            "start time",
-            "end time",
-        }
-
-        text_parts: list[str] = [
-            str(getattr(form_request, "goal", "") or ""),
-            str(getattr(form_request, "title", "") or ""),
-        ]
-
-        for question in getattr(form_request, "questions", []) or []:
-            text_parts.append(str(getattr(question, "label", "") or ""))
-            text_parts.append(str(getattr(question, "hint", "") or ""))
-            text_parts.append(str(getattr(question, "why", "") or ""))
-
-        combined = " ".join(text_parts).lower()
-        return any(keyword in combined for keyword in calendar_keywords)

@@ -18,6 +18,7 @@ class AgentConfig:
     agent_id: str
     soul_path: Path
     default_session: str = "main"
+    working_dir: Path | None = None
 
 
 @dataclass
@@ -29,6 +30,7 @@ class SourceConfig:
     pick_agent_at_startup: bool = True
     target_session: str = ""
     priority: int = 0
+    paused: bool = False
     # cron
     schedule: str = ""
     prompt: str = ""
@@ -61,16 +63,19 @@ class GatewayConfig:
 
         agents: dict[str, AgentConfig] = {}
         for aid, cfg in (raw.get("agents") or {}).items():
+            raw_wd = cfg.get("working_dir")
             agents[aid] = AgentConfig(
                 agent_id=aid,
                 soul_path=(workspace_root / cfg["soul"]).resolve(),
                 default_session=cfg.get("default_session", "main"),
+                working_dir=Path(raw_wd).expanduser().resolve() if raw_wd else None,
             )
 
         sources: dict[str, SourceConfig] = {}
         for sid, cfg in (raw.get("sources") or {}).items():
             known_keys = {
                 "type", "target_agent", "target_session", "priority",
+                "paused",
                 "pick_agent_at_startup",
                 "schedule", "prompt", "interval", "deadline_s",
                 "secret_env", "prompt_template",
@@ -83,6 +88,7 @@ class GatewayConfig:
                 pick_agent_at_startup=cfg.get("pick_agent_at_startup", True),
                 target_session=cfg.get("target_session", ""),
                 priority=cfg.get("priority", 0),
+                paused=bool(cfg.get("paused", False)),
                 schedule=cfg.get("schedule", ""),
                 prompt=cfg.get("prompt", ""),
                 interval=cfg.get("interval", 0),

@@ -9,7 +9,7 @@ import {
   parseBridgeMessage,
   type BridgeMessage,
   type UserInputRequired,
-  isCollaborativeFormRequired,
+  isAskUserQuestionRequired,
 } from "./protocol.js";
 import type { ScrollbackItem } from "./types/scrollback.js";
 import { ScrollbackArea } from "./components/ScrollbackArea.js";
@@ -19,6 +19,7 @@ import { HitlForm } from "./components/HitlForm.js";
 import { AnswerForm } from "./components/AnswerForm.js";
 import { CommandPalette } from "./components/CommandPalette.js";
 import { PlanTodosOverlay } from "./components/PlanTodosOverlay.js";
+import { UsageOverlay } from "./components/UsageOverlay.js";
 
 type StatusKind = "tool" | "subagent" | "progress" | null;
 
@@ -45,6 +46,13 @@ export default function App() {
   const [streamingContent, setStreamingContent] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [planTodosOverlay, setPlanTodosOverlay] = useState<"plan" | "todos" | null>(null);
+  const [usageOverlay, setUsageOverlay] = useState<{
+    tokens_used: number;
+    token_budget: number;
+    context_window: number;
+    turns_used: number;
+    max_turns: number;
+  } | null>(null);
   const [inputHistory, setInputHistory] = useState<string[]>([]);
   const [bootHint, setBootHint] = useState("Connecting to gateway...");
   const [userSendPending, setUserSendPending] = useState(false);
@@ -66,8 +74,16 @@ export default function App() {
   >(null);
   const bufferRef = useRef("");
   const streamingRef = useRef("");
-  const overlayRef = useRef({ planTodosOverlay, commandPaletteOpen });
-  overlayRef.current = { planTodosOverlay, commandPaletteOpen };
+  const overlayRef = useRef({
+    planTodosOverlay,
+    commandPaletteOpen,
+    usageOverlayOpen: usageOverlay !== null,
+  });
+  overlayRef.current = {
+    planTodosOverlay,
+    commandPaletteOpen,
+    usageOverlayOpen: usageOverlay !== null,
+  };
 
   // Resolved session_id (set from boot_complete)
   const sessionRef = useRef<string>("");
@@ -79,11 +95,12 @@ export default function App() {
   useInput(
     (_, key) => {
       if (!key.escape) return;
-      const { planTodosOverlay: plan, commandPaletteOpen: palette } = overlayRef.current;
+      const { planTodosOverlay: plan, commandPaletteOpen: palette, usageOverlayOpen } = overlayRef.current;
       if (plan) setPlanTodosOverlay(null);
       else if (palette) setCommandPaletteOpen(false);
+      else if (usageOverlayOpen) setUsageOverlay(null);
     },
-    { isActive: planTodosOverlay !== null || commandPaletteOpen }
+    { isActive: planTodosOverlay !== null || commandPaletteOpen || usageOverlay !== null }
   );
 
   const commitStreamToScrollback = useCallback(() => {
@@ -452,6 +469,7 @@ export default function App() {
   // --- MCP management state ---
   const mcpModeRef = useRef(false);
   const deleteModeRef = useRef(false);
+  const workDirModeRef = useRef(false);
 
   const startMcpManagement = useCallback(async () => {
     mcpModeRef.current = true;
@@ -535,6 +553,61 @@ export default function App() {
       await startMcpManagement();
     }
   }, [startMcpManagement]);
+
+  const startWorkDirFlow = useCallback(async () => {
+    workDirModeRef.current = true;
+    try {
+      const agentId = bootInfoRef.current?.agentId;
+      const qs = agentId ? `?agent_id=${encodeURIComponent(agentId)}` : "";
+      const res = await fetch(`${GATEWAY}/v1/working-dir${qs}`);
+      const data = res.ok ? (await res.json() as { path?: string }) : { path: "unknown" };
+      const current = data.path ?? "unknown";
+      setHitlSpec({
+        type: "user_input_required" as const,
+        method: "text" as const,
+        prompt: `Working dir: ${current}\nEnter new path (leave empty to cancel):`,
+      });
+    } catch {
+      workDirModeRef.current = false;
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: "Could not reach gateway.", isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handleWorkDirSubmit = useCallback(async (value: string | boolean | number) => {
+    workDirModeRef.current = false;
+    setHitlSpec(null);
+    const newPath = String(value).trim();
+    if (!newPath) return;
+    try {
+      const agentId = bootInfoRef.current?.agentId;
+      const res = await fetch(`${GATEWAY}/v1/working-dir`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: newPath, agent_id: agentId ?? null }),
+      });
+      const data = (await res.json()) as { path?: string; detail?: string };
+      if (res.ok) {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `Working dir set to: ${data.path}`, isFirst: true, isSystem: true },
+        ]);
+      } else {
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `Error: ${data.detail ?? "unknown error"}`, isFirst: true, isSystem: true },
+        ]);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Error: ${msg}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
 
   const handleCreateAgentFlowSubmit = useCallback(
     async (value: string | boolean | number) => {
@@ -774,11 +847,15 @@ export default function App() {
         handleMcpSelection(value);
         return;
       }
+      if (workDirModeRef.current) {
+        void handleWorkDirSubmit(value);
+        return;
+      }
       setUserSendPending(true);
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent]
+    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -813,6 +890,11 @@ export default function App() {
       setHitlSpec(null);
       return;
     }
+    if (workDirModeRef.current) {
+      workDirModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
     sendToGateway({ message: "", form_answer: { value: false } });
     setHitlSpec(null);
   }, [sendToGateway]);
@@ -844,6 +926,7 @@ export default function App() {
       if (
         !bootInfo ||
         hitlSpec !== null ||
+        usageOverlay !== null ||
         planTodosOverlay !== null ||
         commandPaletteOpen ||
         tuiActiveDepth <= 0
@@ -856,6 +939,7 @@ export default function App() {
       isActive: Boolean(
         bootInfo &&
           hitlSpec === null &&
+          usageOverlay === null &&
           planTodosOverlay === null &&
           !commandPaletteOpen &&
           tuiActiveDepth > 0
@@ -892,12 +976,16 @@ export default function App() {
         case "mcps":
           startMcpManagement();
           break;
+        case "work-dir":
+          void startWorkDirFlow();
+          break;
         case "clear":
           setScrollback([]);
           setStreamingContent("");
           streamingRef.current = "";
           bufferRef.current = "";
           setHitlSpec(null);
+          setUsageOverlay(null);
           agentModeRef.current = false;
           mcpModeRef.current = false;
           deleteModeRef.current = false;
@@ -929,17 +1017,48 @@ export default function App() {
         case "todos":
           setPlanTodosOverlay("todos");
           break;
+        case "usage": {
+          const sid = sessionRef.current;
+          if (!sid) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "No active session.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(sid)}/stats`)
+            .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+            .then((data) => {
+              const stats = data as {
+                tokens_used: number;
+                token_budget: number;
+                context_window: number;
+                turns_used: number;
+                max_turns: number;
+              };
+              setUsageOverlay(stats);
+            })
+            .catch(() => {
+              setScrollback((s) => [
+                ...s,
+                { type: "agent_line", content: "Could not fetch usage stats — start a session first.", isFirst: true, isSystem: true },
+              ]);
+            });
+          break;
+        }
         case "help":
           setScrollback((s) => [
             ...s,
-            { type: "agent_line", content: "/agent - Switch agent or create [+] Create new agent", isFirst: true, isSystem: true },
-            { type: "agent_line", content: "/delete - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/mcps  - Enable/disable MCPs", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/clear - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/plan  - View current plan", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/todos - View open todos", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/help  - Show all commands", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/exit  - Exit Proxi", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/agent    - Switch agent or create [+] Create new agent", isFirst: true, isSystem: true },
+            { type: "agent_line", content: "/delete   - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/mcps     - Enable/disable MCPs", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/work-dir - View or change working directory", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/plan     - View current plan", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/todos    - View open todos", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/usage    - Show context and turn usage", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/help     - Show all commands", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/exit     - Exit Proxi", isFirst: false, isSystem: true },
           ]);
           break;
         case "exit":
@@ -947,7 +1066,7 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent, startMcpManagement, bootInfo]
+    [onSwitchAgent, startMcpManagement, startWorkDirFlow, bootInfo]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
@@ -977,7 +1096,7 @@ export default function App() {
           isWaitingForInput={!!hitlSpec}
         />
         {hitlSpec ? (
-          isCollaborativeFormRequired(hitlSpec) ? (
+          isAskUserQuestionRequired(hitlSpec) ? (
             <AnswerForm
               payload={hitlSpec.payload}
               onSubmit={onAnswerFormSubmit}
@@ -997,6 +1116,11 @@ export default function App() {
           <CommandPalette
             onDismiss={() => setCommandPaletteOpen(false)}
             onCommand={onCommand}
+          />
+        ) : usageOverlay ? (
+          <UsageOverlay
+            stats={usageOverlay}
+            onDismiss={() => setUsageOverlay(null)}
           />
         ) : planTodosOverlay ? (
           <PlanTodosOverlay

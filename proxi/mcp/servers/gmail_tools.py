@@ -172,9 +172,9 @@ class GmailTools:
             if not self.service:
                 return {"error": "Gmail service not initialized"}
 
-            message = MIMEText(body)
-            message["to"] = to
-            message["subject"] = subject
+            message = MIMEText(str(body or ""))
+            message["to"] = str(to or "")
+            message["subject"] = str(subject) if subject is not None else "(no subject)"
 
             if cc:
                 message["cc"] = cc
