@@ -78,6 +78,12 @@ class LaneManager:
             await lane.stop()
         self._lanes.clear()
 
+    async def remove_lane(self, session_id: str) -> None:
+        """Stop and drop a single lane by session_id."""
+        lane = self._lanes.pop(session_id, None)
+        if lane is not None:
+            await lane.stop()
+
     async def remove_lanes_for_agent(self, agent_id: str) -> None:
         """Stop and drop all lanes whose ``session_id`` belongs to ``agent_id``."""
         prefix = f"{agent_id}/"

@@ -58,7 +58,7 @@ from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_user_profile
 from proxi.tools.coding import register_coding_tools
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
-from proxi.workspace import WorkspaceError, WorkspaceManager
+from proxi.workspace import AgentInfo, WorkspaceError, WorkspaceManager
 
 logger = get_logger(__name__)
 
@@ -940,6 +940,91 @@ async def delete_agent_endpoint(agent_id: str) -> dict[str, Any]:
     _reload_gateway_config()
     logger.info("agent_deleted_via_api", agent_id=aid)
     return {"status": "deleted", "agent_id": aid}
+
+
+@app.post("/v1/sessions/{session_id:path}/branch")
+async def branch_session_endpoint(session_id: str) -> dict[str, Any]:
+    """Clone the agent owning session_id into a new agent, seeding it with the current history.
+
+    The new agent copies Soul.md and config.yaml from the parent and inherits
+    the session's history.jsonl so the LLM prompt cache hits immediately.
+
+    Returns: { agent_id, session_id }
+    """
+    if lane_manager is None:
+        raise HTTPException(status_code=503, detail="Gateway not ready")
+    parts = session_id.split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail="Invalid session_id format")
+    agent_id, session_name = parts
+    agent_cfg = config.agents.get(agent_id)
+    if agent_cfg is None:
+        raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_id}")
+    source_history_path = config.session_history_path(agent_id, session_name)
+    working_dir_str = str(_agent_working_dirs[agent_id]) if agent_id in _agent_working_dirs else None
+    wm = WorkspaceManager(root=_workspace_root())
+    try:
+        new_agent = wm.branch_agent(
+            parent_agent_id=agent_id,
+            source_history_path=source_history_path,
+            default_session=agent_cfg.default_session,
+            working_dir=working_dir_str,
+        )
+    except WorkspaceError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _reload_gateway_config()
+    new_session_id = f"{new_agent.agent_id}/{agent_cfg.default_session}"
+    lane_manager._get_or_create(new_session_id)
+    logger.info("agent_branched", parent=agent_id, new_agent=new_agent.agent_id)
+    return {"agent_id": new_agent.agent_id, "session_id": new_session_id}
+
+
+@app.post("/v1/sessions/{session_id:path}/btw")
+async def create_btw_session_endpoint(session_id: str) -> dict[str, Any]:
+    """Create a side-session on the same agent that inherits the current history.
+
+    The new session copies the parent's history.jsonl so the LLM prompt cache
+    is warm. The original session is untouched.
+
+    Returns: { btw_session_id, return_session_id }
+    """
+    if lane_manager is None:
+        raise HTTPException(status_code=503, detail="Gateway not ready")
+    parts = session_id.split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail="Invalid session_id format")
+    agent_id, session_name = parts
+    if agent_id not in config.agents:
+        raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_id}")
+    from datetime import datetime, timezone
+    btw_name = "btw-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    btw_session_id = f"{agent_id}/{btw_name}"
+    source_history_path = config.session_history_path(agent_id, session_name)
+    wm = WorkspaceManager(root=_workspace_root())
+    wm.create_named_session(
+        AgentInfo(agent_id=agent_id, path=wm.agents_dir / agent_id),
+        btw_name,
+        source_history_path=source_history_path,
+    )
+    lane_manager._get_or_create(btw_session_id)
+    logger.info("btw_session_created", agent=agent_id, btw_session=btw_session_id, return_session=session_id)
+    return {"btw_session_id": btw_session_id, "return_session_id": session_id}
+
+
+@app.delete("/v1/sessions/{session_id:path}")
+async def delete_session_endpoint(session_id: str) -> dict[str, Any]:
+    """Stop the lane for session_id and delete its directory from disk."""
+    if lane_manager is None:
+        raise HTTPException(status_code=503, detail="Gateway not ready")
+    parts = session_id.split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail="Invalid session_id format")
+    agent_id, session_name = parts
+    await lane_manager.remove_lane(session_id)
+    wm = WorkspaceManager(root=_workspace_root())
+    wm.delete_session(agent_id, session_name)
+    logger.info("session_deleted", session_id=session_id)
+    return {"status": "deleted", "session_id": session_id}
 
 
 class SwitchAgentRequest(BaseModel):
