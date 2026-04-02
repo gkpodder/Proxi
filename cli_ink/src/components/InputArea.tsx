@@ -12,6 +12,7 @@ type Props = {
   onSwitchAgent?: () => void;
   onOpenCommandPalette?: () => void;
   inputHistory?: string[];
+  onEscapeEmpty?: () => void;
 };
 
 export function InputArea({
@@ -23,6 +24,7 @@ export function InputArea({
   onSwitchAgent,
   onOpenCommandPalette,
   inputHistory = [],
+  onEscapeEmpty,
 }: Props) {
   const [value, setValue] = useState("");
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -46,7 +48,10 @@ export function InputArea({
   const canInput = (bridgeReady || inputAllowedOverride) && !disabled;
 
   useInput((input, key) => {
-    if (key.escape) return;
+    if (key.escape) {
+      if (value === "" && onEscapeEmpty) onEscapeEmpty();
+      return;
+    }
     if (!canInput) return;
     if (value === "" && input === "/" && onOpenCommandPalette) {
       onOpenCommandPalette();

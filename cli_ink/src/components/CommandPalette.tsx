@@ -16,6 +16,8 @@ export type CommandDef = {
 
 const COMMANDS: Omit<CommandDef, "handler">[] = [
   { id: "agent", name: "/agent", description: "Switch active agent" },
+  { id: "branch", name: "/branch", description: "Clone this agent with current history" },
+  { id: "btw", name: "/btw", description: "Quick side session (Esc to return)" },
   { id: "delete", name: "/delete", description: "Delete current agent (gateway + disk)" },
   { id: "mcps", name: "/mcps", description: "Enable or disable MCPs" },
   { id: "work-dir", name: "/work-dir", description: "View or change working directory" },

@@ -58,6 +58,9 @@ export default function App() {
   const [userSendPending, setUserSendPending] = useState(false);
   const [tuiActiveDepth, setTuiActiveDepth] = useState(0);
   const [lastTuiAbortableStatus, setLastTuiAbortableStatus] = useState(false);
+  const [btwMode, setBtwMode] = useState(false);
+  const btwReturnSessionRef = useRef<string>("");
+  const btwSavedScrollbackRef = useRef<ScrollbackItem[]>([]);
 
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
@@ -101,6 +104,21 @@ export default function App() {
       else if (usageOverlayOpen) setUsageOverlay(null);
     },
     { isActive: planTodosOverlay !== null || commandPaletteOpen || usageOverlay !== null }
+  );
+
+  useInput(
+    (_, key) => {
+      if (!key.escape) return;
+      handleBtwReturn();
+    },
+    {
+      isActive:
+        btwMode &&
+        hitlSpec === null &&
+        !commandPaletteOpen &&
+        usageOverlay === null &&
+        planTodosOverlay === null,
+    }
   );
 
   const commitStreamToScrollback = useCallback(() => {
@@ -803,6 +821,122 @@ export default function App() {
     startAgentSwitch();
   }, [startAgentSwitch]);
 
+  const handleBranch = useCallback(async () => {
+    const currentSession = sessionRef.current;
+    if (!currentSession) return;
+    setScrollback((s) => [
+      ...s,
+      { type: "agent_line", content: "Branching agent…", isFirst: true, isSystem: true },
+    ]);
+    try {
+      const res = await fetch(
+        `${GATEWAY}/v1/sessions/${encodeURIComponent(currentSession)}/branch`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        const detail = await res.text();
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `Branch failed: ${detail || res.status}`, isFirst: true, isSystem: true },
+        ]);
+        return;
+      }
+      const result = (await res.json()) as { agent_id: string; session_id: string };
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Branched → ${result.agent_id}. Switching…`, isFirst: true, isSystem: true },
+      ]);
+      if (abortRef.current) abortRef.current.abort();
+      sessionRef.current = result.session_id;
+      setBootInfo(null);
+      setBridgeReady(false);
+      setStreamingContent("");
+      streamingRef.current = "";
+      bufferRef.current = "";
+      setUserSendPending(false);
+      setTuiActiveDepth(0);
+      setLastTuiAbortableStatus(false);
+      const ac = new AbortController();
+      abortRef.current = ac;
+      connectSse(result.session_id, ac);
+    } catch (err: any) {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Branch error: ${err.message ?? String(err)}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, [connectSse]);
+
+  const handleBtwReturn = useCallback(() => {
+    const returnSession = btwReturnSessionRef.current;
+    const btwSession = sessionRef.current;
+    if (!returnSession || !btwMode) return;
+    setBtwMode(false);
+    btwReturnSessionRef.current = "";
+    const savedScrollback = btwSavedScrollbackRef.current;
+    btwSavedScrollbackRef.current = [];
+    if (abortRef.current) abortRef.current.abort();
+    sessionRef.current = returnSession;
+    setBootInfo(null);
+    setBridgeReady(false);
+    setScrollback(savedScrollback);
+    setStreamingContent("");
+    streamingRef.current = "";
+    bufferRef.current = "";
+    setUserSendPending(false);
+    setTuiActiveDepth(0);
+    setLastTuiAbortableStatus(false);
+    const ac = new AbortController();
+    abortRef.current = ac;
+    connectSse(returnSession, ac);
+    // Delete the btw session after reconnecting (fire-and-forget)
+    if (btwSession) {
+      fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(btwSession)}`, { method: "DELETE" }).catch(() => undefined);
+    }
+  }, [btwMode, connectSse]);
+
+  const handleBtw = useCallback(async () => {
+    const currentSession = sessionRef.current;
+    if (!currentSession) return;
+    try {
+      const res = await fetch(
+        `${GATEWAY}/v1/sessions/${encodeURIComponent(currentSession)}/btw`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        const detail = await res.text();
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `BTW failed: ${detail || res.status}`, isFirst: true, isSystem: true },
+        ]);
+        return;
+      }
+      const result = (await res.json()) as { btw_session_id: string; return_session_id: string };
+      btwReturnSessionRef.current = result.return_session_id;
+      btwSavedScrollbackRef.current = scrollback;
+      setBtwMode(true);
+      if (abortRef.current) abortRef.current.abort();
+      sessionRef.current = result.btw_session_id;
+      setBootInfo(null);
+      setBridgeReady(false);
+      setScrollback([]);
+      setStreamingContent("");
+      streamingRef.current = "";
+      bufferRef.current = "";
+      setUserSendPending(false);
+      setTuiActiveDepth(0);
+      setLastTuiAbortableStatus(false);
+      const ac = new AbortController();
+      abortRef.current = ac;
+      connectSse(result.btw_session_id, ac);
+    } catch (err: any) {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `BTW error: ${err.message ?? String(err)}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, [connectSse, scrollback]);
+
   const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
     if (!task.trim()) return;
     setInputHistory((prev) => {
@@ -953,6 +1087,26 @@ export default function App() {
         case "agent":
           onSwitchAgent();
           break;
+        case "branch":
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "Connect to an agent first, then use /branch.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          void handleBranch();
+          break;
+        case "btw":
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "Connect to an agent first, then use /btw.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          void handleBtw();
+          break;
         case "delete":
           if (!bootInfo) {
             setScrollback((s) => [
@@ -1050,6 +1204,8 @@ export default function App() {
           setScrollback((s) => [
             ...s,
             { type: "agent_line", content: "/agent    - Switch agent or create [+] Create new agent", isFirst: true, isSystem: true },
+            { type: "agent_line", content: "/branch   - Clone current agent with full session history", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/btw      - Temporary side session (Esc from empty input to return)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/delete   - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/mcps     - Enable/disable MCPs", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/work-dir - View or change working directory", isFirst: false, isSystem: true },
@@ -1066,7 +1222,7 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent, startMcpManagement, startWorkDirFlow, bootInfo]
+    [onSwitchAgent, startMcpManagement, startWorkDirFlow, bootInfo, handleBranch, handleBtw]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
@@ -1094,6 +1250,7 @@ export default function App() {
           agentId={bootInfo?.agentId}
           sessionId={bootInfo?.sessionId}
           isWaitingForInput={!!hitlSpec}
+          isBtw={btwMode}
         />
         {hitlSpec ? (
           isAskUserQuestionRequired(hitlSpec) ? (
@@ -1138,6 +1295,7 @@ export default function App() {
             onSwitchAgent={onSwitchAgent}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             inputHistory={inputHistory}
+            onEscapeEmpty={btwMode ? handleBtwReturn : undefined}
           />
         )}
       </Box>
