@@ -95,7 +95,6 @@ function App() {
   const recognizerRef = useRef(null);
   const pendingMcpActivityRef = useRef({});
   const activeToolRef = useRef(null);
-  const lastThinkingRef = useRef(null);
 
   const visibleQuestions = useMemo(() => {
     if (!formUi) return [];
@@ -801,49 +800,8 @@ function App() {
     return typeof toolName === "string" && toolName.toLowerCase().startsWith("mcp_");
   }
 
-  function getThinkingSummary(content) {
-    if (!content || typeof content !== "string") return "";
-    const trimmed = content.trim();
-    const isGenericThinking = /^thinking\.{0,3}$/i.test(trimmed) || /^reasoning\.{0,3}$/i.test(trimmed);
-    if (!isGenericThinking) return trimmed;
-
-    if (isPromptActive) {
-      return "Waiting for required input before continuing.";
-    }
-
-    const activeTool = activeToolRef.current;
-    if (activeTool?.name) {
-      const elapsedSec = Math.max(0, Math.round((Date.now() - activeTool.startedAt) / 1000));
-      const source = activeTool.isMcp ? "MCP" : "Tool";
-      return `${source} in progress: ${activeTool.name}${elapsedSec > 0 ? ` (${elapsedSec}s)` : ""}.`;
-    }
-
-    if (statusLabel && statusLabel !== "Idle") {
-      return `Current status: ${statusLabel}`;
-    }
-
-    return "Analyzing context and preparing the next action.";
-  }
-
-  function recordThinking(content) {
-    const summary = getThinkingSummary(content);
-    if (!summary) return;
-
-    const now = Date.now();
-    const last = lastThinkingRef.current;
-    if (last && last.text === summary && now - last.at < 12000) {
-      const nextCount = last.count + 1;
-      updateActivityById(last.id, (existing) => ({
-        ...existing,
-        content: `${summary} (x${nextCount})`,
-        at: new Date().toLocaleTimeString(),
-      }));
-      lastThinkingRef.current = { ...last, count: nextCount, at: now };
-      return;
-    }
-
-    const id = addActivity("thinking", "Thinking", summary);
-    lastThinkingRef.current = { id, text: summary, count: 1, at: now };
+  function recordThinking() {
+    return;
   }
 
   function commitStream() {
@@ -896,10 +854,6 @@ function App() {
   }
 
   function handleMessage(msg) {
-    if (typeof msg?.reasoning === "string" && msg.reasoning.trim()) {
-      recordThinking(msg.reasoning.trim());
-    }
-
     switch (msg.type) {
       case "ready":
         setStatusLabel("Gateway ready");
@@ -916,13 +870,14 @@ function App() {
         break;
       case "status_update":
         if (msg.status === "running") {
-          setStatusLabel(msg.label ? `Running: ${msg.label}` : "Running...");
           if (msg.label && /thinking|reasoning/i.test(msg.label)) {
-            recordThinking(msg.label);
+            setStatusLabel("Thinking...");
+          } else {
+            setStatusLabel(msg.label ? `Running: ${msg.label}` : "Running...");
           }
         } else if (msg.status === "done") {
           activeToolRef.current = null;
-          setStatusLabel("Idle");
+          setStatusLabel("Done");
           commitStream();
         }
         break;
@@ -991,7 +946,7 @@ function App() {
       case "thinking":
       case "reasoning":
       case "thinking_stream":
-        recordThinking(msg.content || msg.text || "");
+        setStatusLabel("Thinking...");
         break;
       case "inbound_turn": {
         const sourceType = String(msg.source_type || "").toLowerCase();
@@ -999,6 +954,10 @@ function App() {
           const sourceId = msg.source_id || "cron";
           const prompt = msg.prompt || "Scheduled job triggered.";
           addActivity("cron", `Cron triggered: ${sourceId}`, prompt);
+        } else if (sourceType === "webhook") {
+          const sourceId = msg.source_id || "webhook";
+          const prompt = msg.prompt || "Webhook received.";
+          addActivity("webhook", `Webhook arrived: ${sourceId}`, prompt);
         }
         break;
       }

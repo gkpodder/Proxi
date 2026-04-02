@@ -447,6 +447,10 @@ body.light {
   color: #f59e0b;
 }
 
+.activityItem.webhook .activityKind {
+  color: #38bdf8;
+}
+
 .msg {
   display: flex;
   flex-direction: column;
