@@ -93,7 +93,6 @@ Decision types:
 | `SUB_AGENT_CALL` | Delegate work to a sub-agent |
 | `REQUEST_USER_INPUT` | Request structured user input via a collaborative form |
 
-> Note: `proxi-bridge` still exists for compatibility/debugging but is deprecated in favor of gateway transport.
 
 ## Workspace Layout
 
@@ -162,8 +161,8 @@ uv run python scripts/init_api_keys_db.py
 Set keys via CLI:
 
 ```bash
-uv run python -m proxi.security.key_store upsert --key OPENAI_API_KEY --value "your-key-here"
-uv run python -m proxi.security.key_store upsert --key ANTHROPIC_API_KEY --value "your-key-here"
+uv run proxi keys upsert --key OPENAI_API_KEY --value "your-key-here"
+uv run proxi keys upsert --key ANTHROPIC_API_KEY --value "your-key-here"
 ```
 
 ### Useful environment variables
@@ -220,27 +219,28 @@ This starts the TUI and connects it to the gateway (starting the gateway daemon 
 
 ```bash
 # Default provider
-uv run proxi-run "Your task here"
+uv run proxi run "Your task here"
 
 # Explicit provider
-uv run proxi-run --provider anthropic "Your task here"
+uv run proxi run --provider anthropic "Your task here"
 
 # Extra options
-uv run proxi-run --max-turns 30 --log-level DEBUG "Your task here"
+uv run proxi run --max-turns 30 --log-level DEBUG "Your task here"
 
 # Filesystem MCP shortcut
-uv run proxi-run --mcp-filesystem "." "List all files in the current directory"
+uv run proxi run --mcp-filesystem "." "List all files in the current directory"
 
 # Custom MCP command
-uv run proxi-run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
+uv run proxi run --mcp-server "npx:@modelcontextprotocol/server-filesystem /path" "Your task"
 ```
 
 ### Gateway management
 
 ```bash
-uv run proxi-gateway-ctl start
-uv run proxi-gateway-ctl status
-uv run proxi-gateway-ctl stop
+uv run proxi gateway start
+uv run proxi gateway status
+uv run proxi gateway stop
+uv run proxi gateway restart
 ```
 
 ## TUI Slash Commands
@@ -270,9 +270,9 @@ Run TUI with uv:
 
 ```bash
 # From repository root
-uv run proxi-tui
+uv run proxi
 
-# Or inside cli_ink/
+# Or inside cli_ink/ directly
 cd cli_ink
 npm run dev
 npm run start
@@ -281,36 +281,19 @@ npm run start
 Run tests:
 
 ```bash
-pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 Optional verification:
 
-- **Gateway only:** From project root, run `uv run proxi-gateway`. Then open `http://127.0.0.1:8765/health` and verify `{"status":"ok", ...}`.
-- **Full flow:** Run `proxi` or `uv run proxi`; you should see the boot sequence, agent selection (if applicable), and a prompt. Type a task and press Enter.
+- **Gateway only:** Run `uv run proxi gateway start`, then open `http://127.0.0.1:8765/health` and verify `{"status":"ok", ...}`.
+- **Full flow:** Run `uv run proxi`; the gateway auto-starts, then the TUI launches. Type a task and press Enter.
 
 ## React Frontend (Gateway)
 
-Quick launcher:
-
-```bash
-uv run proxi
-```
-
-This opens an interactive menu to choose:
-
-- TUI
-- React frontend
-- Discord relay
-- Headless (one-shot `proxi-run`)
-
-It checks gateway health and requires a running gateway.
-
-From project root:
-
 ```bash
 # Start the React frontend (requires a running gateway)
-uv run proxi-react
+uv run proxi frontend
 ```
 
 Frontend startup parameters:
@@ -370,13 +353,13 @@ npm install
 npm run start
 ```
 
-Or via root script:
+Or via the unified CLI:
 
 ```bash
-uv run proxi-discord-relay
+uv run proxi discord
 ```
 
-`proxi-discord-relay` requires a running gateway and exits if gateway is unreachable.
+`proxi discord` requires a running gateway and exits if gateway is unreachable.
 
 Relay env file: [discord_relay/.env.example](discord_relay/.env.example)
 
@@ -401,11 +384,11 @@ Use this flow to configure a secure webhook source from the React frontend and v
 From project root:
 
 ```bash
-# Start gateway
-uv run proxi-gateway
+# Start gateway daemon
+uv run proxi gateway start
 
 # In a second terminal, start frontend
-uv run proxi-react
+uv run proxi frontend
 ```
 
 Verify gateway health:

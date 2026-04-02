@@ -8,13 +8,34 @@ import subprocess
 import sys
 from pathlib import Path
 
+import httpx
+
 from proxi.gateway.daemon import _gateway_url, is_running
+
+
+def _frontend_port() -> int:
+    return int(os.environ.get("PORT", 5174))
+
+
+def _frontend_already_running() -> bool:
+    """Return True if the frontend server is already answering on its port."""
+    port = _frontend_port()
+    try:
+        r = httpx.get(f"http://localhost:{port}/", timeout=1.0)
+        return r.status_code < 500
+    except (httpx.ConnectError, httpx.TimeoutException):
+        return False
 
 
 def main() -> None:
     if not is_running(timeout=1.0):
         print(f"Gateway is not reachable at {_gateway_url()}. Start it first.", file=sys.stderr)
         sys.exit(1)
+
+    port = _frontend_port()
+    if _frontend_already_running():
+        print(f"React frontend is already running at http://localhost:{port}")
+        sys.exit(0)
 
     project_root = Path(__file__).resolve().parents[1]
     frontend_dir = project_root / "react_frontend"

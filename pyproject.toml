@@ -23,14 +23,8 @@ dependencies = [
 ]
 
 [project.scripts]
-proxi = "proxi.tui_launcher:main"
-proxi-run = "proxi.cli.main:cli_main"
-proxi-bridge = "proxi.bridge:main"
-proxi-tui = "proxi.tui_launcher:main"
-proxi-react = "proxi.react_launcher:main"
-proxi-discord-relay = "proxi.discord_relay_launcher:main"
+proxi = "proxi.main:main"
 proxi-gateway = "proxi.gateway.server:main"
-proxi-gateway-ctl = "proxi.gateway.daemon_cli:main"
 
 [project.optional-dependencies]
 dev = [
