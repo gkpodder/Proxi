@@ -83,6 +83,14 @@
       setLlmModel,
       saveLlmConfig,
       loadLlmConfig,
+      voiceEnabled,
+      setVoiceEnabled,
+      voiceSilenceSeconds,
+      setVoiceSilenceSeconds,
+      voiceAutoSendAfterSilence,
+      setVoiceAutoSendAfterSilence,
+      voiceBeepEnabled,
+      setVoiceBeepEnabled,
       webhooks,
       webhookLoading,
       webhookSaving,
@@ -105,6 +113,7 @@
       cron: false,
       webhooks: false,
       llm: false,
+      voice: false,
     });
     const [scheduleMode, setScheduleMode] = useState("quick");
     const [everyValue, setEveryValue] = useState("30");
@@ -122,6 +131,7 @@
         { key: "cron", label: "Cron Jobs" },
         { key: "webhooks", label: "Webhooks" },
         { key: "llm", label: "LLM Provider" },
+        { key: "voice", label: "Voice" },
       ],
       []
     );
@@ -910,6 +920,68 @@
                   <button onClick={() => loadLlmConfig()} disabled={llmLoading || llmSaving}>
                     Refresh
                   </button>
+                </div>
+              </Section>
+
+              <Section
+                sectionKey="voice"
+                title="Voice"
+                openSections={openSections}
+                toggleSection={toggleSection}
+                sectionRefs={sectionRefs}
+              >
+                <div className="settingsHint">
+                  When enabled, Proxi listens for "hey proxi" using the browser speech recognizer so it can wake up without using LLM tokens.
+                </div>
+                <div className="settingsRow">
+                  <div>
+                    <div className="settingsLabel">Wake word</div>
+                    <div className="settingsValue">{voiceEnabled ? "Enabled" : "Disabled"}</div>
+                  </div>
+                  <button className="primaryBtn" onClick={() => setVoiceEnabled((prev) => !prev)}>
+                    {voiceEnabled ? "Disable Voice" : "Enable Voice"}
+                  </button>
+                </div>
+                <div className="profileGrid" style={{ marginTop: "0.8rem" }}>
+                  <label className="profileField">
+                    <span>Auto-stop sensitivity ({Number(voiceSilenceSeconds || 2)}s)</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      step="1"
+                      value={String(voiceSilenceSeconds || 2)}
+                      onChange={(e) => {
+                        const value = Number.parseInt(e.target.value, 10);
+                        if (Number.isFinite(value)) {
+                          setVoiceSilenceSeconds(Math.max(1, Math.min(5, value)));
+                        }
+                      }}
+                    />
+                    <div className="formHint">1 = faster auto-stop, 5 = slower auto-stop</div>
+                  </label>
+                  <label className="profileField">
+                    <span>Auto-send after silence</span>
+                    <select
+                      className="profileSelect"
+                      value={voiceAutoSendAfterSilence ? "on" : "off"}
+                      onChange={(e) => setVoiceAutoSendAfterSilence(e.target.value === "on")}
+                    >
+                      <option value="on">On</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </label>
+                  <label className="profileField">
+                    <span>Start-listening beep</span>
+                    <select
+                      className="profileSelect"
+                      value={voiceBeepEnabled ? "on" : "off"}
+                      onChange={(e) => setVoiceBeepEnabled(e.target.value === "on")}
+                    >
+                      <option value="on">On</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </label>
                 </div>
               </Section>
             </div>
