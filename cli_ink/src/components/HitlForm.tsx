@@ -31,7 +31,7 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
   useEffect(() => {
     setTextValue("");
     setSelectIndex(0);
-  }, [spec.prompt, spec.method]);
+  }, [spec.prompt, spec.method, spec.ui]);
 
   useInput((input, key) => {
     if (key.escape) {
@@ -121,6 +121,58 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
   }
 
   if (spec.method === "text") {
+    if (spec.ui === "compact") {
+      return (
+        <Box
+          paddingX={1}
+          paddingY={0}
+          flexDirection="column"
+          flexShrink={0}
+          borderStyle="round"
+          borderColor={theme.purpleDim}
+          gap={0}
+        >
+          <Box marginBottom={1}>
+            <Text color={theme.purple} bold>
+              Compact context
+            </Text>
+          </Box>
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color={theme.mist}>
+              Roll up older conversation into a summary so the next turns use fewer
+              tokens.
+            </Text>
+            <Text color={theme.mist}>
+              Optional: name topics, files, or decisions you want the summary to
+              preserve.
+            </Text>
+          </Box>
+          <Box marginBottom={0}>
+            <Text color={theme.lavender}>Focus hint</Text>
+            <Text color={theme.purpleDim}> </Text>
+            <Text color={theme.mist} italic>
+              (leave empty for default)
+            </Text>
+          </Box>
+          <Box marginBottom={1}>
+            <Text color={theme.purple} bold>
+              ›{" "}
+            </Text>
+            <TextInput
+              key="compact-hitl"
+              value={textValue}
+              onChange={setTextValue}
+              onSubmit={() => handleSubmit()}
+              placeholder="e.g. auth refactor, proxi/gateway/server.py, open bugs…"
+              showCursor
+            />
+          </Box>
+          <Box flexDirection="row" justifyContent="space-between">
+            <Text color={theme.mist}>Enter — run compaction · Esc — cancel</Text>
+          </Box>
+        </Box>
+      );
+    }
     if (workDirMatch) {
       return (
         <Box
@@ -174,7 +226,7 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
           {(spec.prompt ?? "Enter value:")}
         </Text>
         <TextInput
-          key={spec.prompt ?? "text"}
+          key={spec.ui ? `ui-${spec.ui}` : (spec.prompt ?? "text")}
           value={textValue}
           onChange={setTextValue}
           onSubmit={() => handleSubmit()}

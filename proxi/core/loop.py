@@ -7,6 +7,7 @@ import time
 from typing import Any, Protocol
 
 from proxi.agents.registry import SubAgentManager
+from proxi.core.compactor import ContextCompactor
 from proxi.core.planner import Planner
 from proxi.core.reflection import Reflector
 from proxi.core.state import AgentState, AgentStatus, Message, TurnState, TurnStatus, WorkspaceConfig
@@ -18,6 +19,18 @@ from proxi.observability.tracing import TraceContext
 from proxi.tools.registry import ToolRegistry
 
 logger = get_logger(__name__)
+
+
+def _is_context_length_error(exc: Exception) -> bool:
+    """Return True if the exception looks like a context-window overflow."""
+    msg = str(exc).lower()
+    return any(x in msg for x in [
+        "context_length_exceeded",
+        "context window",
+        "maximum context length",
+        "too many tokens",
+        "413",
+    ])
 
 
 class BridgeEmitter(Protocol):
@@ -53,6 +66,7 @@ class AgentLoop:
         emitter: BridgeEmitter | None = None,
         form_bridge: FormBridge | None = None,
         workspace: WorkspaceConfig | None = None,
+        compactor: ContextCompactor | None = None,
     ):
         """Initialize the agent loop."""
         self.llm_client = llm_client
@@ -65,6 +79,7 @@ class AgentLoop:
         self.form_bridge = form_bridge
         self.logger = logger
         self.workspace = workspace
+        self.compactor = compactor
 
     async def run(self, initial_message: str) -> AgentState:
         """
@@ -133,6 +148,51 @@ class AgentLoop:
                     self.logger.debug("turn_start", turn=state.current_turn)
 
                     try:
+                        # --- Pre-flight compaction check ---
+                        if self.compactor is not None and self.planner.prompt_builder._cached_system_prefix:
+                            self.compactor.system_prompt = self.planner.prompt_builder._cached_system_prefix
+                        if self.compactor is not None:
+                            current_tokens = (
+                                state.turns[-2].tokens_used
+                                if len(state.turns) >= 2
+                                else state.total_tokens
+                            )
+                            compaction_threshold_tokens = int(
+                                self.compactor.context_window
+                                * self.compactor.compaction_threshold
+                            )
+                            should_show_compaction_status = (
+                                current_tokens >= compaction_threshold_tokens
+                            )
+                            if should_show_compaction_status and self.emitter:
+                                self.emitter.emit(
+                                    {
+                                        "type": "status_update",
+                                        "label": "Compacting",
+                                        "status": "running",
+                                        "tui_abortable": False,
+                                    }
+                                )
+                            compact_result = await self.compactor.maybe_compact(
+                                state, current_tokens=current_tokens
+                            )
+                            if compact_result.compaction_triggered:
+                                self.logger.info(
+                                    "context_compacted",
+                                    turn=state.current_turn,
+                                    from_tokens=compact_result.original_tokens,
+                                    to_tokens=compact_result.compacted_token_estimate,
+                                )
+                                if should_show_compaction_status and self.emitter:
+                                    self.emitter.emit(
+                                        {
+                                            "type": "status_update",
+                                            "label": "Compacted",
+                                            "status": "done",
+                                            "tui_abortable": False,
+                                        }
+                                    )
+
                         # REASON → DECIDE
                         turn.status = TurnStatus.DECIDING
                         decide_start_ns = now_ns()
@@ -157,9 +217,14 @@ class AgentLoop:
                             )
                         decide_ms = elapsed_ms(decide_start_ns)
 
-                        # Accumulate token usage
+                        # Token accounting:
+                        # - total_tokens tracks spend (input + output)
+                        # - turn.tokens_used tracks current context size (input/prompt only)
                         state.total_tokens += usage.get("total_tokens", 0)
-                        turn.tokens_used = usage.get("total_tokens", 0)
+                        turn.tokens_used = usage.get(
+                            "prompt_tokens",
+                            usage.get("input_tokens", usage.get("total_tokens", 0)),
+                        )
 
                         # ACT
                         turn.status = TurnStatus.ACTING
@@ -402,6 +467,28 @@ class AgentLoop:
                                         break
                         except Exception:
                             pass  # never let recovery logic crash the loop
+
+                        # Reactive compaction: if the error is a context-length
+                        # overflow, compact and retry the turn instead of failing.
+                        if self.compactor is not None and _is_context_length_error(e):
+                            try:
+                                compact_result = await self.compactor.force_compact(
+                                    state,
+                                    current_tokens=self.compactor.context_window,
+                                )
+                                if compact_result.compaction_triggered:
+                                    self.logger.info(
+                                        "reactive_compaction",
+                                        turn=state.current_turn,
+                                        from_tokens=compact_result.original_tokens,
+                                    )
+                                    turn.status = TurnStatus.PENDING
+                                    turn.error = None
+                                    continue  # retry this turn
+                            except Exception as compact_err:
+                                self.logger.error(
+                                    "reactive_compaction_failed", error=str(compact_err)
+                                )
 
                         if not self.reflector.should_retry(state, turn):
                             state.status = AgentStatus.FAILED

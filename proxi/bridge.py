@@ -38,10 +38,14 @@ class StdioEmitter:
     def __init__(self) -> None:
         self._closed = False
         self._last_status: tuple[str, str] | None = None
-        self._max_emit_bytes = int(os.getenv("PROXI_BRIDGE_MAX_EMIT_BYTES", "0"))
-        self._queue_maxsize = max(100, int(os.getenv("PROXI_BRIDGE_OUTBOUND_MAX_QUEUE", "2000")))
-        self._queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=self._queue_maxsize)
-        self._worker = threading.Thread(target=self._drain_loop, name="proxi-bridge-emitter", daemon=True)
+        self._max_emit_bytes = int(
+            os.getenv("PROXI_BRIDGE_MAX_EMIT_BYTES", "0"))
+        self._queue_maxsize = max(
+            100, int(os.getenv("PROXI_BRIDGE_OUTBOUND_MAX_QUEUE", "2000")))
+        self._queue: queue.Queue[dict[str, Any]] = queue.Queue(
+            maxsize=self._queue_maxsize)
+        self._worker = threading.Thread(
+            target=self._drain_loop, name="proxi-bridge-emitter", daemon=True)
         self._worker.start()
 
     def _emit_perf_safe(self, event: str, **fields: Any) -> None:
@@ -103,15 +107,18 @@ class StdioEmitter:
                 self._closed = True
             return
         if msg.get("type") == "status_update":
-            status_key = (str(msg.get("label", "")), str(msg.get("status", "")))
+            status_key = (str(msg.get("label", "")),
+                          str(msg.get("status", "")))
             if self._last_status == status_key:
-                self._emit_perf_safe("perf_bridge_emit_dropped", reason="duplicate_status")
+                self._emit_perf_safe(
+                    "perf_bridge_emit_dropped", reason="duplicate_status")
                 return
             self._last_status = status_key
         try:
             self._queue.put_nowait(msg)
             depth = self._queue.qsize()
-            high_watermark = int(os.getenv("PROXI_BRIDGE_QUEUE_HIGH_WATERMARK", "1500"))
+            high_watermark = int(
+                os.getenv("PROXI_BRIDGE_QUEUE_HIGH_WATERMARK", "1500"))
             if depth >= high_watermark:
                 self._emit_perf_safe(
                     "perf_budget_exceeded",
@@ -171,7 +178,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
     logger.info("initializing_bridge", log_dir=str(
         log_manager.get_session_dir()))
     provider = os.environ.get("PROXI_PROVIDER", "openai").lower()
-    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "20"))
+    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "500"))
     mcp_server = os.environ.get("PROXI_MCP_SERVER")
     no_sub_agents = os.environ.get(
         "PROXI_NO_SUB_AGENTS", "").lower() in ("1", "true", "yes")
@@ -200,9 +207,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
     workspace_manager.ensure_global_system_prompt()
 
     # Queues for command messages, user_input (bootstrap), and form responses
-    command_queue: asyncio.Queue[tuple[float, dict[str, Any] | None]] = asyncio.Queue()
-    user_input_queue: asyncio.Queue[tuple[float, dict[str, Any] | None]] = asyncio.Queue()
-    form_response_queue: asyncio.Queue[tuple[float, dict[str, Any] | None]] = asyncio.Queue()
+    command_queue: asyncio.Queue[tuple[float,
+                                       dict[str, Any] | None]] = asyncio.Queue()
+    user_input_queue: asyncio.Queue[tuple[float,
+                                          dict[str, Any] | None]] = asyncio.Queue()
+    form_response_queue: asyncio.Queue[tuple[float,
+                                             dict[str, Any] | None]] = asyncio.Queue()
     main_loop = asyncio.get_running_loop()
 
     def stdin_reader() -> None:
@@ -224,9 +234,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
                         command_queue.put_nowait, (time.monotonic(), obj))
             except json.JSONDecodeError:
                 continue
-        main_loop.call_soon_threadsafe(command_queue.put_nowait, (time.monotonic(), None))
-        main_loop.call_soon_threadsafe(user_input_queue.put_nowait, (time.monotonic(), None))
-        main_loop.call_soon_threadsafe(form_response_queue.put_nowait, (time.monotonic(), None))
+        main_loop.call_soon_threadsafe(
+            command_queue.put_nowait, (time.monotonic(), None))
+        main_loop.call_soon_threadsafe(
+            user_input_queue.put_nowait, (time.monotonic(), None))
+        main_loop.call_soon_threadsafe(
+            form_response_queue.put_nowait, (time.monotonic(), None))
 
     async def run_reader() -> None:
         await asyncio.to_thread(stdin_reader)
@@ -282,7 +295,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
 
     mcp_adapters = []
     last_mcp_signature: str | None = None
-    
+
     # Auto-load configured MCP servers unless explicitly disabled
     no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
     if not no_mcp:
@@ -294,7 +307,7 @@ async def run_bridge(agent_id: str | None = None) -> None:
             logger.warning("mcp_auto_load_timeout")
         except Exception as e:
             logger.warning("mcp_auto_load_error", error=str(e))
-    
+
     # Also support explicit MCP server via environment variable
     if mcp_server:
         try:
@@ -312,7 +325,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
     if tool_registry.has_deferred_tools():
         from proxi.tools.call_tool_tool import CallToolTool
         tool_registry.register(CallToolTool(tool_registry))
-        logger.info("call_tool_registered", deferred_count=tool_registry.deferred_tool_count())
+        logger.info("call_tool_registered",
+                    deferred_count=tool_registry.deferred_tool_count())
 
     async def refresh_mcp_tools() -> None:
         """Reload MCP tools from currently enabled MCPs without restarting bridge."""
@@ -321,7 +335,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
         from proxi.cli.main import load_mcp_config
         from proxi.security.key_store import get_enabled_mcps
 
-        no_mcp_local = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
+        no_mcp_local = os.environ.get(
+            "PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
         if no_mcp_local:
             return
         signature_payload = {
@@ -330,7 +345,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
             "explicit_server": mcp_server,
         }
         signature = hashlib.sha256(
-            json.dumps(signature_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            json.dumps(signature_payload, sort_keys=True,
+                       separators=(",", ":")).encode("utf-8")
         ).hexdigest()
         if signature == last_mcp_signature:
             emit_perf("perf_mcp_refresh_skipped", reason="unchanged_config")
@@ -379,7 +395,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
         if tool_registry.has_deferred_tools():
             from proxi.tools.call_tool_tool import CallToolTool
             tool_registry.register(CallToolTool(tool_registry))
-            logger.info("call_tool_re_registered", deferred_count=tool_registry.deferred_tool_count())
+            logger.info("call_tool_re_registered",
+                        deferred_count=tool_registry.deferred_tool_count())
 
     async def request_user_input(
         method: str,
@@ -439,7 +456,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
                 break
 
             selected_index = next(
-                (idx for idx, option in enumerate(options[:-1]) if option == choice_str),
+                (idx for idx, option in enumerate(
+                    options[:-1]) if option == choice_str),
                 None,
             )
             if selected_index is None:
@@ -641,10 +659,12 @@ async def run_bridge(agent_id: str | None = None) -> None:
                         loop.planner = type(loop.planner)(llm_client)
                     except ValueError:
                         pass
-                turns = cmd.get("maxTurns") or cmd.get("max_turns") or max_turns
+                turns = cmd.get("maxTurns") or cmd.get(
+                    "max_turns") or max_turns
                 loop.max_turns = turns
 
-                state_before_run = state.model_copy(deep=True) if state is not None else None
+                state_before_run = state.model_copy(
+                    deep=True) if state is not None else None
 
                 async def run_agent() -> AgentState:
                     if state is None:
@@ -670,7 +690,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
                     except Exception as e:
                         logger.exception("bridge_run_error")
                         emitter.emit(
-                            {"type": "text_stream", "content": f"[Error: {e!s}]"}
+                            {"type": "text_stream",
+                                "content": f"[Error: {e!s}]"}
                         )
                     emitter.emit(
                         {"type": "status_update", "label": "Done", "status": "done"}
@@ -693,7 +714,8 @@ async def run_bridge(agent_id: str | None = None) -> None:
                         }
                     )
                     if cmd is not None and cmd.get("type") != "abort":
-                        main_loop.call_soon_threadsafe(command_queue.put_nowait, (time.monotonic(), cmd))
+                        main_loop.call_soon_threadsafe(
+                            command_queue.put_nowait, (time.monotonic(), cmd))
     except asyncio.CancelledError:
         pass
     finally:

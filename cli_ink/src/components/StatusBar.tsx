@@ -17,6 +17,8 @@ type Props = {
   sessionId?: string;
   isWaitingForInput?: boolean;
   isBtw?: boolean;
+  isCompacting?: boolean;
+  autoCompactPercent?: number | null;
 };
 
 export function StatusBar({
@@ -29,6 +31,8 @@ export function StatusBar({
   sessionId,
   isWaitingForInput,
   isBtw,
+  isCompacting,
+  autoCompactPercent,
 }: Props) {
   const showTool = statusKind === "tool" && statusLabel;
   const showSubagent = statusKind === "subagent" && statusLabel;
@@ -37,7 +41,10 @@ export function StatusBar({
   // Status word per spec: ready (mint), thinking (purpleDim), acting (peach), waiting for input (purple)
   let statusWord: string;
   let statusColor: string;
-  if (isWaitingForInput) {
+  if (isCompacting) {
+    statusWord = "compacting";
+    statusColor = theme.peach;
+  } else if (isWaitingForInput) {
     statusWord = "waiting for input";
     statusColor = theme.purple;
   } else if (showTool || showSubagent || showProgress) {
@@ -89,6 +96,12 @@ export function StatusBar({
             <Text color="red" bold>
               Esc abort
             </Text>
+            <Text color={theme.purpleDim}> · </Text>
+          </>
+        )}
+        {autoCompactPercent !== null && autoCompactPercent !== undefined && (
+          <>
+            <Text color={theme.mist}>{autoCompactPercent}% context remaining</Text>
             <Text color={theme.purpleDim}> · </Text>
           </>
         )}

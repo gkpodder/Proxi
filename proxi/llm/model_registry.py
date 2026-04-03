@@ -46,7 +46,11 @@ DEFAULT_MODELS: dict[str, str] = {
 }
 
 # Reserve 15% of the context window for output tokens.
-_BUDGET_FRACTION = 0.85
+#
+# Keep compaction trigger lower than this value so compaction happens before
+# we approach the hard input budget.
+INPUT_BUDGET_FRACTION = 0.90
+DEFAULT_COMPACTION_THRESHOLD = 0.85
 
 
 def get_context_window(model: str) -> int:
@@ -65,7 +69,7 @@ def get_context_window(model: str) -> int:
 
 def token_budget_for_model(model: str) -> int:
     """Return the recommended input token budget (85% of context window)."""
-    return int(get_context_window(model) * _BUDGET_FRACTION)
+    return int(get_context_window(model) * INPUT_BUDGET_FRACTION)
 
 
 def _provider_for_model(model: str) -> str:
@@ -86,7 +90,8 @@ def get_supported_models_by_provider() -> dict[str, list[str]]:
 
 def get_model_limits_by_provider() -> dict[str, list[dict[str, int | str]]]:
     """Return model metadata grouped by provider with context and budget limits."""
-    grouped: dict[str, list[dict[str, int | str]]] = {"openai": [], "anthropic": []}
+    grouped: dict[str, list[dict[str, int | str]]] = {
+        "openai": [], "anthropic": []}
     for model in sorted(_CONTEXT_WINDOWS.keys()):
         grouped[_provider_for_model(model)].append(
             {

@@ -251,6 +251,30 @@ class AgentLane:
             except asyncio.CancelledError:
                 logger.info("lane_dispatch_aborted", session=self.session_id)
             except BudgetExceeded as exc:
+                # Attempt compaction before hard-stopping, then re-enqueue the event.
+                if (
+                    self._loop is not None
+                    and self._loop.compactor is not None
+                    and self._state is not None
+                ):
+                    try:
+                        compact_result = await self._loop.compactor.force_compact(
+                            self._state,
+                            current_tokens=self.budget.tokens_used,
+                        )
+                        if compact_result.compaction_triggered:
+                            self.budget.tokens_used = 0
+                            self._seq += 1
+                            await self.queue.put((0, self._seq, event))
+                            logger.info(
+                                "lane_budget_compacted_requeued",
+                                session=self.session_id,
+                                from_tokens=compact_result.original_tokens,
+                            )
+                            continue  # back to drain loop; event will be retried
+                    except Exception:
+                        pass  # fall through to hard-stop
+
                 logger.warning(
                     "lane_budget_exceeded",
                     session=self.session_id,
@@ -317,7 +341,93 @@ class AgentLane:
         if self._state is not None and self._state.workspace is None:
             self._state.workspace = self.workspace_config
 
-        text = event.payload.get("text", "")
+        text = event.payload.get("text", "").strip()
+
+        # Handle /compact [focus] as a lane-level command — never sent to the loop.
+        if text.lower().startswith("/compact"):
+            focus = text[len("/compact"):].strip() or None
+            if self._sse_channel is not None:
+                try:
+                    await self._sse_channel.send_event({
+                        "type": "status_update",
+                        "label": "Compacting",
+                        "status": "running",
+                        # Compaction is lane-level maintenance; do not show Esc-abort affordance.
+                        "tui_abortable": False,
+                    })
+                except Exception:
+                    pass
+            try:
+                if self._loop is not None and self._loop.compactor is not None and self._state is not None:
+                    result = await self._loop.compactor.force_compact(
+                        self._state,
+                        current_tokens=self.budget.tokens_used,
+                        focus=focus,
+                    )
+                    if result.compaction_triggered:
+                        self.budget.tokens_used = 0  # reset; real count updates after next API call
+                    focus_note = f' Focus: "{focus}"' if focus else ""
+                    if self._sse_channel is not None:
+                        try:
+                            if result.compaction_triggered:
+                                content = (
+                                    f"Context compacted.{focus_note} "
+                                    f"~{result.original_tokens} → ~{result.compacted_token_estimate} tokens."
+                                )
+                            else:
+                                history_len = len(self._state.history) if self._state else 0
+                                content = (
+                                    f"Nothing to compact — history is too short ({history_len} messages). "
+                                    "Have a longer conversation and try again."
+                                )
+                            await self._sse_channel.send_event({
+                                "type": "text_stream",
+                                "content": content,
+                            })
+                            await self._sse_channel.send_event({
+                                "type": "status_update",
+                                "label": "Compacted",
+                                "status": "done",
+                                "tui_abortable": False,
+                            })
+                        except Exception:
+                            pass
+                elif self._sse_channel is not None:
+                    try:
+                        await self._sse_channel.send_event({
+                            "type": "text_stream",
+                            "content": "Compaction unavailable for this session.",
+                        })
+                        await self._sse_channel.send_event({
+                            "type": "status_update",
+                            "label": "Compacted",
+                            "status": "done",
+                            "tui_abortable": False,
+                        })
+                    except Exception:
+                        pass
+            except Exception as exc:
+                logger.exception(
+                    "lane_compaction_failed",
+                    session=self.session_id,
+                    event_id=event.event_id,
+                    error=str(exc),
+                )
+                if self._sse_channel is not None:
+                    try:
+                        await self._sse_channel.send_event({
+                            "type": "text_stream",
+                            "content": "Compaction failed. I left your session history unchanged.",
+                        })
+                        await self._sse_channel.send_event({
+                            "type": "status_update",
+                            "label": "Compaction failed",
+                            "status": "done",
+                            "tui_abortable": False,
+                        })
+                    except Exception:
+                        pass
+            return None
 
         if (
             self._sse_channel is not None

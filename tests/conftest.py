@@ -5,6 +5,10 @@ from pathlib import Path
 import pytest
 
 
+# Use asyncio mode for async tests (requires pytest-asyncio)
+pytest_plugins = ("pytest_asyncio",)
+
+
 @pytest.fixture
 def tmp_proxi_root(tmp_path: Path) -> Path:
     """Temporary directory for proxi workspace (replaces ~/.proxi)."""
