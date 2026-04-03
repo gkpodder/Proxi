@@ -5,6 +5,7 @@ import json
 import os
 from typing import Any
 
+from proxi import __version__
 from proxi.observability.logging import get_logger
 from proxi.observability.perf import elapsed_ms, emit_perf, now_ns
 
@@ -273,7 +274,7 @@ class MCPClient:
                 "capabilities": {},
                 "clientInfo": {
                     "name": "proxi",
-                    "version": "0.1.0",
+                    "version": __version__,
                 },
             },
             timeout=init_timeout,
