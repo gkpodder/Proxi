@@ -23,7 +23,7 @@ const COMMANDS: Omit<CommandDef, "handler">[] = [
   { id: "work-dir", name: "/work-dir", description: "View or change working directory" },
   { id: "compact", name: "/compact", description: "Summarize context to save tokens (optional: add focus hint)" },
   { id: "clear", name: "/clear", description: "Clear UI + disk history (fresh session)" },
-  { id: "plan", name: "/plan", description: "View current plan" },
+  { id: "plan", name: "/plan", description: "Start an interactive planning session" },
   { id: "todos", name: "/todos", description: "View open todos" },
   { id: "usage", name: "/usage", description: "Show context and turn usage" },
   { id: "help", name: "/help", description: "Show all commands" },

@@ -23,7 +23,7 @@ def _build_tool_schema() -> dict:
             "questions": {
                 "type": "array",
                 "minItems": 1,
-                "maxItems": 10,
+                "maxItems": 6,
                 "items": {
                     "type": "object",
                     "required": ["id", "type", "question"],

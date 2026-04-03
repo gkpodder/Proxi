@@ -17,6 +17,7 @@ class LLMClient(Protocol):
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
         session_id: str | None = None,
+        reasoning_effort: str = "minimal",
     ) -> ModelResponse:
         """
         Generate a response from the model.

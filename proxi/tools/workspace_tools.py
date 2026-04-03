@@ -33,7 +33,10 @@ class ManagePlanTool(BaseTool):
         self._workspace = workspace
 
     async def execute(self, arguments: dict[str, Any]) -> ToolResult:
-        path = Path(self._workspace.plan_path)
+        # Use active_plan_path (plans/in-progress.md) when plan mode is active,
+        # falling back to the session-level plan.md.
+        plan_file = self._workspace.active_plan_path or self._workspace.plan_path
+        path = Path(plan_file)
         content = arguments.get("content")
 
         try:

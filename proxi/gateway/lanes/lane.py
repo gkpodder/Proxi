@@ -65,7 +65,8 @@ class AgentLane:
     # Active SSE channel for this lane (set by stream endpoint)
     _sse_channel: Any = field(default=None, repr=False)
     _form_bridge: Any = field(default=None, repr=False)
-    _running_task: asyncio.Task[str | None] | None = field(default=None, repr=False)
+    _running_task: asyncio.Task[str | None] | None = field(
+        default=None, repr=False)
     _dispatch_tui_abortable: bool = field(default=False, repr=False)
 
     async def start(self) -> None:
@@ -128,7 +129,8 @@ class AgentLane:
         elif self._loop is not None and self._loop.form_bridge is not None:
             bridge = self._loop.form_bridge
             if hasattr(bridge, "inject_answer"):
-                await bridge.inject_answer(form_answer)  # type: ignore[attr-defined]
+                # type: ignore[attr-defined]
+                await bridge.inject_answer(form_answer)
 
     def attach_sse(self, channel: Any, form_bridge: Any = None) -> None:
         """Attach an SSE channel (and optional form bridge) to this lane."""
@@ -242,12 +244,14 @@ class AgentLane:
         while True:
             _, _, event = await self.queue.get()
             try:
-                self._running_task = asyncio.ensure_future(self._dispatch(event))
+                self._running_task = asyncio.ensure_future(
+                    self._dispatch(event))
                 response = await self._running_task
                 if event.reply_channel and response:
                     await event.reply_channel.send(response)
                 elif event.reply_channel and not response:
-                    logger.warning("lane_reply_skipped_no_response", session=self.session_id, source=event.source_type)
+                    logger.warning("lane_reply_skipped_no_response",
+                                   session=self.session_id, source=event.source_type)
             except asyncio.CancelledError:
                 logger.info("lane_dispatch_aborted", session=self.session_id)
             except BudgetExceeded as exc:
@@ -375,7 +379,8 @@ class AgentLane:
                                     f"~{result.original_tokens} → ~{result.compacted_token_estimate} tokens."
                                 )
                             else:
-                                history_len = len(self._state.history) if self._state else 0
+                                history_len = len(
+                                    self._state.history) if self._state else 0
                                 content = (
                                     f"Nothing to compact — history is too short ({history_len} messages). "
                                     "Have a longer conversation and try again."
@@ -429,6 +434,82 @@ class AgentLane:
                         pass
             return None
 
+        # Handle /plan [goal] and /plan refine [feedback] as lane-level plan-mode commands.
+        # Unlike /compact, these ARE forwarded to the loop (plan mode drives agent behaviour).
+        if text.lower().startswith("/plan"):
+            rest = text[len("/plan"):].strip()
+
+            if rest.lower().startswith("refine"):
+                # /plan refine {feedback} — keep plan_mode active, pass feedback to loop
+                feedback = rest[len("refine"):].strip()
+                if self._state is not None:
+                    self._state.plan_mode = True
+                    self._state.reasoning_effort = "medium"
+                # Ensure active_plan_path stays set during refine cycles
+                _active_plan = str(
+                    Path(self.workspace_config.workspace_root)
+                    / "agents" / self.workspace_config.agent_id / "plans" / "in-progress.md"
+                )
+                self.workspace_config.active_plan_path = _active_plan
+                if self._state is not None and self._state.workspace is not None:
+                    self._state.workspace.active_plan_path = _active_plan
+                plan_instruction = (
+                    "PLAN MODE — REFINE. The user has reviewed the plan and wants changes.\n"
+                    f"User feedback: {feedback}\n\n"
+                    "Update plan.md via manage_plan to reflect the feedback, then respond with a brief summary."
+                )
+                text = plan_instruction
+
+            else:
+                # /plan {goal} — enter plan mode
+                goal = rest
+                # Point manage_plan at plans/in-progress.md so the plan lives in plans/ from the start
+                _active_plan = str(
+                    Path(self.workspace_config.workspace_root)
+                    / "agents" / self.workspace_config.agent_id / "plans" / "in-progress.md"
+                )
+                self.workspace_config.active_plan_path = _active_plan
+                if self._state is not None:
+                    self._state.plan_mode = True
+                    self._state.reasoning_effort = "medium"
+                    if self._state.workspace is not None:
+                        self._state.workspace.active_plan_path = _active_plan
+                plan_instruction = (
+                    "PLAN MODE ACTIVE. You are now in an interactive planning session.\n\n"
+                    "Your job:\n"
+                    "1. Use ask_user_question to interview the user and deeply understand their goal, "
+                    "requirements, and constraints. Ask at most 6 focused, non-redundant questions per "
+                    "call — prioritise the most critical unknowns first. If you still need more context "
+                    "after the user responds, make a follow-up call with the remaining questions.\n"
+                    "2. Use only read-only tools (read_file, glob, grep, manage_plan for reading) "
+                    "to explore the codebase and gather context.\n"
+                    "3. Once you have a thorough understanding, write a comprehensive, structured plan "
+                    "to plan.md using manage_plan(content=...).\n"
+                    "4. Respond with a brief summary when you are done writing the plan.\n\n"
+                    "MARKDOWN FORMATTING — the plan is a .md file rendered with full markdown support. "
+                    "You MUST use markdown syntax throughout:\n"
+                    "- Use # / ## / ### headings to structure sections.\n"
+                    "- Use ``` fenced code blocks (with a language tag, e.g. ```python, ```shell, ```typescript) "
+                    "for ALL code snippets, shell commands, file content, diffs, and pseudo-code.\n"
+                    "- Use `backtick` inline spans for file paths, function names, variable names, "
+                    "flags, and any other technical tokens mentioned in prose.\n"
+                    "- Use - bullet lists and 1. numbered lists for steps and sub-tasks.\n"
+                    "- Use - [ ] / - [x] checkboxes for actionable implementation steps.\n\n"
+                    "IMPORTANT: Write operations on any files other than manage_plan are blocked in plan mode.\n\n"
+                    f"User goal: {goal}"
+                )
+                text = plan_instruction
+                if self._sse_channel is not None:
+                    try:
+                        await self._sse_channel.send_event({
+                            "type": "status_update",
+                            "label": "Planning",
+                            "status": "running",
+                            "tui_abortable": True,
+                        })
+                    except Exception:
+                        pass
+
         if (
             self._sse_channel is not None
             and _should_emit_inbound_turn_header(event)
@@ -445,14 +526,53 @@ class AgentLane:
             except Exception:
                 pass
 
+        # Determine whether this turn enters plan mode so we can forward the right
+        # reasoning effort even for fresh sessions where self._state is None.
+        _entering_plan_mode = text.startswith("PLAN MODE")
+        _plan_effort = "medium" if _entering_plan_mode else (
+            self._state.reasoning_effort if self._state is not None else "minimal"
+        )
+
         if self._state is not None and self._state.history:
             result_state = await self._loop.run_continue(self._state, text)
         else:
-            result_state = await self._loop.run(text)
+            # Fresh session — pass reasoning_effort directly so the new AgentState
+            # is created with the correct value instead of the "minimal" default.
+            result_state = await self._loop.run(text, reasoning_effort=_plan_effort)
+
+        # For existing-session run_continue(), reasoning_effort was already set on
+        # self._state before the call.  Retroactively apply plan_mode flag so that
+        # plan_ready emission and subsequent refine turns see the correct state.
+        if _entering_plan_mode:
+            result_state.plan_mode = True
+
+        # Reset reasoning effort to "minimal" once the loop finishes a non-plan-mode turn.
+        # This ensures "medium" effort only covers the plan-writing and plan-execution runs,
+        # not all subsequent user messages in the session.
+        if not result_state.plan_mode:
+            result_state.reasoning_effort = "minimal"
 
         self._state = result_state
         last_turn_tokens = result_state.turns[-1].tokens_used if result_state.turns else 0
         self.budget.record_turn(context_tokens=last_turn_tokens)
+
+        # If in plan mode and plan file has content, emit plan_ready before Done.
+        if result_state.plan_mode and result_state.workspace and self._sse_channel is not None:
+            try:
+                _ppath = result_state.workspace.active_plan_path or result_state.workspace.plan_path
+                plan_path = Path(_ppath)
+                if plan_path.exists() and plan_path.stat().st_size > 0:
+                    plan_content = plan_path.read_text(encoding="utf-8")
+                    await self._sse_channel.send_event({
+                        "type": "plan_ready",
+                        "content": plan_content,
+                        # Session plan.md path (typically sessions/<session_id>/plan.md)
+                        "plan_path": result_state.workspace.plan_path,
+                        # When plan mode is active, the agent may be writing to an in-progress file.
+                        "active_plan_path": result_state.workspace.active_plan_path,
+                    })
+            except Exception:
+                pass
 
         # Signal completion on the SSE channel
         if self._sse_channel is not None:

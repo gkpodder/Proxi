@@ -18,6 +18,7 @@ type Props = {
   isWaitingForInput?: boolean;
   isBtw?: boolean;
   isCompacting?: boolean;
+  isPlanMode?: boolean;
   autoCompactPercent?: number | null;
 };
 
@@ -32,6 +33,7 @@ export function StatusBar({
   isWaitingForInput,
   isBtw,
   isCompacting,
+  isPlanMode,
   autoCompactPercent,
 }: Props) {
   const showTool = statusKind === "tool" && statusLabel;
@@ -41,7 +43,10 @@ export function StatusBar({
   // Status word per spec: ready (mint), thinking (purpleDim), acting (peach), waiting for input (purple)
   let statusWord: string;
   let statusColor: string;
-  if (isCompacting) {
+  if (isPlanMode) {
+    statusWord = "planning";
+    statusColor = theme.lavender;
+  } else if (isCompacting) {
     statusWord = "compacting";
     statusColor = theme.peach;
   } else if (isWaitingForInput) {
@@ -68,6 +73,12 @@ export function StatusBar({
         <>
           <Text color={theme.purpleDim}>  ·  </Text>
           <Text color={theme.peach} bold>btw</Text>
+        </>
+      )}
+      {isPlanMode && (
+        <>
+          <Text color={theme.purpleDim}>  ·  </Text>
+          <Text color={theme.lavender} bold>◆ plan</Text>
         </>
       )}
       <Text color={theme.purpleDim}>  ·  </Text>

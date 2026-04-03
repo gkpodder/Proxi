@@ -267,10 +267,26 @@ export function AnswerForm({ payload, onSubmit }: Props) {
 
     // TextInput already handles Enter via its own onSubmit callback.
     // Only call advanceOrSubmit here for question types that don't use
-    // a TextInput (i.e. choice/multiselect without "Other" active).
+    // a TextInput (i.e. choice without "Other" active).
+    // Multiselect: Enter must toggle like Space — a prior generic return handler
+    // used to call advanceOrSubmit first, so Enter always skipped the list.
     if (key.return && !key.shift) {
       if (currentQ.type === "text") return;
       if (isOtherSelected) return;
+      if (currentQ.type === "multiselect" && optionsWithOther.length > 0) {
+        const idx = selectIndexRef.current;
+        if (optionsWithOther[idx] === OTHER_OPTION) {
+          setIsOtherSelected(true);
+          return;
+        }
+        setMultiselectSet((s) => {
+          const next = new Set(s);
+          if (next.has(idx)) next.delete(idx);
+          else next.add(idx);
+          return next;
+        });
+        return;
+      }
       advanceOrSubmit();
       return;
     }
@@ -299,10 +315,6 @@ export function AnswerForm({ payload, onSubmit }: Props) {
           else next.add(idx);
           return next;
         });
-        return;
-      }
-      if (key.return) {
-        advanceOrSubmit();
         return;
       }
       return;
@@ -439,8 +451,9 @@ export function AnswerForm({ payload, onSubmit }: Props) {
 
       <Box marginTop={1}>
         <Text color={theme.mist}>
-          Enter confirm · Tab next · Shift+Tab prev
-          {currentQ.type === "multiselect" && " · Space toggle"}
+          {currentQ.type === "multiselect"
+            ? "Enter/Space toggle · Tab next · Shift+Tab prev"
+            : "Enter confirm · Tab next · Shift+Tab prev"}
           {currentQ.type === "text" && " · Shift+Enter newline"}
           {allow_skip && " · Esc cancel"}
         </Text>

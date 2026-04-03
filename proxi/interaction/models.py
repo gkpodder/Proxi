@@ -80,7 +80,7 @@ class FormRequest(BaseModel):
         default=None,
         description="Optional form title shown in the TUI header."
     )
-    questions: list[Question] = Field(min_length=1, max_length=10)
+    questions: list[Question] = Field(min_length=1, max_length=6)
     allow_skip: bool = Field(
         default=False,
         description=(
