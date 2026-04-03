@@ -64,7 +64,7 @@ export const UserInputRequiredBootstrapSchema = z.object({
   options: z.array(z.string()).optional(),
   prompt: z.string().optional(),
   /** Local TUI layout hint (not used by gateway payloads). */
-  ui: z.enum(["compact", "plan"]).optional(),
+  ui: z.enum(["compact", "plan", "reasoning-effort"]).optional(),
 });
 export type UserInputRequiredBootstrap = z.infer<typeof UserInputRequiredBootstrapSchema>;
 

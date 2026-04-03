@@ -72,6 +72,9 @@ export default function App() {
   const planGoalInputRef = useRef(false);
   const [isPlanActive, setIsPlanActive] = useState(false);
 
+  const reasoningEffortModeRef = useRef(false);
+  const [tuiReasoningEffort, setTuiReasoningEffort] = useState<string>("minimal");
+
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
 
@@ -714,6 +717,16 @@ export default function App() {
     void sendToGateway({ message: msg });
   }, [sendToGateway]);
 
+  const handleReasoningEffortSubmit = useCallback((value: string | boolean | number) => {
+    reasoningEffortModeRef.current = false;
+    setHitlSpec(null);
+    const level = String(value).trim().toLowerCase() || "minimal";
+    const valid = ["minimal", "medium", "high"];
+    const resolved = valid.includes(level) ? level : "minimal";
+    setTuiReasoningEffort(resolved);
+    void sendToGateway({ message: `/reasoning-effort ${resolved}` });
+  }, [sendToGateway]);
+
   const handleWorkDirSubmit = useCallback(async (value: string | boolean | number) => {
     workDirModeRef.current = false;
     setHitlSpec(null);
@@ -1118,11 +1131,15 @@ export default function App() {
         handlePlanGoalSubmit(value);
         return;
       }
+      if (reasoningEffortModeRef.current) {
+        handleReasoningEffortSubmit(value);
+        return;
+      }
       setUserSendPending(true);
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit, handlePlanGoalSubmit]
+    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit, handlePlanGoalSubmit, handleReasoningEffortSubmit]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -1171,6 +1188,11 @@ export default function App() {
       planGoalInputRef.current = false;
       setHitlSpec(null);
       setIsPlanActive(false);
+      return;
+    }
+    if (reasoningEffortModeRef.current) {
+      reasoningEffortModeRef.current = false;
+      setHitlSpec(null);
       return;
     }
     sendToGateway({ message: "", form_answer: { value: false } });
@@ -1341,6 +1363,16 @@ export default function App() {
             ui: "plan",
           });
           break;
+        case "reasoning-effort":
+          reasoningEffortModeRef.current = true;
+          setHitlSpec({
+            type: "user_input_required" as const,
+            method: "select" as const,
+            prompt: "Reasoning effort",
+            options: ["minimal", "medium", "high"],
+            ui: "reasoning-effort",
+          });
+          break;
         case "todos":
           setPlanTodosOverlay("todos");
           break;
@@ -1429,6 +1461,7 @@ export default function App() {
           isBtw={btwMode}
           isCompacting={isCompacting}
           isPlanMode={isPlanActive}
+          reasoningEffort={tuiReasoningEffort}
           autoCompactPercent={autoCompactPercent}
         />
         {hitlSpec ? (

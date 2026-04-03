@@ -3,7 +3,7 @@
  * Filters commands in real-time. ↑/↓ to navigate, Enter to execute, Esc to dismiss.
  */
 import React, { useState, useMemo, useCallback } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text, useInput, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { theme } from "../theme.js";
 
@@ -24,6 +24,7 @@ const COMMANDS: Omit<CommandDef, "handler">[] = [
   { id: "compact", name: "/compact", description: "Summarize context to save tokens (optional: add focus hint)" },
   { id: "clear", name: "/clear", description: "Clear UI + disk history (fresh session)" },
   { id: "plan", name: "/plan", description: "Start an interactive planning session" },
+  { id: "reasoning-effort", name: "/reasoning-effort", description: "Set TUI reasoning depth (minimal · medium · high)" },
   { id: "todos", name: "/todos", description: "View open todos" },
   { id: "usage", name: "/usage", description: "Show context and turn usage" },
   { id: "help", name: "/help", description: "Show all commands" },
@@ -38,6 +39,7 @@ type Props = {
 export function CommandPalette({ onDismiss, onCommand }: Props) {
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState(0);
+  const { stdout } = useStdout();
 
   const filtered = useMemo(() => {
     const q = filter.toLowerCase().trim();
@@ -73,6 +75,24 @@ export function CommandPalette({ onDismiss, onCommand }: Props) {
       return;
     }
   });
+
+  const termWidth = stdout?.columns ?? 80;
+  const prefixWidth = 3; // "›  " or "   "
+  const nameWidth = 18; // enough for "/reasoning-effort" without wrapping
+  const descMinWidth = 16;
+  const descWidth = Math.max(descMinWidth, termWidth - (2 + prefixWidth + nameWidth)); // +2 for container paddingX
+
+  const truncate = (s: string, w: number) => {
+    if (w <= 0) return "";
+    if (s.length <= w) return s;
+    if (w === 1) return "…";
+    return s.slice(0, Math.max(0, w - 1)) + "…";
+  };
+
+  const formatNameCol = (name: string) => {
+    if (name.length >= nameWidth) return truncate(name, nameWidth);
+    return name.padEnd(nameWidth);
+  };
 
   return (
     <Box
@@ -115,13 +135,13 @@ export function CommandPalette({ onDismiss, onCommand }: Props) {
                 color={theme.white}
                 backgroundColor={i === selectedIdx ? theme.purpleFaint : undefined}
               >
-                {cmd.name.padEnd(12)}
+                {formatNameCol(cmd.name)}
               </Text>
               <Text
                 color={theme.mist}
                 backgroundColor={i === selectedIdx ? theme.purpleFaint : undefined}
               >
-                {cmd.description}
+                {truncate(cmd.description, descWidth)}
               </Text>
             </Box>
           ))

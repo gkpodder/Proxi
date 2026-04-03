@@ -19,6 +19,7 @@ type Props = {
   isBtw?: boolean;
   isCompacting?: boolean;
   isPlanMode?: boolean;
+  reasoningEffort?: string;
   autoCompactPercent?: number | null;
 };
 
@@ -34,6 +35,7 @@ export function StatusBar({
   isBtw,
   isCompacting,
   isPlanMode,
+  reasoningEffort,
   autoCompactPercent,
 }: Props) {
   const showTool = statusKind === "tool" && statusLabel;
@@ -79,6 +81,12 @@ export function StatusBar({
         <>
           <Text color={theme.purpleDim}>  ·  </Text>
           <Text color={theme.lavender} bold>◆ plan</Text>
+        </>
+      )}
+      {reasoningEffort && reasoningEffort !== "minimal" && (
+        <>
+          <Text color={theme.purpleDim}>  ·  </Text>
+          <Text color={theme.peach} bold>◆ {reasoningEffort}</Text>
         </>
       )}
       <Text color={theme.purpleDim}>  ·  </Text>

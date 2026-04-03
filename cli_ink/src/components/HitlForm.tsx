@@ -92,6 +92,51 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
   }
 
   if (spec.method === "select" && options.length > 0) {
+    if (spec.ui === "reasoning-effort") {
+      return (
+        <Box
+          paddingX={1}
+          paddingY={0}
+          flexDirection="column"
+          flexShrink={0}
+          gap={0}
+          borderStyle="round"
+          borderColor={theme.purpleDim}
+        >
+          <Box marginBottom={1}>
+            <Text color={theme.peach} bold>
+              ◆ Reasoning effort
+            </Text>
+            <Text color={theme.purpleDim}>  ·  </Text>
+            <Text color={theme.mist}>TUI-only</Text>
+          </Box>
+
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color={theme.mist}>Choose how much reasoning the agent should use in this session.</Text>
+            <Text color={theme.mist}>This does not affect cron, Discord, or other sources.</Text>
+          </Box>
+
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color={theme.lavender}>Level</Text>
+            {options.map((opt, i) => (
+              <Box key={opt}>
+                <Text
+                  color={i === selectIndex ? theme.purple : theme.white}
+                  backgroundColor={i === selectIndex ? theme.purpleFaint : undefined}
+                >
+                  {i === selectIndex ? "› " : "  "}
+                  {opt}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+
+          <Text color={theme.mist} dimColor>
+            Enter — apply · ↑↓ select · Esc — cancel
+          </Text>
+        </Box>
+      );
+    }
     return (
       <Box
         paddingX={1}
@@ -121,6 +166,54 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
   }
 
   if (spec.method === "text") {
+    if (spec.ui === "reasoning-effort") {
+      return (
+        <Box
+          paddingX={1}
+          paddingY={0}
+          flexDirection="column"
+          flexShrink={0}
+          borderStyle="round"
+          borderColor={theme.purpleDim}
+          gap={0}
+        >
+          <Box marginBottom={1}>
+            <Text color={theme.peach} bold>
+              ◆ Reasoning effort
+            </Text>
+          </Box>
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color={theme.mist}>
+              Set the reasoning depth for your TUI prompts this session.
+            </Text>
+            <Text color={theme.mist}>
+              Cron, Discord, and other sources are unaffected.
+            </Text>
+          </Box>
+          <Box marginBottom={0}>
+            <Text color={theme.lavender}>Level</Text>
+          </Box>
+          <Box marginBottom={1}>
+            <Text color={theme.purple} bold>
+              {"› "}
+            </Text>
+            <TextInput
+              key="reasoning-effort-hitl"
+              value={textValue}
+              onChange={setTextValue}
+              onSubmit={() => handleSubmit()}
+              placeholder="minimal · medium · high"
+              showCursor
+            />
+          </Box>
+          <Box flexDirection="row" justifyContent="space-between">
+            <Text color={theme.mist} dimColor>
+              Enter — apply · Esc — cancel
+            </Text>
+          </Box>
+        </Box>
+      );
+    }
     if (spec.ui === "compact") {
       return (
         <Box

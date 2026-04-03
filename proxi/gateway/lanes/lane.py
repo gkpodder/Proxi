@@ -69,6 +69,11 @@ class AgentLane:
         default=None, repr=False)
     _dispatch_tui_abortable: bool = field(default=False, repr=False)
 
+    # Reasoning effort override set via /reasoning-effort command from the TUI.
+    # Applied only to events from the TUI source; cron/discord/webhook events
+    # always use "minimal" regardless of this setting.
+    tui_reasoning_effort: str = field(default="minimal", repr=False)
+
     async def start(self) -> None:
         self._state = AgentState.load(self.history_path)
         self._task = asyncio.create_task(
@@ -434,6 +439,26 @@ class AgentLane:
                         pass
             return None
 
+        # Handle /reasoning-effort <level> as a lane-level command — never sent to the loop.
+        # Only affects events that originate from the TUI; all other sources always use "minimal".
+        if text.lower().startswith("/reasoning-effort"):
+            level = text[len("/reasoning-effort"):].strip().lower()
+            if level == "reset":
+                level = "minimal"
+            _valid_levels = {"minimal", "medium", "high"}
+            if level in _valid_levels:
+                self.tui_reasoning_effort = level
+                _re_label = (
+                    f"Reasoning effort → {level}"
+                    if level != "minimal"
+                    else "Reasoning effort → minimal (default)"
+                )
+            else:
+                _re_label = f"Unknown level '{level}' — use: minimal · medium · high"
+            # Intentionally don't emit a TUI text_stream line for this lane-level setting.
+            # The TUI already shows the active effort level in the status bar.
+            return None
+
         # Handle /plan [goal] and /plan refine [feedback] as lane-level plan-mode commands.
         # Unlike /compact, these ARE forwarded to the loop (plan mode drives agent behaviour).
         if text.lower().startswith("/plan"):
@@ -526,19 +551,26 @@ class AgentLane:
             except Exception:
                 pass
 
-        # Determine whether this turn enters plan mode so we can forward the right
-        # reasoning effort even for fresh sessions where self._state is None.
+        # Compute effective reasoning effort for this dispatch:
+        #   1. Plan mode (active or entering) always uses "medium".
+        #   2. TUI-sourced events use the user-configured tui_reasoning_effort.
+        #   3. All other sources (cron, discord, webhook, …) always use "minimal".
         _entering_plan_mode = text.startswith("PLAN MODE")
-        _plan_effort = "medium" if _entering_plan_mode else (
-            self._state.reasoning_effort if self._state is not None else "minimal"
-        )
+        _already_plan_mode = self._state is not None and self._state.plan_mode
+        if _entering_plan_mode or _already_plan_mode:
+            _effective_effort = "medium"
+        elif event.source_id == "tui":
+            _effective_effort = self.tui_reasoning_effort
+        else:
+            _effective_effort = "minimal"
 
         if self._state is not None and self._state.history:
+            self._state.reasoning_effort = _effective_effort
             result_state = await self._loop.run_continue(self._state, text)
         else:
             # Fresh session — pass reasoning_effort directly so the new AgentState
             # is created with the correct value instead of the "minimal" default.
-            result_state = await self._loop.run(text, reasoning_effort=_plan_effort)
+            result_state = await self._loop.run(text, reasoning_effort=_effective_effort)
 
         # For existing-session run_continue(), reasoning_effort was already set on
         # self._state before the call.  Retroactively apply plan_mode flag so that
