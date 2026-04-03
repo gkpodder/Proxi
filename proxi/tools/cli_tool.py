@@ -2,29 +2,47 @@
 
 Pattern for adding a new CLI tool:
   1. Write a script under proxi/scripts/ with argparse subcommands or flags.
+     - Exit 0 when the script ran to completion (even if the API returned an error).
+       Put the API error in the JSON output — the agent reads it and can retry.
+     - Exit non-zero only for unrecoverable script failures (bad args, import errors,
+       total network failure). Always print a structured JSON error to stdout, not a
+       raw traceback.
   2. Subclass CLITool, set command=[sys.executable, "-m", "proxi.scripts.<name>", ...].
   3. Append the new class to CLI_TOOLS at the bottom of this file.
   4. Adjust config/mcp.json cliTools.always_load if it should be live instead of deferred.
+  5. Mark parallel_safe=True only if the script has no shared mutable state between
+     concurrent invocations (stateless HTTP calls are fine; file writes are not).
 """
 
 from __future__ import annotations
 
 import asyncio
 import sys
+import time
+from pathlib import Path
 from typing import Any
 
 from proxi.tools.base import BaseTool, ToolResult
 
 _MAX_OUTPUT = 15_000
+# Time to wait for graceful SIGTERM shutdown before escalating to SIGKILL.
+_SIGTERM_GRACE_SECONDS = 5.0
 
 
 class CLITool(BaseTool):
     """Base class for tools backed by a pre-configured CLI script.
 
     Subclasses define ``command`` in ``__init__``; the LLM never composes it.
-    Structured arguments from the LLM are translated to ``--flag value`` CLI
-    pairs by ``_build_argv``.  Subclasses can override ``_build_argv`` for
-    non-standard argument layouts.
+    Structured arguments from the LLM are translated to ``--flag=value`` CLI
+    pairs by ``_build_argv``.  The ``=`` form is used deliberately to prevent
+    flag injection: argparse always treats everything after ``=`` as a literal
+    value, even if it starts with ``--``.
+
+    Subclasses can override ``_build_argv`` for non-standard argument layouts.
+
+    Timeout handling uses a two-stage escalation:
+      1. SIGTERM — gives the process a chance to flush output and clean up.
+      2. After _SIGTERM_GRACE_SECONDS, SIGKILL — unconditional termination.
     """
 
     def __init__(
@@ -37,6 +55,7 @@ class CLITool(BaseTool):
         timeout: int = 30,
         parallel_safe: bool = False,
         defer_loading: bool = True,
+        working_dir: Path | None = None,
     ) -> None:
         super().__init__(
             name=name,
@@ -47,16 +66,22 @@ class CLITool(BaseTool):
         self._command = command
         self._timeout = timeout
         self.defer_loading = defer_loading
+        self._working_dir = working_dir
 
     def _build_argv(self, arguments: dict[str, Any]) -> list[str]:
-        """Translate ``{key: value}`` arguments to ``[--key, value]`` CLI flags.
+        """Translate ``{key: value}`` arguments to ``--key=value`` CLI flags.
 
         Rules:
         - ``None`` or ``False``  → skip (flag omitted)
         - ``True``               → ``--flag`` (bare flag, no value)
-        - ``list``               → ``--flag val1 --flag val2`` (repeated)
-        - everything else        → ``--flag str(value)``
+        - ``list``               → ``--flag=val1 --flag=val2`` (repeated)
+        - everything else        → ``--flag=str(value)``
         - underscores in keys    → hyphens (``temperature_unit`` → ``--temperature-unit``)
+
+        The ``--flag=value`` (equals) form prevents flag injection: if the LLM
+        passes ``{"location": "--unit=fahrenheit"}``, argparse receives
+        ``--location=--unit=fahrenheit`` and treats the entire right-hand side
+        as the value of ``--location``, not as a separate flag.
         """
         argv: list[str] = []
         for key, value in arguments.items():
@@ -67,55 +92,87 @@ class CLITool(BaseTool):
                 argv.append(flag)
             elif isinstance(value, list):
                 for item in value:
-                    argv.extend([flag, str(item)])
+                    argv.append(f"{flag}={item}")
             else:
-                argv.extend([flag, str(value)])
+                argv.append(f"{flag}={value}")
         return argv
 
     async def execute(self, arguments: dict[str, Any]) -> ToolResult:
         argv = self._command + self._build_argv(arguments)
+        start = time.monotonic()
         try:
             process = await asyncio.create_subprocess_exec(
                 *argv,
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                cwd=self._working_dir,
             )
             try:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(), timeout=float(self._timeout)
                 )
             except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
+                # Stage 1: graceful shutdown via SIGTERM
+                process.terminate()
+                try:
+                    await asyncio.wait_for(
+                        process.wait(), timeout=_SIGTERM_GRACE_SECONDS
+                    )
+                except asyncio.TimeoutError:
+                    # Stage 2: forceful kill
+                    process.kill()
+                    await process.wait()
+                elapsed_ms = int((time.monotonic() - start) * 1000)
                 return ToolResult(
                     success=False,
                     output="",
                     error=f"Tool timed out after {self._timeout}s",
+                    metadata={"elapsed_ms": elapsed_ms},
                 )
 
+            elapsed_ms = int((time.monotonic() - start) * 1000)
             out = stdout.decode("utf-8", errors="replace")
-            err = stderr.decode("utf-8", errors="replace")
+            err = stderr.decode("utf-8", errors="replace").strip()
             rc = process.returncode
 
+            # Truncate and always annotate — applies to both success and failure paths.
             truncated = len(out) > _MAX_OUTPUT
             if truncated:
-                out = out[:_MAX_OUTPUT]
+                out = out[:_MAX_OUTPUT] + "\n[output truncated at 15,000 chars]"
 
             if rc != 0:
+                # Include stdout in the error so the agent sees any structured
+                # error payload the script wrote before exiting non-zero.
+                error_parts = [f"Exit {rc}"]
+                if out:
+                    error_parts.append(f"Output:\n{out}")
+                if err:
+                    error_parts.append(f"Stderr:\n{err}")
                 return ToolResult(
                     success=False,
                     output=out,
-                    error=f"Exit {rc}\n{err}",
-                    metadata={"return_code": rc},
+                    error="\n".join(error_parts),
+                    metadata={"return_code": rc, "elapsed_ms": elapsed_ms},
                 )
+
+            # Append stderr warnings to successful output so the agent sees them.
+            if err:
+                out += f"\n[stderr]\n{err}"
+
             return ToolResult(
                 success=True,
-                output=out + ("\n[output truncated]" if truncated else ""),
-                metadata={"return_code": rc},
+                output=out,
+                metadata={"return_code": rc, "elapsed_ms": elapsed_ms},
             )
         except Exception as e:
-            return ToolResult(success=False, output="", error=f"Subprocess error: {e}")
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            return ToolResult(
+                success=False,
+                output="",
+                error=f"Subprocess error: {e}",
+                metadata={"elapsed_ms": elapsed_ms},
+            )
 
 
 class GetWeatherTool(CLITool):
@@ -126,8 +183,9 @@ class GetWeatherTool(CLITool):
             name="get_weather",
             description=(
                 "Get current weather for a location. Use unit=celsius unless the user "
-                "asks for Fahrenheit. If lookup fails, retry once with a more explicit "
-                "location string (e.g. 'Hamilton, Ontario, Canada') before asking the user."
+                "asks for Fahrenheit. If the result contains an error field, retry once "
+                "with a more explicit location string (e.g. 'Hamilton, Ontario, Canada') "
+                "before asking the user."
             ),
             parameters_schema={
                 "type": "object",
@@ -146,6 +204,8 @@ class GetWeatherTool(CLITool):
             },
             command=[sys.executable, "-m", "proxi.scripts.weather", "current"],
             timeout=30,
+            # parallel_safe: each invocation is a stateless HTTP call to Open-Meteo
+            # with no shared mutable state, so concurrent calls are safe.
             parallel_safe=True,
             defer_loading=True,
         )
@@ -159,7 +219,8 @@ class GetWeatherForecastTool(CLITool):
             name="get_weather_forecast",
             description=(
                 "Get a multi-day weather forecast for a location. Use when the user asks "
-                "about upcoming days or a date range. Days are capped at 7."
+                "about upcoming days or a date range. Days are capped at 7. If the result "
+                "contains an error field, retry with a more explicit location string."
             ),
             parameters_schema={
                 "type": "object",
@@ -182,6 +243,7 @@ class GetWeatherForecastTool(CLITool):
             },
             command=[sys.executable, "-m", "proxi.scripts.weather", "forecast"],
             timeout=30,
+            # parallel_safe: stateless HTTP calls, no shared mutable state.
             parallel_safe=True,
             defer_loading=True,
         )
