@@ -20,6 +20,17 @@ from proxi.tools.registry import ToolRegistry
 
 logger = get_logger(__name__)
 
+# Tools that are blocked while plan_mode is active.
+# manage_plan is intentionally omitted — that's how the agent writes the plan.
+_PLAN_MODE_WRITE_BLOCKED_TOOLS: frozenset[str] = frozenset({
+    "write_file",
+    "edit_file",
+    "apply_patch",
+    "execute_code",
+    "shell",
+    "manage_todos",
+})
+
 
 def _is_context_length_error(exc: Exception) -> bool:
     """Return True if the exception looks like a context-window overflow."""
@@ -81,12 +92,13 @@ class AgentLoop:
         self.workspace = workspace
         self.compactor = compactor
 
-    async def run(self, initial_message: str) -> AgentState:
+    async def run(self, initial_message: str, reasoning_effort: str = "minimal") -> AgentState:
         """
         Run the agent loop with an initial message.
 
         Args:
             initial_message: Initial user message
+            reasoning_effort: LLM reasoning effort for this run ("minimal", "medium", "high")
 
         Returns:
             Final agent state
@@ -96,6 +108,7 @@ class AgentLoop:
             max_turns=self.max_turns,
             start_time=time.time(),
             workspace=self.workspace,
+            reasoning_effort=reasoning_effort,
         )
         state.add_message(Message(role="user", content=initial_message))
         self.logger.info("agent_loop_start", message=initial_message[:100])
@@ -205,7 +218,8 @@ class AgentLoop:
                                 }
                             )
                         decision, usage = await self._decide(
-                            state, emit_stream=self.emitter is not None
+                            state, emit_stream=self.emitter is not None,
+                            reasoning_effort=state.reasoning_effort,
                         )
                         if self.emitter:
                             self.emitter.emit(
@@ -560,7 +574,7 @@ class AgentLoop:
         return state
 
     async def _decide(
-        self, state: AgentState, *, emit_stream: bool = False
+        self, state: AgentState, *, emit_stream: bool = False, reasoning_effort: str = "minimal",
     ) -> tuple[ModelDecision, dict[str, int]]:
         """Make a decision based on current state."""
         tools = self.tool_registry.to_specs()
@@ -578,6 +592,7 @@ class AgentLoop:
         decision, usage = await self.planner.decide(
             state, tools, agents, stream_callback=stream_cb,
             deferred_tool_count=deferred_count, deferred_specs=deferred_specs,
+            reasoning_effort=reasoning_effort,
         )
         return decision, usage
 
@@ -596,6 +611,31 @@ class AgentLoop:
                 return await self._handle_ask_user_question(
                     state, tool_call_id, arguments, turn
                 )
+
+            # Block write tools in plan mode (cache-safe: schemas unchanged, blocked at runtime)
+            if state.plan_mode and tool_name in _PLAN_MODE_WRITE_BLOCKED_TOOLS:
+                if self.emitter:
+                    self.emitter.emit({
+                        "type": "tool_start",
+                        "tool": tool_name,
+                        "arguments": arguments,
+                    })
+                    self.emitter.emit({
+                        "type": "tool_done",
+                        "tool": tool_name,
+                        "success": False,
+                        "error": "Plan mode: write operations are not allowed during planning. "
+                                 "Use manage_plan to write the plan, then the user can accept it.",
+                    })
+                return {
+                    "type": "tool_call",
+                    "tool": tool_name,
+                    "success": False,
+                    "output": "",
+                    "error": "Plan mode: write operations are not allowed during planning. "
+                             "Use manage_plan to write the plan, then the user can accept it.",
+                    "metadata": {},
+                }
 
             self.logger.info("tool_call", tool=tool_name,
                              turn=turn.turn_number)

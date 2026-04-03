@@ -64,7 +64,7 @@ export const UserInputRequiredBootstrapSchema = z.object({
   options: z.array(z.string()).optional(),
   prompt: z.string().optional(),
   /** Local TUI layout hint (not used by gateway payloads). */
-  ui: z.enum(["compact"]).optional(),
+  ui: z.enum(["compact", "plan"]).optional(),
 });
 export type UserInputRequiredBootstrap = z.infer<typeof UserInputRequiredBootstrapSchema>;
 
@@ -109,6 +109,18 @@ export function isAskUserQuestionRequired(
   return "payload" in msg && Array.isArray((msg as UserInputRequiredForm).payload?.questions);
 }
 
+export const PlanReadySchema = z.object({
+  type: z.literal("plan_ready"),
+  content: z.string(),
+  // Session workspace path for the plan.md file users may edit manually.
+  // This is typically `sessions/<agent_id>/<session_name>/plan.md`.
+  plan_path: z.string().optional(),
+  // If plan mode is active, the agent may be writing to an in-progress file
+  // instead of the session-level `plan.md`.
+  active_plan_path: z.string().optional(),
+});
+export type PlanReady = z.infer<typeof PlanReadySchema>;
+
 export const ReadySchema = z.object({
   type: z.literal("ready"),
 });
@@ -140,6 +152,7 @@ export const BridgeMessageSchema = z.union([
   SubagentDoneSchema,
   UserInputRequiredBootstrapSchema,
   UserInputRequiredFormSchema,
+  PlanReadySchema,
   ReadySchema,
   BootCompleteSchema,
   InboundTurnSchema,

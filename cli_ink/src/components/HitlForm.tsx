@@ -173,6 +173,52 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
         </Box>
       );
     }
+    if (spec.ui === "plan") {
+      return (
+        <Box
+          paddingX={1}
+          paddingY={0}
+          flexDirection="column"
+          flexShrink={0}
+          borderStyle="round"
+          borderColor={theme.purpleDim}
+          gap={0}
+        >
+          <Box marginBottom={1}>
+            <Text color={theme.purple} bold>
+              ◆ Plan mode
+            </Text>
+          </Box>
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color={theme.mist}>
+              Describe your goal. The agent will interview you, explore the codebase,
+            </Text>
+            <Text color={theme.mist}>
+              and write a structured plan for you to review before any changes are made.
+            </Text>
+          </Box>
+          <Box marginBottom={0}>
+            <Text color={theme.lavender}>Goal</Text>
+          </Box>
+          <Box marginBottom={1}>
+            <Text color={theme.purple} bold>
+              ›{" "}
+            </Text>
+            <TextInput
+              key="plan-hitl"
+              value={textValue}
+              onChange={setTextValue}
+              onSubmit={() => handleSubmit()}
+              placeholder="e.g. implement OAuth2 login, refactor the gateway, add dark mode…"
+              showCursor
+            />
+          </Box>
+          <Box flexDirection="row" justifyContent="space-between">
+            <Text color={theme.mist}>Enter — start planning · Esc — cancel</Text>
+          </Box>
+        </Box>
+      );
+    }
     if (workDirMatch) {
       return (
         <Box

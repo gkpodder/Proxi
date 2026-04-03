@@ -492,7 +492,7 @@ class ContextCompactor:
             except OSError:
                 pass
 
-        plan_path = state.workspace.plan_path
+        plan_path = state.workspace.active_plan_path or state.workspace.plan_path
         if plan_path:
             try:
                 plan = Path(plan_path).read_text(encoding="utf-8").strip()

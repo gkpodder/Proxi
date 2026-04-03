@@ -63,10 +63,13 @@ class AnthropicClient:
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
         session_id: str | None = None,
+        reasoning_effort: str = "minimal",
     ) -> ModelResponse:
         """Generate a response from Anthropic."""
-        # session_id is intentionally unused for Anthropic.
+        # session_id and reasoning_effort are intentionally unused for Anthropic.
+        # Standard Claude models don't have a reasoning effort knob equivalent to OpenAI's.
         _ = session_id
+        _ = reasoning_effort
         self.logger.info("llm_call", model=self.model, provider="anthropic")
         anthropic_messages = self._convert_messages(messages)
         anthropic_tools = self._convert_tools(tools) if tools else None
@@ -144,6 +147,7 @@ class AnthropicClient:
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
         session_id: str | None = None,
+        reasoning_effort: str = "minimal",
     ) -> AsyncIterator[tuple[str, ModelResponse | None]]:
         """
         Generate a response; yields content in one chunk then the full response.
@@ -155,6 +159,7 @@ class AnthropicClient:
             agents=agents,
             system=system,
             session_id=session_id,
+            reasoning_effort=reasoning_effort,
         )
         content = response.decision.payload.get("content") or ""
         if content:

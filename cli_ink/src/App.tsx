@@ -19,6 +19,7 @@ import { HitlForm } from "./components/HitlForm.js";
 import { AnswerForm } from "./components/AnswerForm.js";
 import { CommandPalette } from "./components/CommandPalette.js";
 import { PlanTodosOverlay } from "./components/PlanTodosOverlay.js";
+import { PlanModeOverlay } from "./components/PlanModeOverlay.js";
 import { UsageOverlay } from "./components/UsageOverlay.js";
 
 type StatusKind = "tool" | "subagent" | "progress" | null;
@@ -45,7 +46,7 @@ export default function App() {
   const [scrollback, setScrollback] = useState<ScrollbackItem[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [planTodosOverlay, setPlanTodosOverlay] = useState<"plan" | "todos" | null>(null);
+  const [planTodosOverlay, setPlanTodosOverlay] = useState<"todos" | null>(null);
   const [usageOverlay, setUsageOverlay] = useState<{
     tokens_used: number;
     token_budget: number;
@@ -63,6 +64,13 @@ export default function App() {
   const [btwMode, setBtwMode] = useState(false);
   const btwReturnSessionRef = useRef<string>("");
   const btwSavedScrollbackRef = useRef<ScrollbackItem[]>([]);
+  const [planModeOverlay, setPlanModeOverlay] = useState<string | null>(null);
+  const [planModeOverlayMeta, setPlanModeOverlayMeta] = useState<{
+    plan_path?: string;
+    active_plan_path?: string;
+  } | null>(null);
+  const planGoalInputRef = useRef(false);
+  const [isPlanActive, setIsPlanActive] = useState(false);
 
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
@@ -232,6 +240,15 @@ export default function App() {
       }
       case "user_input_required":
         setHitlSpec(msg);
+        break;
+      case "plan_ready":
+        commitStreamToScrollback();
+        setPlanModeOverlay(msg.content);
+        setPlanModeOverlayMeta({
+          plan_path: (msg as import("./protocol.js").PlanReady).plan_path,
+          active_plan_path: (msg as import("./protocol.js").PlanReady).active_plan_path,
+        });
+        setIsPlanActive(true);
         break;
       case "inbound_turn":
         commitStreamToScrollback();
@@ -629,6 +646,61 @@ export default function App() {
       setScrollback((s) => [
         ...s,
         { type: "agent_line", content: "Could not reach gateway.", isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handlePlanGoalSubmit = useCallback((value: string | boolean | number) => {
+    planGoalInputRef.current = false;
+    setHitlSpec(null);
+    const goal = String(value).trim();
+    if (!goal) {
+      setIsPlanActive(false);
+      return;
+    }
+    setIsPlanActive(true);
+    const msg = `/plan ${goal}`;
+    setScrollback((s) => [...s, { type: "user", content: msg }, { type: "spacing" as const }]);
+    setUserSendPending(true);
+    void sendToGateway({ message: msg });
+  }, [sendToGateway]);
+
+  const handlePlanAccept = useCallback(async () => {
+    const sid = sessionRef.current;
+    setIsPlanActive(false);
+    setPlanModeOverlay(null);
+    setPlanModeOverlayMeta(null);
+    try {
+      await fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(sid)}/plan/accept`, { method: "POST" });
+    } catch {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: "Could not accept plan — gateway unreachable.", isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handlePlanRefine = useCallback((feedback: string) => {
+    setPlanModeOverlay(null);
+    setPlanModeOverlayMeta(null);
+    // Keep plan mode active while the new plan is being generated.
+    const msg = `/plan refine ${feedback}`;
+    setScrollback((s) => [...s, { type: "user", content: msg }, { type: "spacing" as const }]);
+    setUserSendPending(true);
+    void sendToGateway({ message: msg });
+  }, [sendToGateway]);
+
+  const handlePlanReject = useCallback(async () => {
+    const sid = sessionRef.current;
+    setIsPlanActive(false);
+    setPlanModeOverlay(null);
+    setPlanModeOverlayMeta(null);
+    try {
+      await fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(sid)}/plan/reject`, { method: "POST" });
+    } catch {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: "Could not reject plan — gateway unreachable.", isFirst: true, isSystem: true },
       ]);
     }
   }, []);
@@ -1042,11 +1114,15 @@ export default function App() {
         handleCompactSubmit(value);
         return;
       }
+      if (planGoalInputRef.current) {
+        handlePlanGoalSubmit(value);
+        return;
+      }
       setUserSendPending(true);
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit]
+    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit, handlePlanGoalSubmit]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -1089,6 +1165,12 @@ export default function App() {
     if (compactModeRef.current) {
       compactModeRef.current = false;
       setHitlSpec(null);
+      return;
+    }
+    if (planGoalInputRef.current) {
+      planGoalInputRef.current = false;
+      setHitlSpec(null);
+      setIsPlanActive(false);
       return;
     }
     sendToGateway({ message: "", form_answer: { value: false } });
@@ -1244,7 +1326,20 @@ export default function App() {
           }
           break;
         case "plan":
-          setPlanTodosOverlay("plan");
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "Connect to an agent first, then use /plan.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          planGoalInputRef.current = true;
+          setIsPlanActive(true);
+          setHitlSpec({
+            type: "user_input_required" as const,
+            method: "text" as const,
+            ui: "plan",
+          });
           break;
         case "todos":
           setPlanTodosOverlay("todos");
@@ -1290,7 +1385,7 @@ export default function App() {
             { type: "agent_line", content: "/work-dir - View or change working directory", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/compact  - Summarize context to save tokens (optionally add a focus hint)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/plan     - View current plan", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/plan     - Start an interactive planning session", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/todos    - View open todos", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/usage    - Show context and turn usage", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/help     - Show all commands", isFirst: false, isSystem: true },
@@ -1333,6 +1428,7 @@ export default function App() {
           isWaitingForInput={!!hitlSpec}
           isBtw={btwMode}
           isCompacting={isCompacting}
+          isPlanMode={isPlanActive}
           autoCompactPercent={autoCompactPercent}
         />
         {hitlSpec ? (
@@ -1359,6 +1455,15 @@ export default function App() {
           />
         ) : usageOverlay ? (
           <UsageOverlay stats={usageOverlay} />
+        ) : planModeOverlay ? (
+          <PlanModeOverlay
+            content={planModeOverlay}
+            planPath={planModeOverlayMeta?.plan_path}
+            activePlanPath={planModeOverlayMeta?.active_plan_path}
+            onAccept={handlePlanAccept}
+            onRefine={handlePlanRefine}
+            onReject={handlePlanReject}
+          />
         ) : planTodosOverlay ? (
           <PlanTodosOverlay
             type={planTodosOverlay}

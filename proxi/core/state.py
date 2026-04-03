@@ -130,6 +130,10 @@ class WorkspaceConfig(BaseModel):
     plan_path: Annotated[str, Field(description="Path to sessions/<session_id>/plan.md (optional)")]
     todos_path: Annotated[str, Field(description="Path to sessions/<session_id>/todos.md (optional)")]
 
+    # When plan mode is active, manage_plan writes here instead of plan_path.
+    # Points to agents/<agent_id>/plans/in-progress.md so the plan lives in plans/ from the start.
+    active_plan_path: Annotated[str | None, Field(default=None, description="Override path for manage_plan during plan mode")] = None
+
     curr_working_dir: Annotated[
         str | None,
         Field(default=None, description="Root directory for file and shell tool operations"),
@@ -226,6 +230,15 @@ class AgentState(BaseModel):
 
     # Form interaction history
     interaction_history: Annotated[list[dict[str, Any]], Field(default_factory=list, description="Records of form interactions")]
+
+    # Plan mode flag — set when the agent is in an interactive planning session.
+    # Runtime-only; not persisted in history.jsonl.
+    plan_mode: Annotated[bool, Field(default=False, description="True while agent is in plan-writing mode")] = False
+
+    # Reasoning effort override — "minimal" (default), "medium", or "high".
+    # Set to "medium" during plan-mode and plan execution; reset to "minimal" otherwise.
+    # Runtime-only; not persisted in history.jsonl.
+    reasoning_effort: Annotated[str, Field(default="minimal", description="Reasoning effort for LLM calls: minimal, medium, or high")] = "minimal"
 
     def add_message(self, message: Message) -> None:
         """Add a message to the history and append to history.jsonl if configured."""

@@ -104,6 +104,19 @@ def _workspace_root() -> Path:
     return Path.home() / ".proxi"
 
 
+def _purge_all_plans(workspace_root: Path) -> None:
+    """Delete all files inside every agents/{agent_id}/plans/ directory.
+
+    Plans are ephemeral: they should not survive a gateway restart or crash.
+    """
+    import glob as _glob
+    for plan_file in _glob.glob(str(workspace_root / "agents" / "*" / "plans" / "*")):
+        try:
+            Path(plan_file).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
 def _reload_gateway_config() -> None:
     """Reload ``gateway.yml`` and sync in-memory router + lane manager."""
     global config, router
@@ -371,6 +384,9 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         mcp_tools=len(_mcp_tools),
     )
 
+    # Clean up any plans left over from a previous crash.
+    _purge_all_plans(workspace_root)
+
     yield
 
     scheduler.shutdown(wait=False)
@@ -383,6 +399,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
             logger.warning("mcp_close_error", error=str(exc))
     _mcp_adapters.clear()
     _mcp_tools.clear()
+    # Plans are ephemeral — delete them on every shutdown.
+    _purge_all_plans(workspace_root)
     logger.info("gateway_stopped")
 
 
@@ -1460,6 +1478,120 @@ async def abort_session(session_id: str) -> dict[str, str]:
         raise HTTPException(status_code=404, detail="Lane not found")
     await lane.abort()
     return {"status": "aborted"}
+
+
+@app.post("/v1/sessions/{session_id:path}/plan/accept")
+async def accept_plan(session_id: str) -> dict[str, str]:
+    """Accept the current plan: save to plans/ dir, exit plan mode, and auto-execute."""
+    import re
+    from datetime import datetime
+
+    lane = lane_manager.get_lane(session_id) if lane_manager else None
+    if lane is None:
+        raise HTTPException(status_code=404, detail="Lane not found")
+    if lane._state is None or lane._state.workspace is None:
+        raise HTTPException(status_code=400, detail="No active session workspace")
+
+    # Read from active_plan_path (plans/in-progress.md) if set, else session plan.md
+    _pfile = lane._state.workspace.active_plan_path or lane._state.workspace.plan_path
+    plan_path = Path(_pfile)
+    if not plan_path.exists() or plan_path.stat().st_size == 0:
+        raise HTTPException(status_code=400, detail="No plan to accept")
+
+    plan_content = plan_path.read_text(encoding="utf-8")
+
+    # Derive a slug from the first # heading, fallback to "plan"
+    slug = "plan"
+    for line in plan_content.splitlines():
+        heading = line.lstrip("#").strip()
+        if heading:
+            slug = re.sub(r"[^a-z0-9]+", "-", heading.lower())[:40].strip("-")
+            break
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    workspace_root = Path(lane._state.workspace.workspace_root)
+    agent_id = lane._state.workspace.agent_id
+    plans_dir = workspace_root / "agents" / agent_id / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    saved_path = plans_dir / f"{timestamp}_{slug}.md"
+
+    # Rename in-progress.md → timestamped file (atomic on same filesystem)
+    try:
+        plan_path.rename(saved_path)
+    except OSError:
+        saved_path.write_text(plan_content, encoding="utf-8")
+        plan_path.unlink(missing_ok=True)
+
+    # Exit plan mode and clear the active plan path; keep reasoning_effort at "medium"
+    # for the execution run (complex plan → deserves better reasoning throughout).
+    lane._state.plan_mode = False
+    lane._state.reasoning_effort = "medium"
+    lane._state.workspace.active_plan_path = None
+    lane.workspace_config.active_plan_path = None
+
+    # Inject plan content as the next user turn so the agent auto-executes
+    execute_message = f"Execute the following plan:\n\n{plan_content}"
+
+    if lane._sse_channel is not None:
+        try:
+            await lane._sse_channel.send_event({
+                "type": "status_update",
+                "label": "Executing plan",
+                "status": "running",
+                "tui_abortable": True,
+            })
+        except Exception:
+            pass
+
+    # Route the execution message through the lane (async background task)
+    event = GatewayEvent(
+        source_id="tui",
+        source_type="http",
+        payload={"text": execute_message},
+    )
+    asyncio.create_task(lane._dispatch(event))
+
+    return {"status": "accepted", "saved_to": str(saved_path)}
+
+
+@app.post("/v1/sessions/{session_id:path}/plan/reject")
+async def reject_plan(session_id: str) -> dict[str, str]:
+    """Reject the current plan: clear plan.md and exit plan mode."""
+    lane = lane_manager.get_lane(session_id) if lane_manager else None
+    if lane is None:
+        raise HTTPException(status_code=404, detail="Lane not found")
+    if lane._state is None or lane._state.workspace is None:
+        raise HTTPException(status_code=400, detail="No active session workspace")
+
+    # Delete in-progress.md (plans/ dir) if it exists, otherwise clear session plan.md
+    _pfile = lane._state.workspace.active_plan_path or lane._state.workspace.plan_path
+    plan_path = Path(_pfile)
+    try:
+        plan_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    lane._state.plan_mode = False
+    lane._state.reasoning_effort = "minimal"
+    lane._state.workspace.active_plan_path = None
+    lane.workspace_config.active_plan_path = None
+
+    if lane._sse_channel is not None:
+        try:
+            await lane._sse_channel.send_event({
+                "type": "text_stream",
+                "content": "Plan rejected.",
+            })
+            await lane._sse_channel.send_event({
+                "type": "status_update",
+                "label": "Plan rejected",
+                "status": "done",
+                "tui_abortable": False,
+            })
+        except Exception:
+            pass
+
+    return {"status": "rejected"}
 
 
 @app.post("/v1/sessions/{session_id:path}/clear-history")

@@ -325,6 +325,7 @@ class OpenAIClient:
         *,
         stream: bool,
         session_id: str | None,
+        reasoning_effort: str = "minimal",
     ) -> tuple[dict[str, Any], str]:
         """Build shared kwargs for Responses API create calls."""
         kwargs: dict[str, Any] = {
@@ -334,8 +335,7 @@ class OpenAIClient:
         if stream:
             kwargs["stream"] = True
         if self._supports_reasoning_controls():
-            # Keep effort low for reasoning-capable models unless overridden.
-            kwargs["reasoning"] = {"effort": "minimal"}
+            kwargs["reasoning"] = {"effort": reasoning_effort}
         if system:
             kwargs["instructions"] = system
         if response_tools:
@@ -353,9 +353,10 @@ class OpenAIClient:
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
         session_id: str | None = None,
+        reasoning_effort: str = "minimal",
     ) -> ModelResponse:
         """Generate a response from OpenAI Responses API."""
-        self.logger.info("llm_call", model=self.model, provider="openai")
+        self.logger.info("llm_call", model=self.model, provider="openai", reasoning_effort=reasoning_effort)
         input_items = self._convert_messages(messages)
         response_tools = (self._convert_tools(tools) if tools else [
         ]) + self._convert_agents_to_tools(agents)
@@ -366,6 +367,7 @@ class OpenAIClient:
             system=system,
             stream=False,
             session_id=session_id,
+            reasoning_effort=reasoning_effort,
         )
 
         response = await self.client.responses.create(**kwargs)
@@ -403,13 +405,13 @@ class OpenAIClient:
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
         session_id: str | None = None,
+        reasoning_effort: str = "minimal",
     ) -> AsyncIterator[tuple[str, ModelResponse | None]]:
         """
         Generate a response with streaming. Yields (content_delta, None) for each
         text chunk and ("", response) at the end.
         """
-        self.logger.info("llm_call_stream",
-                         model=self.model, provider="openai")
+        self.logger.info("llm_call_stream", model=self.model, provider="openai", reasoning_effort=reasoning_effort)
         input_items = self._convert_messages(messages)
         response_tools = (self._convert_tools(tools) if tools else [
         ]) + self._convert_agents_to_tools(agents)
@@ -420,6 +422,7 @@ class OpenAIClient:
             system=system,
             stream=True,
             session_id=session_id,
+            reasoning_effort=reasoning_effort,
         )
 
         stream = await self.client.responses.create(**kwargs)
