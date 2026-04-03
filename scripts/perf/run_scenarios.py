@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import signal
 import subprocess
 import sys
 import threading
@@ -82,67 +81,6 @@ def _run_cli_task(task: str, provider: str, use_mcp: bool, timeout_s: int) -> di
     }
 
 
-def _bridge_abort_stress(provider: str, loops: int = 10) -> dict[str, Any]:
-    env = os.environ.copy()
-    env.setdefault("PROXI_PERF_ENABLED", "1")
-    env["PROXI_PROVIDER"] = provider
-    bridge_cmd = [sys.executable, "-m", "proxi.bridge"]
-    proc = subprocess.Popen(
-        bridge_cmd,
-        env=env,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-    )
-    assert proc.stdin is not None
-    start = time.time()
-    for i in range(loops):
-        proc.stdin.write(json.dumps({"type": "start", "task": f"Quick task {i}"}) + "\n")
-        proc.stdin.flush()
-        time.sleep(0.05)
-        proc.stdin.write(json.dumps({"type": "abort"}) + "\n")
-        proc.stdin.flush()
-    time.sleep(0.5)
-    proc.send_signal(signal.SIGTERM)
-    try:
-        rc = proc.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        rc = 124
-    return {"exit_code": rc, "duration_s": round(time.time() - start, 3), "loops": loops}
-
-
-def _bridge_burst(provider: str, bursts: int = 250) -> dict[str, Any]:
-    env = os.environ.copy()
-    env.setdefault("PROXI_PERF_ENABLED", "1")
-    env["PROXI_PROVIDER"] = provider
-    bridge_cmd = [sys.executable, "-m", "proxi.bridge"]
-    proc = subprocess.Popen(
-        bridge_cmd,
-        env=env,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-    )
-    assert proc.stdin is not None
-    start = time.time()
-    for i in range(bursts):
-        proc.stdin.write(json.dumps({"type": "status_update", "label": f"msg-{i}", "status": "running"}) + "\n")
-    proc.stdin.flush()
-    time.sleep(0.5)
-    proc.send_signal(signal.SIGTERM)
-    try:
-        rc = proc.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        rc = 124
-    return {"exit_code": rc, "duration_s": round(time.time() - start, 3), "bursts": bursts}
-
-
 def run_scenario(scenario: str, provider: str, use_mcp: bool, timeout_s: int) -> dict[str, Any]:
     if scenario == "S1":
         task = "Give a concise 2-step plan for organizing a study session."
@@ -156,16 +94,12 @@ def run_scenario(scenario: str, provider: str, use_mcp: bool, timeout_s: int) ->
     if scenario == "S3":
         task = "Use available MCP tools to fetch lightweight information and summarize results."
         return _run_cli_task(task, provider, use_mcp=use_mcp, timeout_s=timeout_s)
-    if scenario == "S4":
-        return _bridge_abort_stress(provider)
-    if scenario == "S5":
-        return _bridge_burst(provider)
     raise ValueError(f"Unsupported scenario: {scenario}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Proxi perf scenarios")
-    parser.add_argument("--scenario", required=True, choices=["S1", "S2", "S3", "S4", "S5"])
+    parser.add_argument("--scenario", required=True, choices=["S1", "S2", "S3"])
     parser.add_argument("--provider", default="openai", choices=["openai", "anthropic"])
     parser.add_argument("--mcp", action="store_true", help="Enable MCP for S3")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_S)
