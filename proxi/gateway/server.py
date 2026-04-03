@@ -88,6 +88,10 @@ _mcp_deferred_tools: list[Any] = []
 _last_mcp_signature: str | None = None
 _mcp_refresh_lock = asyncio.Lock()
 
+# CLI tools loaded once at startup; share the same lane injection as MCP tools.
+_cli_tools: list[Any] = []           # live CLI tools
+_cli_deferred_tools: list[Any] = []  # deferred CLI tools (found via call_tool)
+
 # Global working directory fallback (env var / POST /v1/working-dir with no agent).
 _working_dir: Path = Path(os.environ.get("PROXI_WORKING_DIR", ".")).resolve()
 
@@ -259,6 +263,32 @@ async def _refresh_mcp_tools() -> None:
                 _mcp_tools, _mcp_deferred_tools)
 
 
+def _refresh_cli_tools() -> None:
+    """Load CLI tools from config/mcp.json cliTools section into global lists."""
+    global _cli_tools, _cli_deferred_tools
+    from proxi.cli.main import load_mcp_config
+    from proxi.tools.cli_tool import CLI_TOOLS
+
+    config = load_mcp_config()
+    cli_config = config.get("cliTools", {})
+    defer_by_default = cli_config.get("defer_loading", True)
+    always_load = set(cli_config.get("always_load", []))
+
+    _cli_tools.clear()
+    _cli_deferred_tools.clear()
+    for tool_class in CLI_TOOLS:
+        tool = tool_class()
+        if not defer_by_default or tool.name in always_load:
+            _cli_tools.append(tool)
+        else:
+            _cli_deferred_tools.append(tool)
+    logger.info(
+        "cli_tools_loaded",
+        live=len(_cli_tools),
+        deferred=len(_cli_deferred_tools),
+    )
+
+
 def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     """Factory called by LaneManager to create an AgentLoop per session.
 
@@ -291,6 +321,10 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
         tool_registry.register(mcp_tool)
     for mcp_tool in _mcp_deferred_tools:
         tool_registry.register_deferred(mcp_tool)
+    for cli_tool in _cli_tools:
+        tool_registry.register(cli_tool)
+    for cli_tool in _cli_deferred_tools:
+        tool_registry.register_deferred(cli_tool)
     if tool_registry.has_deferred_tools():
         from proxi.tools.call_tool_tool import CallToolTool
         tool_registry.register(CallToolTool(tool_registry))
@@ -352,6 +386,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
     # Load MCP adapters once so their tools are available to all lanes.
     await _refresh_mcp_tools()
+    # Load CLI tools once so they are available to all lanes alongside MCP tools.
+    _refresh_cli_tools()
 
     lane_manager = LaneManager(config, create_loop=_create_agent_loop)
 

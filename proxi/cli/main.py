@@ -95,6 +95,24 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
     return manager
 
 
+def auto_load_cli_tools(tool_registry: ToolRegistry) -> None:
+    """Load CLI tools from config/mcp.json cliTools section into the tool registry."""
+    from proxi.tools.cli_tool import CLI_TOOLS
+
+    config = load_mcp_config()
+    cli_config = config.get("cliTools", {})
+    defer_by_default = cli_config.get("defer_loading", True)
+    always_load = set(cli_config.get("always_load", []))
+    for tool_class in CLI_TOOLS:
+        tool = tool_class()
+        if not defer_by_default or tool.name in always_load:
+            tool_registry.register(tool)
+            logger.info("cli_tool_registered", tool=tool.name)
+        else:
+            tool_registry.register_deferred(tool)
+            logger.info("cli_tool_deferred", tool=tool.name)
+
+
 async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]:
     """Auto-load only enabled MCP servers from DB and MCP config.
 
@@ -378,6 +396,9 @@ async def main():
         agent_config = workspace_manager.read_agent_config(agent_info.agent_id)
         coding_tier = agent_config.get("tool_sets", {}).get("coding", "live")
         register_coding_tools(tool_registry, working_dir=working_dir, tier=str(coding_tier))
+
+        # Register CLI tools from config
+        auto_load_cli_tools(tool_registry)
 
         # Attach working dir to workspace config so tools and prompts can reference it
         workspace_config.curr_working_dir = str(working_dir)
