@@ -1,6 +1,5 @@
 """Agent state management for tracking turns, history, and context."""
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -13,7 +12,10 @@ from typing import Annotated, Any, TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 import json
+from proxi.observability.logging import get_logger
 from proxi.observability.perf import elapsed_ms, emit_perf, now_ns
+
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from proxi.interaction.models import FormRequest, FormResponse
@@ -29,7 +31,7 @@ class _HistoryWriter:
             "no",
             "off",
         }
-        self._queue: queue.SimpleQueue[tuple[str, str]] = queue.SimpleQueue()
+        self._queue: queue.SimpleQueue[tuple[str, str | threading.Event]] = queue.SimpleQueue()
         self._thread: threading.Thread | None = None
         self._stop = False
         if self._enabled:
@@ -43,6 +45,18 @@ class _HistoryWriter:
             return
         self._queue.put((str(path), payload))
 
+    def drain(self, path: Path, timeout: float = 2.0) -> None:
+        """Block until all queued writes for *path* have been flushed to disk.
+
+        Used by ``rewrite_history`` to prevent the background thread from
+        appending stale messages after the atomic file replace.
+        """
+        if not self._enabled or self._thread is None:
+            return
+        event = threading.Event()
+        self._queue.put((str(path), event))
+        event.wait(timeout=timeout)
+
     def close(self) -> None:
         self._stop = True
         self._queue.put(("", ""))
@@ -53,6 +67,11 @@ class _HistoryWriter:
         while not self._stop:
             path_str, payload = self._queue.get()
             if not path_str and not payload:
+                continue
+            if isinstance(payload, threading.Event):
+                # Barrier item: signal the waiting caller that all prior writes
+                # for this path have been processed.
+                payload.set()
                 continue
             self._write(Path(path_str), payload)
 
@@ -302,6 +321,30 @@ class AgentState(BaseModel):
                 "answers": res.answers,
                 "skipped": res.skipped,
             })
+
+    def rewrite_history(self, messages: list[Message]) -> None:
+        """Replace in-memory history and atomically rewrite history.jsonl.
+
+        Used after context compaction. Drains the background _history_writer
+        queue before the atomic replace so that queued appends from the
+        compacted turns do not overwrite the new file after the swap.
+        """
+        self.history = list(messages)
+        if self.workspace is not None and self.workspace.history_path:
+            path = Path(self.workspace.history_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".jsonl.tmp")
+            try:
+                # Flush any queued appends for this path before replacing the
+                # file, otherwise the background thread may append stale
+                # messages after the atomic swap.
+                _history_writer.drain(path)
+                payload = "".join(m.model_dump_json() + "\n" for m in messages)
+                tmp.write_text(payload, encoding="utf-8")
+                tmp.replace(path)  # atomic on POSIX
+                logger.debug("history_rewritten path=%s messages=%d", path, len(messages))
+            except Exception as exc:
+                logger.error("history_rewrite_failed path=%s error=%r", path, exc)
 
     def _append_history_jsonl(self, message: Message) -> None:
         """Append a single message to the workspace history.jsonl file."""

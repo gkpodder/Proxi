@@ -58,6 +58,8 @@ export default function App() {
   const [userSendPending, setUserSendPending] = useState(false);
   const [tuiActiveDepth, setTuiActiveDepth] = useState(0);
   const [lastTuiAbortableStatus, setLastTuiAbortableStatus] = useState(false);
+  const [autoCompactPercent, setAutoCompactPercent] = useState<number | null>(null);
+  const [isCompacting, setIsCompacting] = useState(false);
   const [btwMode, setBtwMode] = useState(false);
   const btwReturnSessionRef = useRef<string>("");
   const btwSavedScrollbackRef = useRef<ScrollbackItem[]>([]);
@@ -94,14 +96,16 @@ export default function App() {
   const clearSessionPromiseRef = useRef<Promise<void> | null>(null);
   const handleMsgRef = useRef<(msg: BridgeMessage) => void>(() => {});
   const onAbortRef = useRef<() => void>(() => {});
+  const statsFetchInFlightRef = useRef(false);
 
   useInput(
     (_, key) => {
       if (!key.escape) return;
+      // Order must match render priority: CommandPalette → UsageOverlay → PlanTodosOverlay
       const { planTodosOverlay: plan, commandPaletteOpen: palette, usageOverlayOpen } = overlayRef.current;
-      if (plan) setPlanTodosOverlay(null);
-      else if (palette) setCommandPaletteOpen(false);
+      if (palette) setCommandPaletteOpen(false);
       else if (usageOverlayOpen) setUsageOverlay(null);
+      else if (plan) setPlanTodosOverlay(null);
     },
     { isActive: planTodosOverlay !== null || commandPaletteOpen || usageOverlay !== null }
   );
@@ -154,6 +158,8 @@ export default function App() {
         setLastTuiAbortableStatus(false);
         setTuiActiveDepth(0);
         setUserSendPending(false);
+        setIsCompacting(false);
+        void refreshSessionStats();
         break;
       case "text_stream":
         streamingRef.current += msg.content;
@@ -191,6 +197,11 @@ export default function App() {
         });
         break;
       case "status_update": {
+        const statusLabelLower = (msg.label ?? "").toLowerCase();
+        const isCompactionStatus = statusLabelLower.includes("compact");
+        if (isCompactionStatus) {
+          setIsCompacting(msg.status === "running");
+        }
         const tab = msg.tui_abortable === true;
         if (msg.tui_abortable !== undefined) {
           setLastTuiAbortableStatus(tab);
@@ -213,6 +224,9 @@ export default function App() {
         setStatusLabel(msg.status === "done" ? null : (msg.label ?? null));
         setStatusKind(msg.status === "done" ? null : kind);
         setIsProgress(progress && msg.status === "running");
+        if (msg.status === "done") {
+          void refreshSessionStats();
+        }
         commitStreamToScrollback();
         break;
       }
@@ -417,6 +431,7 @@ export default function App() {
       setUserSendPending(false);
       setTuiActiveDepth(0);
       setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
       setError(null);
       sessionRef.current = "";
       setBootHint("Choose an agent below.");
@@ -454,6 +469,29 @@ export default function App() {
   }, [connectSse, startAgentSwitch]);
 
   // --- HTTP helpers ---
+  const refreshSessionStats = useCallback(async () => {
+    const sid = sessionRef.current;
+    if (!sid || statsFetchInFlightRef.current) return;
+    statsFetchInFlightRef.current = true;
+    try {
+      const res = await fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(sid)}/stats`);
+      if (!res.ok) return;
+      const stats = (await res.json()) as {
+        tokens_used: number;
+        context_window: number;
+        compaction_threshold?: number;
+      };
+      const thresholdFraction = stats.compaction_threshold ?? 0.7;
+      const thresholdTokens = Math.max(1, Math.floor(stats.context_window * thresholdFraction));
+      const remaining = Math.max(0, thresholdTokens - stats.tokens_used);
+      setAutoCompactPercent(Math.round((remaining / thresholdTokens) * 100));
+    } catch {
+      // best effort
+    } finally {
+      statsFetchInFlightRef.current = false;
+    }
+  }, []);
+
   const sendToGateway = useCallback(async (body: Record<string, unknown>) => {
     const pendingClear = clearSessionPromiseRef.current;
     if (pendingClear) {
@@ -488,6 +526,7 @@ export default function App() {
   const mcpModeRef = useRef(false);
   const deleteModeRef = useRef(false);
   const workDirModeRef = useRef(false);
+  const compactModeRef = useRef(false);
 
   const startMcpManagement = useCallback(async () => {
     mcpModeRef.current = true;
@@ -593,6 +632,15 @@ export default function App() {
       ]);
     }
   }, []);
+
+  const handleCompactSubmit = useCallback((value: string | boolean | number) => {
+    compactModeRef.current = false;
+    setHitlSpec(null);
+    const focus = String(value).trim();
+    const msg = focus ? `/compact ${focus}` : "/compact";
+    setScrollback((s) => [...s, { type: "user", content: msg }, { type: "spacing" as const }]);
+    void sendToGateway({ message: msg });
+  }, [sendToGateway]);
 
   const handleWorkDirSubmit = useCallback(async (value: string | boolean | number) => {
     workDirModeRef.current = false;
@@ -718,6 +766,7 @@ export default function App() {
           setUserSendPending(false);
           setTuiActiveDepth(0);
           setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
           initialAgentPickRef.current = false;
           const ac = new AbortController();
           abortRef.current = ac;
@@ -800,6 +849,7 @@ export default function App() {
       setUserSendPending(false);
       setTuiActiveDepth(0);
       setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
 
       const ac = new AbortController();
       abortRef.current = ac;
@@ -856,6 +906,7 @@ export default function App() {
       setUserSendPending(false);
       setTuiActiveDepth(0);
       setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
       const ac = new AbortController();
       abortRef.current = ac;
       connectSse(result.session_id, ac);
@@ -886,6 +937,7 @@ export default function App() {
     setUserSendPending(false);
     setTuiActiveDepth(0);
     setLastTuiAbortableStatus(false);
+    setIsCompacting(false);
     const ac = new AbortController();
     abortRef.current = ac;
     connectSse(returnSession, ac);
@@ -926,6 +978,7 @@ export default function App() {
       setUserSendPending(false);
       setTuiActiveDepth(0);
       setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
       const ac = new AbortController();
       abortRef.current = ac;
       connectSse(result.btw_session_id, ac);
@@ -985,11 +1038,15 @@ export default function App() {
         void handleWorkDirSubmit(value);
         return;
       }
+      if (compactModeRef.current) {
+        handleCompactSubmit(value);
+        return;
+      }
       setUserSendPending(true);
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit]
+    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -1026,6 +1083,11 @@ export default function App() {
     }
     if (workDirModeRef.current) {
       workDirModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    if (compactModeRef.current) {
+      compactModeRef.current = false;
       setHitlSpec(null);
       return;
     }
@@ -1133,6 +1195,21 @@ export default function App() {
         case "work-dir":
           void startWorkDirFlow();
           break;
+        case "compact":
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "Connect to an agent first, then use /compact.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          compactModeRef.current = true;
+          setHitlSpec({
+            type: "user_input_required" as const,
+            method: "text" as const,
+            ui: "compact",
+          });
+          break;
         case "clear":
           setScrollback([]);
           setStreamingContent("");
@@ -1149,6 +1226,7 @@ export default function App() {
           setUserSendPending(false);
           setTuiActiveDepth(0);
           setLastTuiAbortableStatus(false);
+          setIsCompacting(false);
           setError(null);
           {
             const p = fetch(
@@ -1190,6 +1268,7 @@ export default function App() {
                 turns_used: number;
                 max_turns: number;
               };
+              setPlanTodosOverlay(null);
               setUsageOverlay(stats);
             })
             .catch(() => {
@@ -1209,6 +1288,7 @@ export default function App() {
             { type: "agent_line", content: "/delete   - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/mcps     - Enable/disable MCPs", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/work-dir - View or change working directory", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/compact  - Summarize context to save tokens (optionally add a focus hint)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/plan     - View current plan", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/todos    - View open todos", isFirst: false, isSystem: true },
@@ -1228,6 +1308,7 @@ export default function App() {
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
 
   const showStatusSpinner =
+    isCompacting ||
     userSendPending ||
     tuiActiveDepth > 0 ||
     (isProgress && lastTuiAbortableStatus);
@@ -1251,6 +1332,8 @@ export default function App() {
           sessionId={bootInfo?.sessionId}
           isWaitingForInput={!!hitlSpec}
           isBtw={btwMode}
+          isCompacting={isCompacting}
+          autoCompactPercent={autoCompactPercent}
         />
         {hitlSpec ? (
           isAskUserQuestionRequired(hitlSpec) ? (
@@ -1275,10 +1358,7 @@ export default function App() {
             onCommand={onCommand}
           />
         ) : usageOverlay ? (
-          <UsageOverlay
-            stats={usageOverlay}
-            onDismiss={() => setUsageOverlay(null)}
-          />
+          <UsageOverlay stats={usageOverlay} />
         ) : planTodosOverlay ? (
           <PlanTodosOverlay
             type={planTodosOverlay}
@@ -1290,7 +1370,7 @@ export default function App() {
           <InputArea
             onSubmit={onSubmit}
             onCommitStreaming={commitStreaming}
-            disabled={!bridgeReady}
+            disabled={!bridgeReady || isCompacting}
             bridgeReady={bridgeReady}
             onSwitchAgent={onSwitchAgent}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}

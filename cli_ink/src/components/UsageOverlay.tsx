@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Box, Text, useInput } from "ink";
+import { Box, Text } from "ink";
 import { theme } from "../theme.js";
 
 type UsageStats = {
@@ -12,7 +12,6 @@ type UsageStats = {
 
 type Props = {
   stats: UsageStats;
-  onDismiss: () => void;
 };
 
 function makeBar(used: number, total: number, width = 24): { bar: string; pct: number } {
@@ -22,13 +21,7 @@ function makeBar(used: number, total: number, width = 24): { bar: string; pct: n
   return { bar: "█".repeat(fill) + "░".repeat(width - fill), pct: clampedPct };
 }
 
-export function UsageOverlay({ stats, onDismiss }: Props) {
-  useInput((input, key) => {
-    if (key.escape || key.return || input.toLowerCase() === "q") {
-      onDismiss();
-    }
-  });
-
+export function UsageOverlay({ stats }: Props) {
   const context = useMemo(
     () => makeBar(stats.tokens_used, stats.token_budget),
     [stats.tokens_used, stats.token_budget]
@@ -81,7 +74,7 @@ export function UsageOverlay({ stats, onDismiss }: Props) {
         </Text>
       </Box>
 
-      <Text color={theme.mist}>Esc, Enter, or q to close</Text>
+      <Text color={theme.mist}>Esc to close</Text>
     </Box>
   );
 }

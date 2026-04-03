@@ -23,6 +23,7 @@ from proxi.cli.main import (
     setup_sub_agents,
     setup_tools,
 )
+from proxi.core.compactor import ContextCompactor
 from proxi.core.loop import AgentLoop
 from proxi.core.state import WorkspaceConfig
 from proxi.gateway.channels.cron import CronRegistry, _parse_cron
@@ -51,6 +52,7 @@ from proxi.gateway.router import EventRouter
 from proxi.interaction.tool import get_ask_user_question_spec
 from proxi.llm.model_registry import (
     DEFAULT_MODELS,
+    get_context_window,
     get_model_limits_by_provider,
     get_supported_models_by_provider,
 )
@@ -72,7 +74,8 @@ heartbeat_mgr: HeartbeatManager
 scheduler = AsyncIOScheduler()
 
 SUPPORTED_LLM_MODELS: dict[str, list[str]] = get_supported_models_by_provider()
-LLM_MODEL_LIMITS: dict[str, list[dict[str, int | str]]] = get_model_limits_by_provider()
+LLM_MODEL_LIMITS: dict[str, list[dict[str, int | str]]
+                       ] = get_model_limits_by_provider()
 DEFAULT_LLM_MODELS: dict[str, str] = dict(DEFAULT_MODELS)
 llm_provider: str = "openai"
 llm_model: str = DEFAULT_LLM_MODELS["openai"]
@@ -80,7 +83,8 @@ llm_model: str = DEFAULT_LLM_MODELS["openai"]
 # MCP adapters loaded once at startup; their tools are injected into each lane.
 _mcp_adapters: list[Any] = []
 _mcp_tools: list[Any] = []           # live (always-loaded) MCP tools
-_mcp_deferred_tools: list[Any] = []  # deferred MCP tools (loaded via search_tools)
+# deferred MCP tools (loaded via search_tools)
+_mcp_deferred_tools: list[Any] = []
 _last_mcp_signature: str | None = None
 _mcp_refresh_lock = asyncio.Lock()
 
@@ -121,13 +125,15 @@ def _gateway_config_path() -> Path:
 def _load_gateway_raw_config() -> dict[str, Any]:
     path = _gateway_config_path()
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"gateway.yml not found at {path}")
+        raise HTTPException(
+            status_code=404, detail=f"gateway.yml not found at {path}")
 
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if raw is None:
         raw = {}
     if not isinstance(raw, dict):
-        raise HTTPException(status_code=500, detail="gateway.yml must be a YAML mapping")
+        raise HTTPException(
+            status_code=500, detail="gateway.yml must be a YAML mapping")
 
     if not isinstance(raw.get("agents"), dict):
         raw["agents"] = {}
@@ -221,7 +227,8 @@ async def _refresh_mcp_tools() -> None:
                 auto_load_mcp_servers(tmp_registry), timeout=30.0
             )
             _mcp_tools[:] = list(tmp_registry._tools.values())
-            _mcp_deferred_tools[:] = list(tmp_registry._deferred_tools.values())
+            _mcp_deferred_tools[:] = list(
+                tmp_registry._deferred_tools.values())
             logger.info(
                 "mcp_refreshed",
                 adapters=len(_mcp_adapters),
@@ -235,7 +242,8 @@ async def _refresh_mcp_tools() -> None:
         # global tool objects and closes old MCP stdio clients — push the new tools
         # into every active loop so toggles take effect without restarting the gateway.
         if lane_manager is not None:
-            lane_manager.sync_mcp_tools_to_loops(_mcp_tools, _mcp_deferred_tools)
+            lane_manager.sync_mcp_tools_to_loops(
+                _mcp_tools, _mcp_deferred_tools)
 
 
 def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
@@ -247,7 +255,8 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     """
     llm_client = create_llm_client(provider=llm_provider, model=llm_model)
 
-    working_dir = _agent_working_dirs.get(workspace_config.agent_id, _working_dir)
+    working_dir = _agent_working_dirs.get(
+        workspace_config.agent_id, _working_dir)
 
     tool_registry = setup_tools(working_directory=working_dir)
     tool_registry.register_raw_spec(get_ask_user_question_spec())
@@ -257,9 +266,11 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 
     # Register coding tools based on per-agent config
     workspace_manager = WorkspaceManager(root=_workspace_root())
-    agent_config = workspace_manager.read_agent_config(workspace_config.agent_id)
+    agent_config = workspace_manager.read_agent_config(
+        workspace_config.agent_id)
     coding_tier = agent_config.get("tool_sets", {}).get("coding", "live")
-    register_coding_tools(tool_registry, working_dir=working_dir, tier=str(coding_tier))
+    register_coding_tools(
+        tool_registry, working_dir=working_dir, tier=str(coding_tier))
 
     workspace_config.curr_working_dir = str(working_dir)
 
@@ -276,7 +287,11 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     )
     sub_agent_manager = None if no_sub_agents else setup_sub_agents(llm_client)
 
-    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "100"))
+    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "500"))
+    compactor = ContextCompactor(
+        llm_client=llm_client,
+        context_window=get_context_window(llm_model),
+    )
     return AgentLoop(
         llm_client=llm_client,
         tool_registry=tool_registry,
@@ -284,6 +299,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
         max_turns=max_turns,
         enable_reflection=True,
         workspace=workspace_config,
+        compactor=compactor,
     )
 
 
@@ -387,7 +403,8 @@ async def intake(adapter: TelegramAdapter | WhatsAppAdapter | DiscordAdapter, ra
 def _discord_source() -> Any:
     source = config.sources.get("discord")
     if source is None or source.source_type not in ("discord", "channel"):
-        raise HTTPException(status_code=404, detail="Discord source is not configured")
+        raise HTTPException(
+            status_code=404, detail="Discord source is not configured")
     return source
 
 
@@ -406,7 +423,8 @@ def _discord_user_id(raw: dict[str, Any]) -> str:
 
 
 def _sanitize_session_token(value: str, fallback: str) -> str:
-    cleaned = "".join(ch for ch in str(value or "") if ch.isalnum() or ch in ("-", "_"))
+    cleaned = "".join(ch for ch in str(value or "")
+                      if ch.isalnum() or ch in ("-", "_"))
     return cleaned or fallback
 
 
@@ -425,9 +443,11 @@ def _resolve_discord_session(source: Any, raw: dict[str, Any]) -> str:
 
     agent_id = _discord_agent_for_channel(source, channel_id)
     if agent_id not in config.agents:
-        raise HTTPException(status_code=400, detail=f"Unknown Discord target agent: {agent_id}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown Discord target agent: {agent_id}")
 
-    mode = str(source.extras.get("discord_session_mode", "channel")).strip().lower()
+    mode = str(source.extras.get(
+        "discord_session_mode", "channel")).strip().lower()
     base_session = str(source.target_session or "").strip()
     agent_default = config.agents[agent_id].default_session
 
@@ -448,9 +468,11 @@ def _set_discord_channel_agent(channel_id: str, agent_id: str) -> None:
     sources = raw["sources"]
     existing = sources.get("discord")
     if existing is None:
-        raise HTTPException(status_code=404, detail="Discord source is not configured")
+        raise HTTPException(
+            status_code=404, detail="Discord source is not configured")
     if not isinstance(existing, dict):
-        raise HTTPException(status_code=500, detail="Discord source config is invalid")
+        raise HTTPException(
+            status_code=500, detail="Discord source config is invalid")
 
     overrides = existing.get("discord_agent_overrides")
     if not isinstance(overrides, dict):
@@ -512,10 +534,12 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
     await verify_discord_signature(request)
     raw_payload = await request.json()
     if not isinstance(raw_payload, dict):
-        raise HTTPException(status_code=400, detail="Discord payload must be an object")
+        raise HTTPException(
+            status_code=400, detail="Discord payload must be an object")
 
     source = _discord_source()
-    command_prefix = str(source.extras.get("discord_command_prefix", "/proxi") or "/proxi")
+    command_prefix = str(source.extras.get(
+        "discord_command_prefix", "/proxi") or "/proxi")
     allow_plain = bool(source.extras.get("discord_allow_plain", False))
 
     event = await DiscordAdapter(
@@ -564,13 +588,16 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
     if action == "switch":
         next_agent_id = str(command.get("agent_id", "")).strip()
         if not next_agent_id:
-            raise HTTPException(status_code=400, detail="switch command requires agent id")
+            raise HTTPException(
+                status_code=400, detail="switch command requires agent id")
         if next_agent_id not in config.agents:
-            raise HTTPException(status_code=404, detail=f"Unknown agent: {next_agent_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Unknown agent: {next_agent_id}")
 
         channel_id = _discord_channel_id(raw_payload)
         if not channel_id:
-            raise HTTPException(status_code=400, detail="Discord channel_id is required for switch")
+            raise HTTPException(
+                status_code=400, detail="Discord channel_id is required for switch")
 
         _set_discord_channel_agent(channel_id, next_agent_id)
         source = _discord_source()
@@ -588,7 +615,8 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
         }
 
     if action != "start":
-        raise HTTPException(status_code=400, detail=f"Unsupported Discord command action: {action}")
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported Discord command action: {action}")
 
     task = str(event.payload.get("text", "")).strip()
     if not task:
@@ -613,9 +641,11 @@ async def generic_webhook(source_id: str, request: Request) -> dict[str, bool]:
     try:
         raw_payload = await request.json()
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="Webhook payload must be valid JSON") from exc
+        raise HTTPException(
+            status_code=400, detail="Webhook payload must be valid JSON") from exc
 
-    raw = raw_payload if isinstance(raw_payload, dict) else {"_raw": raw_payload}
+    raw = raw_payload if isinstance(raw_payload, dict) else {
+        "_raw": raw_payload}
 
     event = build_webhook_event(source, raw)
     event.session_id = router.resolve(event)
@@ -850,20 +880,24 @@ async def set_working_dir_endpoint(body: SetWorkingDirRequest) -> dict[str, str]
         raise HTTPException(status_code=400, detail="path is required")
     new_dir = Path(raw).expanduser().resolve()
     if not new_dir.exists():
-        raise HTTPException(status_code=400, detail=f"Path does not exist: {new_dir}")
+        raise HTTPException(
+            status_code=400, detail=f"Path does not exist: {new_dir}")
     if not new_dir.is_dir():
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {new_dir}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a directory: {new_dir}")
 
     if body.agent_id:
         _agent_working_dirs[body.agent_id] = new_dir
         if lane_manager is not None:
-            lane_manager.sync_coding_tools_to_agent_loops(body.agent_id, new_dir)
+            lane_manager.sync_coding_tools_to_agent_loops(
+                body.agent_id, new_dir)
     else:
         _working_dir = new_dir
         if lane_manager is not None:
             lane_manager.sync_coding_tools_to_loops(new_dir)
 
-    logger.info("working_dir_changed", path=str(new_dir), agent_id=body.agent_id)
+    logger.info("working_dir_changed", path=str(
+        new_dir), agent_id=body.agent_id)
     return {"path": str(new_dir)}
 
 
@@ -955,13 +989,16 @@ async def branch_session_endpoint(session_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="Gateway not ready")
     parts = session_id.split("/", 1)
     if len(parts) != 2:
-        raise HTTPException(status_code=400, detail="Invalid session_id format")
+        raise HTTPException(
+            status_code=400, detail="Invalid session_id format")
     agent_id, session_name = parts
     agent_cfg = config.agents.get(agent_id)
     if agent_cfg is None:
-        raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Unknown agent: {agent_id}")
     source_history_path = config.session_history_path(agent_id, session_name)
-    working_dir_str = str(_agent_working_dirs[agent_id]) if agent_id in _agent_working_dirs else None
+    working_dir_str = str(
+        _agent_working_dirs[agent_id]) if agent_id in _agent_working_dirs else None
     wm = WorkspaceManager(root=_workspace_root())
     try:
         new_agent = wm.branch_agent(
@@ -975,7 +1012,8 @@ async def branch_session_endpoint(session_id: str) -> dict[str, Any]:
     _reload_gateway_config()
     new_session_id = f"{new_agent.agent_id}/{agent_cfg.default_session}"
     lane_manager._get_or_create(new_session_id)
-    logger.info("agent_branched", parent=agent_id, new_agent=new_agent.agent_id)
+    logger.info("agent_branched", parent=agent_id,
+                new_agent=new_agent.agent_id)
     return {"agent_id": new_agent.agent_id, "session_id": new_session_id}
 
 
@@ -992,10 +1030,12 @@ async def create_btw_session_endpoint(session_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="Gateway not ready")
     parts = session_id.split("/", 1)
     if len(parts) != 2:
-        raise HTTPException(status_code=400, detail="Invalid session_id format")
+        raise HTTPException(
+            status_code=400, detail="Invalid session_id format")
     agent_id, session_name = parts
     if agent_id not in config.agents:
-        raise HTTPException(status_code=404, detail=f"Unknown agent: {agent_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Unknown agent: {agent_id}")
     from datetime import datetime, timezone
     btw_name = "btw-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     btw_session_id = f"{agent_id}/{btw_name}"
@@ -1007,7 +1047,8 @@ async def create_btw_session_endpoint(session_id: str) -> dict[str, Any]:
         source_history_path=source_history_path,
     )
     lane_manager._get_or_create(btw_session_id)
-    logger.info("btw_session_created", agent=agent_id, btw_session=btw_session_id, return_session=session_id)
+    logger.info("btw_session_created", agent=agent_id,
+                btw_session=btw_session_id, return_session=session_id)
     return {"btw_session_id": btw_session_id, "return_session_id": session_id}
 
 
@@ -1018,7 +1059,8 @@ async def delete_session_endpoint(session_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="Gateway not ready")
     parts = session_id.split("/", 1)
     if len(parts) != 2:
-        raise HTTPException(status_code=400, detail="Invalid session_id format")
+        raise HTTPException(
+            status_code=400, detail="Invalid session_id format")
     agent_id, session_name = parts
     await lane_manager.remove_lane(session_id)
     wm = WorkspaceManager(root=_workspace_root())
@@ -1178,9 +1220,11 @@ async def upsert_cron_job_endpoint(source_id: str, body: CronJobUpsertRequest) -
     if not target_agent:
         raise HTTPException(status_code=400, detail="target_agent is required")
     if target_agent not in config.agents:
-        raise HTTPException(status_code=400, detail=f"Unknown agent: {target_agent}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown agent: {target_agent}")
     if body.priority < 0 or body.priority > 5:
-        raise HTTPException(status_code=400, detail="priority must be between 0 and 5")
+        raise HTTPException(
+            status_code=400, detail="priority must be between 0 and 5")
 
     try:
         _parse_cron(schedule)
@@ -1233,9 +1277,11 @@ async def pause_cron_job_endpoint(source_id: str, body: CronPauseRequest) -> dic
     sources = raw["sources"]
     existing = sources.get(sid)
     if existing is None:
-        raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
+        raise HTTPException(
+            status_code=404, detail=f"Cron source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "cron":
-        raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+        raise HTTPException(
+            status_code=400, detail=f"Source is not a cron job: {sid}")
 
     existing["paused"] = bool(body.paused)
     sources[sid] = existing
@@ -1255,14 +1301,15 @@ async def delete_cron_job_endpoint(source_id: str) -> dict[str, Any]:
     sources = raw["sources"]
     existing = sources.get(sid)
     if existing is None:
-        raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
+        raise HTTPException(
+            status_code=404, detail=f"Cron source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "cron":
-        raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+        raise HTTPException(
+            status_code=400, detail=f"Source is not a cron job: {sid}")
 
     del sources[sid]
     _persist_and_reload_gateway_config(raw)
     return {"status": "deleted", "source_id": sid}
-
 
 
 # Webhook Sources
@@ -1305,11 +1352,14 @@ async def upsert_webhook_endpoint(source_id: str, body: WebhookUpsertRequest) ->
     if not target_agent:
         raise HTTPException(status_code=400, detail="target_agent is required")
     if not secret_env:
-        raise HTTPException(status_code=400, detail="secret_env is required for webhook security")
+        raise HTTPException(
+            status_code=400, detail="secret_env is required for webhook security")
     if target_agent not in config.agents:
-        raise HTTPException(status_code=400, detail=f"Unknown agent: {target_agent}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown agent: {target_agent}")
     if body.priority < 0 or body.priority > 5:
-        raise HTTPException(status_code=400, detail="priority must be between 0 and 5")
+        raise HTTPException(
+            status_code=400, detail="priority must be between 0 and 5")
 
     raw = _load_gateway_raw_config()
     sources = raw["sources"]
@@ -1324,7 +1374,7 @@ async def upsert_webhook_endpoint(source_id: str, body: WebhookUpsertRequest) ->
     existing["target_agent"] = target_agent
     existing["priority"] = int(body.priority)
     existing["paused"] = bool(body.paused)
-    
+
     if body.prompt_template:
         existing["prompt_template"] = body.prompt_template
     elif "prompt_template" in existing:
@@ -1364,9 +1414,11 @@ async def pause_webhook_endpoint(source_id: str, body: WebhookPauseRequest) -> d
     sources = raw["sources"]
     existing = sources.get(sid)
     if existing is None:
-        raise HTTPException(status_code=404, detail=f"Webhook source not found: {sid}")
+        raise HTTPException(
+            status_code=404, detail=f"Webhook source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "webhook":
-        raise HTTPException(status_code=400, detail=f"Source is not a webhook: {sid}")
+        raise HTTPException(
+            status_code=400, detail=f"Source is not a webhook: {sid}")
 
     existing["paused"] = bool(body.paused)
     sources[sid] = existing
@@ -1386,9 +1438,11 @@ async def delete_webhook_endpoint(source_id: str) -> dict[str, Any]:
     sources = raw["sources"]
     existing = sources.get(sid)
     if existing is None:
-        raise HTTPException(status_code=404, detail=f"Webhook source not found: {sid}")
+        raise HTTPException(
+            status_code=404, detail=f"Webhook source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "webhook":
-        raise HTTPException(status_code=400, detail=f"Source is not a webhook: {sid}")
+        raise HTTPException(
+            status_code=400, detail=f"Source is not a webhook: {sid}")
 
     del sources[sid]
     _persist_and_reload_gateway_config(raw)
@@ -1423,12 +1477,14 @@ async def get_session_stats(session_id: str) -> dict[str, Any]:
     """Return token and turn usage stats for an active session lane."""
     lane = lane_manager.get_lane(session_id)
     if lane is None:
-        raise HTTPException(status_code=404, detail="No active lane for this session")
+        raise HTTPException(
+            status_code=404, detail="No active lane for this session")
     b = lane.budget
     return {
         "tokens_used": b.tokens_used,
         "token_budget": b.token_budget,
         "context_window": b.context_window,
+        "compaction_threshold": b.compaction_threshold,
         "turns_used": b.turns_used,
         "max_turns": b.max_turns,
     }
