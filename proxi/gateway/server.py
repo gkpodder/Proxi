@@ -72,6 +72,7 @@ router: EventRouter
 lane_manager: LaneManager | None = None
 heartbeat_mgr: HeartbeatManager
 scheduler = AsyncIOScheduler()
+memory_manager: Any | None = None  # MemoryManager, initialised in lifespan
 
 SUPPORTED_LLM_MODELS: dict[str, list[str]] = get_supported_models_by_provider()
 LLM_MODEL_LIMITS: dict[str, list[dict[str, int | str]]
@@ -329,6 +330,15 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
         from proxi.tools.call_tool_tool import CallToolTool
         tool_registry.register(CallToolTool(tool_registry))
 
+    # Register memory tools if memory is enabled for this agent
+    if memory_manager is not None:
+        _agent_mem_enabled = config.agents.get(workspace_config.agent_id)
+        if _agent_mem_enabled is None or _agent_mem_enabled.memory_enabled:
+            from proxi.tools.memory_tools import SearchMemoryTool, SaveSkillTool, UpdateUserModelTool
+            tool_registry.register(SearchMemoryTool(memory_manager))
+            tool_registry.register(SaveSkillTool(memory_manager))
+            tool_registry.register(UpdateUserModelTool(memory_manager))
+
     no_sub_agents = os.environ.get("PROXI_NO_SUB_AGENTS", "").lower() in (
         "1", "true", "yes",
     )
@@ -358,9 +368,18 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     global config, router, lane_manager, heartbeat_mgr
     global _mcp_adapters, _mcp_tools
     global llm_provider, llm_model
+    global memory_manager
 
     workspace_root = _workspace_root()
     WorkspaceManager(root=workspace_root).ensure_global_system_prompt()
+
+    # Initialize memory system
+    from proxi.memory.manager import MemoryManager as _MemoryManager
+    memory_manager = _MemoryManager(
+        memory_dir=workspace_root / "memory",
+        gateway_config_path=workspace_root / "gateway.yml",
+    )
+    memory_manager.init()
 
     config = GatewayConfig.load(workspace_root)
     router = EventRouter(config)

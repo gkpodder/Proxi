@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
@@ -14,6 +15,92 @@ from proxi.gateway.lanes.budget import BudgetExceeded, LaneBudget
 from proxi.observability.logging import get_logger
 
 logger = get_logger(__name__)
+
+_SUMMARIZER_PROMPT = """\
+Summarize the following conversation in ~200 words. Focus on:
+- What the user asked for
+- What was accomplished (key actions, files changed, decisions made)
+- Any errors and how they were resolved
+- Useful facts for future reference
+
+Also output a JSON array of 3-5 topic tags on the last line prefixed with TAGS:
+Example last line: TAGS: ["docker", "deployment", "debugging"]
+
+Conversation:
+{transcript}
+"""
+
+
+async def _summarize_session(
+    agent_id: str,
+    session_id: str,
+    history: list[Any],
+    memory_manager: Any,
+    llm_client: Any,
+) -> None:
+    """Background task: summarize a completed session and store in episodic memory."""
+    # Only summarize sessions with meaningful content (at least 3 user turns)
+    user_msgs = [m for m in history if getattr(m, "role", None) == "user"]
+    if len(user_msgs) < 3:
+        return
+
+    # Build a compact transcript (skip large tool results)
+    lines: list[str] = []
+    for msg in history:
+        role = getattr(msg, "role", "")
+        content = getattr(msg, "content", None) or ""
+        if role in ("user", "assistant") and content:
+            lines.append(f"{role.upper()}: {content[:500]}")
+        elif role == "tool" and content:
+            lines.append(f"TOOL RESULT: {content[:200]}")
+    transcript = "\n".join(lines)[:6000]  # keep within cheap model's context
+
+    prompt = _SUMMARIZER_PROMPT.format(transcript=transcript)
+    try:
+        model = os.environ.get("PROXI_MEMORY_SUMMARIZER_MODEL", "gpt-4o-mini")
+        resp = await llm_client.generate(
+            messages=[{"role": "user", "content": prompt}],
+            model=model,
+            max_tokens=400,
+        )
+        raw = ""
+        if hasattr(resp, "content"):
+            raw = resp.content or ""
+        elif isinstance(resp, dict):
+            raw = resp.get("content", "") or ""
+        elif isinstance(resp, str):
+            raw = resp
+
+        # Extract tags from last line
+        import json as _json
+        tags: list[str] = []
+        summary_lines = raw.strip().splitlines()
+        if summary_lines and summary_lines[-1].startswith("TAGS:"):
+            tag_str = summary_lines[-1][5:].strip()
+            try:
+                tags = _json.loads(tag_str)
+            except Exception:
+                tags = []
+            summary_lines = summary_lines[:-1]
+        summary = "\n".join(summary_lines).strip()
+
+        from proxi.memory.schema import EpisodeSummary
+        episode = EpisodeSummary(
+            agent_id=agent_id,
+            session_id=session_id,
+            summary=summary,
+            full_text=transcript,
+            tags=tags,
+        )
+        await memory_manager.save_episode(episode)
+        logger.info(
+            "session_summarized",
+            agent_id=agent_id,
+            session_id=session_id,
+            tags=tags,
+        )
+    except Exception as exc:
+        logger.warning("session_summarization_failed", error=str(exc))
 
 
 def _should_emit_inbound_turn_header(event: GatewayEvent) -> bool:
@@ -619,6 +706,27 @@ class AgentLane:
                 )
             except Exception:
                 pass
+
+        # Fire-and-forget post-session summarization into episodic memory
+        try:
+            from proxi.gateway import server as _srv
+            _mm = getattr(_srv, "memory_manager", None)
+            if _mm is not None and self._loop is not None:
+                _ws = result_state.workspace
+                _agent_id = _ws.agent_id if _ws else "unknown"
+                _session_id = _ws.session_id if _ws else self.session_id
+                if _mm.is_enabled(_agent_id):
+                    asyncio.ensure_future(
+                        _summarize_session(
+                            agent_id=_agent_id,
+                            session_id=_session_id,
+                            history=list(result_state.history),
+                            memory_manager=_mm,
+                            llm_client=self._loop.llm_client,
+                        )
+                    )
+        except Exception:
+            pass  # never block the dispatch path
 
         last_msg = (
             result_state.history[-1]

@@ -49,6 +49,10 @@ class ToolRegistry:
         self._deferred_tools[tool.name] = tool
         self._rebuild_deferred_index()
 
+    def has_tool(self, name: str) -> bool:
+        """Return True if a tool with *name* is in the live tier."""
+        return name in self._tools
+
     def has_deferred_tools(self) -> bool:
         """Return True if any tools remain in the deferred tier."""
         return bool(self._deferred_tools)
