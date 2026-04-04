@@ -201,11 +201,11 @@ class PromptBuilder:
                 "- Do NOT call unrelated live tools (mcp_read_emails, etc.) before call_tool.\n"
                 "- Do NOT use read/list tools to perform write/send actions.\n\n"
                 "Examples:\n"
-                "- List Obsidian notes → call_tool('mcp_obsidian_list_notes', {})\n"
-                "- Create Obsidian note → call_tool('mcp_obsidian_create_note', {\"note_path\": \"Jokes/Funny.md\", \"content\": \"...\"})\n"
-                "- Send email → call_tool('mcp_send_email', {\"to\": \"...\", \"subject\": \"...\", \"body\": \"...\"})\n"
-                "- Create calendar event → call_tool('mcp_calendar_create_event', {\"summary\": \"...\", \"start\": \"...\", \"end\": \"...\"})\n"
-                "- Create Notion page → call_tool('mcp_notion_create_page', {\"title\": \"...\", \"content\": \"...\"})"
+                "- List Obsidian notes → call_tool('obsidian_list_notes', {})\n"
+                "- Create Obsidian note → call_tool('obsidian_create_note', {\"note_path\": \"Jokes/Funny.md\", \"content\": \"...\"})\n"
+                "- Send email → call_tool('send_email', {\"to\": \"...\", \"subject\": \"...\", \"body\": \"...\"})\n"
+                "- Create calendar event → call_tool('calendar_create_event', {\"summary\": \"...\", \"start_time\": \"...\", \"end_time\": \"...\", \"timezone\": \"America/Toronto\", \"attendees\": []})\n"
+                "- Create Notion page → call_tool('notion_create_page', {\"title\": \"...\", \"content\": \"...\"})"
             )
 
         return "\n\n".join(parts).strip()

@@ -287,10 +287,578 @@ class GetWeatherForecastTool(CLITool):
         )
 
 
+class NotionListChildrenTool(CLITool):
+    """List child pages/databases under the configured Notion parent page."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="notion_list_children",
+            description=(
+                "List child pages/databases under the configured parent page. "
+                "Use this for requests like 'show my Notion pages'. If the result "
+                "contains an error field, report it and ask follow-up only if needed."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of items to retrieve (default: 10)",
+                    }
+                },
+                "required": [],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.notion", "list-children"],
+            timeout=30,
+            # parallel_safe: stateless HTTP calls, no shared mutable state.
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class NotionCreatePageTool(CLITool):
+    """Create a Notion page under the configured parent page."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="notion_create_page",
+            description=(
+                "Create a new Notion page under the configured parent page. Always "
+                "pass title. Content is optional. If output contains an error field, "
+                "surface it and ask a follow-up only if needed."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Page title",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Optional page content",
+                    },
+                },
+                "required": ["title"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.notion", "create-page"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=False,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class NotionAppendToPageTool(CLITool):
+    """Append paragraph content to an existing Notion page."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="notion_append_to_page",
+            description=(
+                "Append content to an existing Notion page. Always pass page_id and "
+                "content. If output contains an error field, surface it and ask for "
+                "clarification only when required."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "string",
+                        "description": "Notion page ID",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Content to append",
+                    },
+                },
+                "required": ["page_id", "content"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.notion", "append-to-page"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=False,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class NotionGetPageTool(CLITool):
+    """Get details for a Notion page by page ID."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="notion_get_page",
+            description=(
+                "Get details for a Notion page. Always pass page_id. If output "
+                "contains an error field, surface it and ask follow-up only if needed."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "string",
+                        "description": "Notion page ID",
+                    },
+                },
+                "required": ["page_id"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.notion", "get-page"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class ReadEmailsTool(CLITool):
+    """Read Gmail inbox messages via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="read_emails",
+            description=(
+                "Read emails from Gmail. Use max_results (default 10) and optional "
+                "query. If the result contains an error field, report it and ask "
+                "follow-up only if needed."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of emails to retrieve (default: 10)",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Optional Gmail search query",
+                    },
+                },
+                "required": [],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.gmail", "read"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class SendEmailTool(CLITool):
+    """Send Gmail message via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="send_email",
+            description=(
+                "Send an email via Gmail. Require to and body. Subject defaults to "
+                "(no subject). Optional cc and bcc are supported."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string", "description": "Recipient email address"},
+                    "subject": {"type": "string", "description": "Email subject"},
+                    "body": {"type": "string", "description": "Email body"},
+                    "cc": {"type": "string", "description": "CC email addresses"},
+                    "bcc": {"type": "string", "description": "BCC email addresses"},
+                },
+                "required": ["to", "body"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.gmail", "send"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=False,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class GetEmailTool(CLITool):
+    """Get a specific Gmail message by ID via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="get_email",
+            description=(
+                "Get details for a specific Gmail message by email_id."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "email_id": {
+                        "type": "string",
+                        "description": "Gmail message ID",
+                    },
+                },
+                "required": ["email_id"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.gmail", "get"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class CalendarListEventsTool(CLITool):
+    """List calendar events via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="calendar_list_events",
+            description=(
+                "List upcoming Google Calendar events. Supports max_results, "
+                "calendar_id, optional time_min/time_max, and optional query."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "max_results": {"type": "integer", "description": "Maximum number of events"},
+                    "calendar_id": {"type": "string", "description": "Calendar ID (default: primary)"},
+                    "time_min": {"type": "string", "description": "RFC3339 lower bound"},
+                    "time_max": {"type": "string", "description": "RFC3339 upper bound"},
+                    "query": {"type": "string", "description": "Optional free-text search query"},
+                },
+                "required": [],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.calendar", "list-events"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class CalendarCreateEventTool(CLITool):
+    """Create a calendar event via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="calendar_create_event",
+            description=(
+                "Create a Google Calendar event. Requires summary, start_time, "
+                "end_time, timezone, and attendees."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string", "description": "Event title"},
+                    "start_time": {"type": "string", "description": "Event start date-time"},
+                    "end_time": {"type": "string", "description": "Event end date-time"},
+                    "timezone": {"type": "string", "description": "IANA timezone name"},
+                    "calendar_id": {"type": "string", "description": "Calendar ID (default: primary)"},
+                    "attendees": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of attendee emails",
+                    },
+                    "description": {"type": "string", "description": "Event description"},
+                    "location": {"type": "string", "description": "Event location"},
+                },
+                "required": ["summary", "start_time", "end_time", "timezone", "attendees"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.calendar", "create-event"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=False,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class CalendarGetEventTool(CLITool):
+    """Get a calendar event by ID via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="calendar_get_event",
+            description="Get details of a specific Google Calendar event by event_id.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "string", "description": "Google Calendar event ID"},
+                    "calendar_id": {"type": "string", "description": "Calendar ID (default: primary)"},
+                },
+                "required": ["event_id"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.calendar", "get-event"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class CalendarUpdateEventTool(CLITool):
+    """Update a calendar event via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="calendar_update_event",
+            description=(
+                "Update fields of an existing Google Calendar event. Requires event_id "
+                "plus one or more fields to change."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "string", "description": "Google Calendar event ID"},
+                    "calendar_id": {"type": "string", "description": "Calendar ID (default: primary)"},
+                    "summary": {"type": "string", "description": "Updated event title"},
+                    "start_time": {"type": "string", "description": "Updated start date-time"},
+                    "end_time": {"type": "string", "description": "Updated end date-time"},
+                    "timezone": {"type": "string", "description": "Updated IANA timezone"},
+                    "attendees": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Updated attendee email list",
+                    },
+                    "description": {"type": "string", "description": "Updated event description"},
+                    "location": {"type": "string", "description": "Updated event location"},
+                },
+                "required": ["event_id"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.calendar", "update-event"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=False,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class CalendarDeleteEventTool(CLITool):
+    """Delete a calendar event via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="calendar_delete_event",
+            description="Delete a Google Calendar event by event_id.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "event_id": {"type": "string", "description": "Google Calendar event ID"},
+                    "calendar_id": {"type": "string", "description": "Calendar ID (default: primary)"},
+                },
+                "required": ["event_id"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.calendar", "delete-event"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=False,
+            defer_loading=True,
+            max_retries=2,
+        )
+
+
+class ObsidianListVaultsTool(CLITool):
+    """List discovered Obsidian vaults via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="obsidian_list_vaults",
+            description="List discovered Obsidian vaults.",
+            parameters_schema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.obsidian", "list-vaults"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=0,
+        )
+
+
+class ObsidianListNotesTool(CLITool):
+    """List notes in selected Obsidian vault via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="obsidian_list_notes",
+            description="List markdown notes in an Obsidian vault.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "vault_name": {"type": "string", "description": "Vault name"},
+                    "vault_path": {"type": "string", "description": "Absolute vault path"},
+                    "max_results": {"type": "integer", "description": "Maximum number of notes"},
+                },
+                "required": [],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.obsidian", "list-notes"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=0,
+        )
+
+
+class ObsidianReadNoteTool(CLITool):
+    """Read an Obsidian note via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="obsidian_read_note",
+            description="Read an Obsidian note by note_path.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "vault_name": {"type": "string", "description": "Vault name"},
+                    "vault_path": {"type": "string", "description": "Absolute vault path"},
+                    "note_path": {"type": "string", "description": "Path to note within vault"},
+                },
+                "required": ["note_path"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.obsidian", "read-note"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=0,
+        )
+
+
+class ObsidianCreateNoteTool(CLITool):
+    """Create an Obsidian note via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="obsidian_create_note",
+            description="Create a note in an Obsidian vault.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "vault_name": {"type": "string", "description": "Vault name"},
+                    "vault_path": {"type": "string", "description": "Absolute vault path"},
+                    "note_path": {"type": "string", "description": "Path to note within vault"},
+                    "content": {"type": "string", "description": "Markdown content"},
+                    "overwrite": {"type": "boolean", "description": "Overwrite existing note"},
+                },
+                "required": ["note_path", "content"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.obsidian", "create-note"],
+            timeout=30,
+            parallel_safe=False,
+            read_only=False,
+            defer_loading=True,
+            max_retries=0,
+        )
+
+
+class ObsidianUpdateNoteTool(CLITool):
+    """Update an Obsidian note via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="obsidian_update_note",
+            description="Update content of an existing Obsidian note.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "vault_name": {"type": "string", "description": "Vault name"},
+                    "vault_path": {"type": "string", "description": "Absolute vault path"},
+                    "note_path": {"type": "string", "description": "Path to note within vault"},
+                    "content": {"type": "string", "description": "Markdown content"},
+                    "append": {"type": "boolean", "description": "Append instead of replace"},
+                },
+                "required": ["note_path", "content"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.obsidian", "update-note"],
+            timeout=30,
+            parallel_safe=False,
+            read_only=False,
+            defer_loading=True,
+            max_retries=0,
+        )
+
+
+class ObsidianSearchNotesTool(CLITool):
+    """Search notes in Obsidian vault via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="obsidian_search_notes",
+            description="Search Obsidian notes by query.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "vault_name": {"type": "string", "description": "Vault name"},
+                    "vault_path": {"type": "string", "description": "Absolute vault path"},
+                    "query": {"type": "string", "description": "Search text"},
+                    "max_results": {"type": "integer", "description": "Maximum number of matches"},
+                },
+                "required": ["query"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.obsidian", "search-notes"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=0,
+        )
+
+
+class ObsidianGetNoteMetadataTool(CLITool):
+    """Get Obsidian note metadata via CLI wrapper."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="obsidian_get_note_metadata",
+            description="Get metadata/frontmatter for an Obsidian note.",
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "vault_name": {"type": "string", "description": "Vault name"},
+                    "vault_path": {"type": "string", "description": "Absolute vault path"},
+                    "note_path": {"type": "string", "description": "Path to note within vault"},
+                },
+                "required": ["note_path"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.obsidian", "get-note-metadata"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=0,
+        )
+
+
 # Registry of all CLI tools.  auto_load_cli_tools() iterates this list and
 # applies the defer_loading / always_load config from config/mcp.json.
 # To add a new CLI tool: subclass CLITool above, then append it here.
 CLI_TOOLS: list[type[CLITool]] = [
     GetWeatherTool,
     GetWeatherForecastTool,
+    NotionListChildrenTool,
+    NotionCreatePageTool,
+    NotionAppendToPageTool,
+    NotionGetPageTool,
+    ReadEmailsTool,
+    SendEmailTool,
+    GetEmailTool,
+    CalendarListEventsTool,
+    CalendarCreateEventTool,
+    CalendarGetEventTool,
+    CalendarUpdateEventTool,
+    CalendarDeleteEventTool,
+    ObsidianListVaultsTool,
+    ObsidianListNotesTool,
+    ObsidianReadNoteTool,
+    ObsidianCreateNoteTool,
+    ObsidianUpdateNoteTool,
+    ObsidianSearchNotesTool,
+    ObsidianGetNoteMetadataTool,
 ]
