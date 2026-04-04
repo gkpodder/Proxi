@@ -41,10 +41,15 @@ class CallToolTool(BaseTool):
             name="call_tool",
             description=(
                 "Execute a tool from the AVAILABLE ON DEMAND list. "
-                "Pass the exact tool_name and the args it requires. "
+                "Pass the exact tool_name and the args it requires — include every "
+                "required key from the schema (e.g. weather tools need `location` in "
+                "`args` or the CLI exits with a usage error). "
                 "If the tool is not found, relevant alternatives are returned — "
                 "retry with the correct name. "
-                "Do NOT call live tools to gather info before calling this."
+                "Do NOT call live tools to gather info before calling this. "
+                "PARALLEL: when multiple independent calls are needed (e.g. weather for "
+                "several cities, reading several notes), issue ALL call_tool invocations "
+                "in a single response as multiple tool_calls — never one at a time."
             ),
             parameters_schema={
                 "type": "object",

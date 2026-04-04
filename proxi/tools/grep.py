@@ -119,7 +119,9 @@ class GrepTool(BaseTool):
                 "Supports file glob filters and context lines. "
                 "output_mode='files' returns only matching file paths; "
                 "'count' returns match counts per file; "
-                "'content' (default) returns matching lines with line numbers."
+                "'content' (default) returns matching lines with line numbers. "
+                "Several independent searches (different paths or patterns) should be multiple grep "
+                "calls in the same assistant turn, not one search per turn."
             ),
             parallel_safe=True,
             parameters_schema={

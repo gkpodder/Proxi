@@ -20,6 +20,7 @@ class ManagePlanTool(BaseTool):
                 "If 'content' is provided, it overwrites the file; otherwise "
                 "the current contents are returned."
             ),
+            read_only=False,
             parameters_schema={
                 "type": "object",
                 "properties": {
@@ -85,6 +86,7 @@ class ManageTodosTool(BaseTool):
                 "If 'content' is provided, it overwrites the file; otherwise "
                 "the current contents are returned."
             ),
+            read_only=False,
             parameters_schema={
                 "type": "object",
                 "properties": {

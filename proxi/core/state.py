@@ -235,10 +235,10 @@ class AgentState(BaseModel):
     # Runtime-only; not persisted in history.jsonl.
     plan_mode: Annotated[bool, Field(default=False, description="True while agent is in plan-writing mode")] = False
 
-    # Reasoning effort override — "minimal" (default), "medium", or "high".
-    # Set to "medium" during plan-mode and plan execution; reset to "minimal" otherwise.
+    # Reasoning effort override — "low" (default), "minimal", "medium", or "high".
+    # Set to "medium" during plan-mode and plan execution; reset to "low" otherwise.
     # Runtime-only; not persisted in history.jsonl.
-    reasoning_effort: Annotated[str, Field(default="minimal", description="Reasoning effort for LLM calls: minimal, medium, or high")] = "minimal"
+    reasoning_effort: Annotated[str, Field(default="low", description="Reasoning effort for LLM calls: minimal, low, medium, or high")] = "low"
 
     def add_message(self, message: Message) -> None:
         """Add a message to the history and append to history.jsonl if configured."""

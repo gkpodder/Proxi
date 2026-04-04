@@ -19,7 +19,9 @@
   },
   "cliTools": {
     "defer_loading": true,
-    "always_load": []
+    "always_load": [
+      "get_weather"
+    ]
   },
   "imports": []
 }

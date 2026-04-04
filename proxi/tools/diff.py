@@ -140,6 +140,7 @@ class ApplyPatchTool(BaseTool):
                 "For simple single-file edits, prefer edit_file instead."
             ),
             parallel_safe=False,
+            read_only=False,
             parameters_schema={
                 "type": "object",
                 "properties": {

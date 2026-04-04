@@ -15,7 +15,9 @@ class GlobTool(BaseTool):
             description=(
                 "Find files matching a glob pattern. "
                 "Supports patterns like '**/*.py', 'src/**/*.ts', '*.json'. "
-                "Results are sorted by modification time (newest first)."
+                "Results are sorted by modification time (newest first). "
+                "After you have the paths, read them with parallel read_file calls in the same turn "
+                "(one read_file per file, batched) — not one file per turn."
             ),
             parallel_safe=True,
             parameters_schema={

@@ -17,6 +17,7 @@ import argparse
 import asyncio
 import json
 import sys
+import urllib.error
 
 
 def main() -> None:
@@ -66,21 +67,24 @@ def main() -> None:
         print(json.dumps(result))
         sys.exit(0)
 
+    except (urllib.error.URLError, TimeoutError) as e:
+        # Transient network failure — the agent should retry.
+        print(json.dumps({
+            "error": str(e),
+            "hint": "Transient network error. Retrying may succeed.",
+        }))
+        sys.exit(3)
     except Exception as e:
-        # Unrecoverable failure: network totally down, import error, etc.
+        # Unrecoverable failure: import error, bad args, logic error, etc.
         # Emit structured JSON so the agent gets an actionable message
         # rather than a raw Python traceback.
-        print(
-            json.dumps(
-                {
-                    "error": str(e),
-                    "hint": (
-                        "This is a script-level failure, not an API error. "
-                        "Check network connectivity or try again."
-                    ),
-                }
-            )
-        )
+        print(json.dumps({
+            "error": str(e),
+            "hint": (
+                "This is a script-level failure, not an API error. "
+                "Check network connectivity or try again."
+            ),
+        }))
         sys.exit(1)
 
 
