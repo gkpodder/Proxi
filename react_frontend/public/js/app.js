@@ -57,6 +57,64 @@ function App() {
       return true;
     }
   });
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem("proxi.ttsEnabled");
+      if (stored == null) return false;
+      return stored === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [ttsVoiceName, setTtsVoiceName] = useState(() => {
+    try {
+      return window.localStorage.getItem("proxi.ttsVoiceName") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [ttsVoiceUri, setTtsVoiceUri] = useState(() => {
+    try {
+      return window.localStorage.getItem("proxi.ttsVoiceUri") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [ttsRate, setTtsRate] = useState(() => {
+    try {
+      const raw = Number.parseFloat(window.localStorage.getItem("proxi.ttsRate") || "1");
+      if (Number.isFinite(raw)) return Math.max(0.5, Math.min(2, raw));
+    } catch {
+      // ignore storage errors
+    }
+    return 1;
+  });
+  const [ttsVoices, setTtsVoices] = useState([]);
+  const ttsVoicesForDisplay = useMemo(() => {
+    const voices = Array.isArray(ttsVoices) ? [...ttsVoices] : [];
+
+    const scoreVoice = (voice) => {
+      const name = String(voice?.name || "").toLowerCase();
+      const lang = String(voice?.lang || "").toLowerCase();
+      let score = 0;
+
+      if (voice?.localService) score += 2;
+      if (name.includes("natural") || name.includes("neural") || name.includes("online") || name.includes("premium")) {
+        score += 8;
+      }
+      if (name.includes("microsoft")) score += 3;
+      if (lang.startsWith("en")) score += 2;
+      if (lang.startsWith("en-us") || lang.startsWith("en-gb")) score += 1;
+
+      return score;
+    };
+
+    return voices.sort((left, right) => {
+      const scoreDiff = scoreVoice(right) - scoreVoice(left);
+      if (scoreDiff !== 0) return scoreDiff;
+      return String(left?.name || "").localeCompare(String(right?.name || ""));
+    });
+  }, [ttsVoices]);
   const [darkMode, setDarkMode] = useState(true);
   const [apiKeys, setApiKeys] = useState([]);
   const [keysLoading, setKeysLoading] = useState(false);
@@ -152,6 +210,10 @@ function App() {
   const llmProviderRef = useRef(llmProvider);
   const voiceAutoSendAfterSilenceRef = useRef(voiceAutoSendAfterSilence);
   const voiceBeepEnabledRef = useRef(voiceBeepEnabled);
+  const ttsEnabledRef = useRef(ttsEnabled);
+  const ttsVoiceNameRef = useRef(ttsVoiceName);
+  const ttsVoiceUriRef = useRef(ttsVoiceUri);
+  const ttsRateRef = useRef(ttsRate);
   const pendingMcpActivityRef = useRef({});
   const activeToolRef = useRef(null);
 
@@ -257,6 +319,42 @@ function App() {
   }, [voiceBeepEnabled]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.ttsEnabled", ttsEnabled ? "true" : "false");
+    } catch {
+      // ignore storage errors
+    }
+
+    if (!ttsEnabled && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, [ttsEnabled]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.ttsVoiceName", ttsVoiceName);
+    } catch {
+      // ignore storage errors
+    }
+  }, [ttsVoiceName]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.ttsVoiceUri", ttsVoiceUri);
+    } catch {
+      // ignore storage errors
+    }
+  }, [ttsVoiceUri]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.ttsRate", String(ttsRate));
+    } catch {
+      // ignore storage errors
+    }
+  }, [ttsRate]);
+
+  useEffect(() => {
     inputValueRef.current = input;
   }, [input]);
 
@@ -268,7 +366,53 @@ function App() {
     llmProviderRef.current = llmProvider;
     voiceAutoSendAfterSilenceRef.current = voiceAutoSendAfterSilence;
     voiceBeepEnabledRef.current = voiceBeepEnabled;
-  }, [voiceEnabled, canInteract, isPromptActive, hasSelectedAgent, llmProvider, voiceAutoSendAfterSilence, voiceBeepEnabled]);
+    ttsEnabledRef.current = ttsEnabled;
+    ttsVoiceNameRef.current = ttsVoiceName;
+    ttsVoiceUriRef.current = ttsVoiceUri;
+    ttsRateRef.current = ttsRate;
+  }, [voiceEnabled, canInteract, isPromptActive, hasSelectedAgent, llmProvider, voiceAutoSendAfterSilence, voiceBeepEnabled, ttsEnabled, ttsVoiceName, ttsVoiceUri, ttsRate]);
+
+  useEffect(() => {
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices() || [];
+      setTtsVoices(voices);
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged === loadVoices) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (ttsVoiceName) return;
+    const firstVoice = Array.isArray(ttsVoices) && ttsVoices.length > 0 ? ttsVoices[0] : null;
+    if (firstVoice?.name) {
+      setTtsVoiceName(firstVoice.name);
+    }
+  }, [ttsVoiceName, ttsVoices]);
+
+  useEffect(() => {
+    if (ttsVoiceUri || !Array.isArray(ttsVoices) || ttsVoices.length === 0) return;
+
+    const voiceFromName = String(ttsVoiceName || "").trim()
+      ? ttsVoices.find((voice) => voice.name === String(ttsVoiceName || "").trim())
+      : null;
+
+    const fallbackVoice = voiceFromName || ttsVoices[0] || null;
+    if (fallbackVoice?.voiceURI) {
+      setTtsVoiceUri(fallbackVoice.voiceURI);
+      if (!ttsVoiceName && fallbackVoice.name) {
+        setTtsVoiceName(fallbackVoice.name);
+      }
+    }
+  }, [ttsVoiceUri, ttsVoiceName, ttsVoices]);
 
   useEffect(() => {
     if (!voiceEnabled || !canInteract || isPromptActive) {
@@ -953,7 +1097,10 @@ function App() {
 
   function commitStream() {
     setStreaming((prev) => {
-      if (prev) addAssistant(prev);
+      if (prev) {
+        addAssistant(prev);
+        speakAssistantResponse(prev);
+      }
       return "";
     });
   }
@@ -1270,6 +1417,10 @@ function App() {
     }
     if (!task) return;
 
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
     pendingAutoSendRef.current = false;
     voiceDiscardActiveRef.current = true;
     voiceBaseInputRef.current = "";
@@ -1292,6 +1443,10 @@ function App() {
     if (!hasSelectedAgent) {
       addSystem("Select an agent first.");
       return;
+    }
+
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
 
     send({ type: "abort" });
@@ -1447,6 +1602,81 @@ function App() {
     }
   }
 
+  function getLiveTtsVoices() {
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return [];
+    const voices = window.speechSynthesis.getVoices?.();
+    return Array.isArray(voices) ? voices : [];
+  }
+
+  function pickTtsVoice(voices) {
+    const selectedVoiceUri = String(ttsVoiceUriRef.current || "").trim();
+    const selectedVoiceName = String(ttsVoiceNameRef.current || "").trim();
+
+    const scoreVoice = (voice) => {
+      const name = String(voice?.name || "").toLowerCase();
+      const lang = String(voice?.lang || "").toLowerCase();
+      let score = 0;
+
+      if (voice?.localService) score += 2;
+      if (name.includes("natural") || name.includes("neural") || name.includes("online") || name.includes("premium")) {
+        score += 8;
+      }
+      if (name.includes("microsoft")) score += 3;
+      if (lang.startsWith("en")) score += 2;
+      if (lang.startsWith("en-us") || lang.startsWith("en-gb")) score += 1;
+
+      return score;
+    };
+
+    return (
+      voices.find((voice) => voice.voiceURI === selectedVoiceUri) ||
+      voices.find((voice) => voice.name === selectedVoiceName) ||
+      voices.reduce((bestVoice, voice) => {
+        if (!bestVoice) return voice;
+        return scoreVoice(voice) > scoreVoice(bestVoice) ? voice : bestVoice;
+      }, null) ||
+      null
+    );
+  }
+
+  function speakAssistantResponse(text, options = {}) {
+    if (!ttsEnabledRef.current && !options.force) return;
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+
+    const spokenText = String(text || "").trim();
+    if (!spokenText) return;
+
+    try {
+      const voices = getLiveTtsVoices();
+      if (voices.length === 0 && (options.attempts || 0) < 6) {
+        window.speechSynthesis.getVoices();
+        window.setTimeout(() => {
+          speakAssistantResponse(text, {
+            ...options,
+            attempts: (options.attempts || 0) + 1,
+          });
+        }, 120);
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(spokenText);
+      const selectedVoice = pickTtsVoice(voices);
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang || "en-US";
+      }
+
+      utterance.rate = Number.isFinite(ttsRateRef.current) ? ttsRateRef.current : 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // ignore speech synthesis failures
+    }
+  }
+
   function queueVoiceSilenceAutoStop() {
     clearVoiceSilenceTimer();
     if (!voiceSessionActiveRef.current) return;
@@ -1460,6 +1690,13 @@ function App() {
       voiceDiscardActiveRef.current = false;
       stopActiveVoiceInput();
     }, delayMs);
+  }
+
+  function testSelectedTtsVoice() {
+    speakAssistantResponse("This is Proxi testing the currently selected voice.", {
+      force: true,
+      attempts: 0,
+    });
   }
 
   function sendTask(task) {
@@ -2001,6 +2238,16 @@ function App() {
         setVoiceAutoSendAfterSilence={setVoiceAutoSendAfterSilence}
         voiceBeepEnabled={voiceBeepEnabled}
         setVoiceBeepEnabled={setVoiceBeepEnabled}
+        ttsEnabled={ttsEnabled}
+        setTtsEnabled={setTtsEnabled}
+        ttsVoices={ttsVoicesForDisplay}
+        ttsVoiceName={ttsVoiceName}
+        setTtsVoiceName={setTtsVoiceName}
+        ttsVoiceUri={ttsVoiceUri}
+        setTtsVoiceUri={setTtsVoiceUri}
+        ttsRate={ttsRate}
+        setTtsRate={setTtsRate}
+        testTtsVoice={testSelectedTtsVoice}
         webhooks={webhooks}
         webhookLoading={webhookLoading}
         webhookSaving={webhookSaving}

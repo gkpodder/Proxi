@@ -91,6 +91,16 @@
       setVoiceAutoSendAfterSilence,
       voiceBeepEnabled,
       setVoiceBeepEnabled,
+      ttsEnabled,
+      setTtsEnabled,
+      ttsVoices,
+      ttsVoiceName,
+      setTtsVoiceName,
+      ttsVoiceUri,
+      setTtsVoiceUri,
+      ttsRate,
+      setTtsRate,
+      testTtsVoice,
       webhooks,
       webhookLoading,
       webhookSaving,
@@ -982,6 +992,64 @@
                       <option value="off">Off</option>
                     </select>
                   </label>
+                  <label className="profileField">
+                    <span>Text to speech</span>
+                    <select
+                      className="profileSelect"
+                      value={ttsEnabled ? "on" : "off"}
+                      onChange={(e) => setTtsEnabled(e.target.value === "on")}
+                    >
+                      <option value="on">On</option>
+                      <option value="off">Off</option>
+                    </select>
+                  </label>
+                  <label className="profileField">
+                    <span>Voice / accent</span>
+                    <select
+                      className="profileSelect"
+                      value={ttsVoiceUri || ""}
+                      onChange={(e) => {
+                        const selectedVoice = (Array.isArray(ttsVoices) ? ttsVoices : []).find(
+                          (voice) => voice.voiceURI === e.target.value
+                        );
+                        setTtsVoiceUri(e.target.value);
+                        if (selectedVoice?.name) {
+                          setTtsVoiceName(selectedVoice.name);
+                        }
+                      }}
+                      disabled={!ttsEnabled || !Array.isArray(ttsVoices) || ttsVoices.length === 0}
+                    >
+                      {(Array.isArray(ttsVoices) ? ttsVoices : []).map((voice) => (
+                        <option key={`${voice.voiceURI || voice.name}-${voice.lang}`} value={voice.voiceURI || voice.name}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="formHint">Pick a voice, then use Preview Voice to confirm the browser is actually switching voices.</div>
+                  </label>
+                  <label className="profileField">
+                    <span>Narration speed ({Number(ttsRate || 1).toFixed(2)}x)</span>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2"
+                      step="0.05"
+                      value={String(ttsRate || 1)}
+                      onChange={(e) => {
+                        const value = Number.parseFloat(e.target.value);
+                        if (Number.isFinite(value)) {
+                          setTtsRate(Math.max(0.5, Math.min(2, value)));
+                        }
+                      }}
+                      disabled={!ttsEnabled}
+                    />
+                    <div className="formHint">0.5x is slower, 2x is faster.</div>
+                  </label>
+                </div>
+                <div className="formActions">
+                  <button className="primaryBtn" onClick={testTtsVoice} disabled={!ttsEnabled || !ttsVoices || ttsVoices.length === 0}>
+                    Preview Voice
+                  </button>
                 </div>
               </Section>
             </div>
