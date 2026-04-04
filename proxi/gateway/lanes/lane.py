@@ -31,6 +31,46 @@ Conversation:
 """
 
 
+_CHEAP_MODELS: dict[str, str] = {
+    "anthropic": "claude-haiku-4-5-20251001",
+    "openai": "gpt-4o-mini",
+}
+
+
+def _build_summarizer_client(llm_client: Any) -> Any:
+    """Return a cheap LLM client for session summarization.
+
+    Priority:
+    1. ``PROXI_MEMORY_SUMMARIZER_MODEL`` env var (explicit override).
+    2. Cheapest model for the detected provider (anthropic → Haiku, openai → gpt-4o-mini).
+    3. Fall back to *llm_client* itself (covers vllm / unknown providers).
+    """
+    env_model = os.environ.get("PROXI_MEMORY_SUMMARIZER_MODEL", "").strip()
+    cls_name = type(llm_client).__name__  # "AnthropicClient" | "OpenAIClient" | other
+
+    if "Anthropic" in cls_name:
+        provider = "anthropic"
+    elif "OpenAI" in cls_name:
+        provider = "openai"
+    else:
+        # Unknown provider (vllm, custom) — reuse the existing client as-is.
+        return llm_client
+
+    target_model = env_model or _CHEAP_MODELS[provider]
+
+    # If the current client is already using the target model, reuse it.
+    current_model = getattr(llm_client, "model", None)
+    if current_model == target_model:
+        return llm_client
+
+    try:
+        from proxi.cli.main import create_llm_client
+        return create_llm_client(provider=provider, model=target_model)
+    except Exception:
+        # API key missing or other setup error — fall back to the main client.
+        return llm_client
+
+
 async def _summarize_session(
     agent_id: str,
     session_id: str,
@@ -57,11 +97,10 @@ async def _summarize_session(
 
     prompt = _SUMMARIZER_PROMPT.format(transcript=transcript)
     try:
-        model = os.environ.get("PROXI_MEMORY_SUMMARIZER_MODEL", "gpt-4o-mini")
-        resp = await llm_client.generate(
-            messages=[{"role": "user", "content": prompt}],
-            model=model,
-            max_tokens=400,
+        summarizer_client = _build_summarizer_client(llm_client)
+        from proxi.core.state import Message as _Message
+        resp = await summarizer_client.generate(
+            messages=[_Message(role="user", content=prompt)],
         )
         raw = ""
         if hasattr(resp, "content"):
