@@ -202,7 +202,7 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
               value={textValue}
               onChange={setTextValue}
               onSubmit={() => handleSubmit()}
-              placeholder="minimal · medium · high"
+              placeholder="minimal · low · medium · high"
               showCursor
             />
           </Box>

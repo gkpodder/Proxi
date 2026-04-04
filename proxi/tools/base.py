@@ -56,6 +56,7 @@ class BaseTool:
         parameters_schema: dict[str, Any],
         *,
         parallel_safe: bool = False,
+        read_only: bool = True,
         defer_loading: bool | None = None,
     ):
         """Initialize the tool."""
@@ -63,6 +64,7 @@ class BaseTool:
         self.description = description
         self.parameters_schema = parameters_schema
         self.parallel_safe = parallel_safe
+        self.read_only = read_only
         if defer_loading is not None:
             self.defer_loading = defer_loading
 

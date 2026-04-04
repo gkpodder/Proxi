@@ -9,14 +9,19 @@
         "-m",
         "proxi.mcp.servers.server"
       ],
-      "description": "Default local Proxi MCP server (gmail, calendar, notion, weather, obsidian)",
+      "description": "Default local Proxi MCP server (gmail, calendar, notion, obsidian)",
       "defer_loading": true,
       "always_load": [
         "read_emails",
-        "calendar_list_events",
-        "weather_get_current"
+        "calendar_list_events"
       ]
     }
+  },
+  "cliTools": {
+    "defer_loading": true,
+    "always_load": [
+      "get_weather"
+    ]
   },
   "imports": []
 }

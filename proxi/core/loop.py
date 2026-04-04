@@ -98,7 +98,7 @@ class AgentLoop:
 
         Args:
             initial_message: Initial user message
-            reasoning_effort: LLM reasoning effort for this run ("minimal", "medium", "high")
+            reasoning_effort: LLM reasoning effort for this run ("minimal", "low", "medium", "high")
 
         Returns:
             Final agent state
@@ -288,12 +288,10 @@ class AgentLoop:
                                     parsed_calls.append(
                                         (tool_call_id, tool_name, tool_args))
 
+                                # Default 16: read/grep/glob batches often exceed 4 paths; higher
+                                # concurrency cuts wall-clock time. Tune down via PROXI_TOOL_PARALLELISM.
                                 parallel_limit = max(
-                                    1, int(os.getenv("PROXI_TOOL_PARALLELISM", "1")))
-                                can_parallelize = (
-                                    parallel_limit > 1
-                                    and all(self.tool_registry.is_parallel_safe(name) for _, name, _ in parsed_calls)
-                                )
+                                    1, int(os.getenv("PROXI_TOOL_PARALLELISM", "16")))
 
                                 async def exec_one(
                                     tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
@@ -308,33 +306,75 @@ class AgentLoop:
                                     )
                                     tool_start_ns = now_ns()
                                     result = await self._act(state, temp_decision, turn)
+                                    # Merge outer elapsed_ms into the result dict so
+                                    # _observe() can report timing even for parallel runs.
+                                    outer_ms = elapsed_ms(tool_start_ns)
+                                    result["metadata"] = {
+                                        **(result.get("metadata") or {}),
+                                        "elapsed_ms": outer_ms,
+                                    }
                                     return {
                                         "tool_call_id": tool_call_id,
                                         "name": tool_name,
                                         "result": result,
-                                        "elapsed_ms": elapsed_ms(tool_start_ns),
+                                        "elapsed_ms": outer_ms,
                                     }
 
-                                action_results = []
-                                if can_parallelize:
-                                    semaphore = asyncio.Semaphore(
-                                        parallel_limit)
+                                # Partition into safe (parallelisable) and unsafe (sequential).
+                                # Pass args so call_tool delegation can check the inner tool.
+                                safe_indices = [
+                                    i for i, (_, name, args) in enumerate(parsed_calls)
+                                    if self.tool_registry.is_parallel_safe(name, args)
+                                ]
+                                unsafe_indices = [
+                                    i for i, (_, name, args) in enumerate(parsed_calls)
+                                    if not self.tool_registry.is_parallel_safe(name, args)
+                                ]
+
+                                results_by_index: dict[int, dict[str, Any]] = {}
+
+                                if parallel_limit > 1 and safe_indices:
+                                    semaphore = asyncio.Semaphore(parallel_limit)
 
                                     async def run_with_limit(
-                                        tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
-                                    ) -> dict[str, Any]:
+                                        idx: int, tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
+                                    ) -> tuple[int, dict[str, Any]]:
                                         async with semaphore:
-                                            return await exec_one(tool_call_id, tool_name, tool_args)
+                                            return idx, await exec_one(tool_call_id, tool_name, tool_args)
 
-                                    tasks = [
+                                    safe_tasks = [
                                         asyncio.create_task(run_with_limit(
-                                            tool_call_id, tool_name, tool_args))
-                                        for tool_call_id, tool_name, tool_args in parsed_calls
+                                            i, *parsed_calls[i]))
+                                        for i in safe_indices
                                     ]
-                                    action_results = await asyncio.gather(*tasks)
+                                    # Timeout: max individual tool timeout + 5 s buffer.
+                                    gather_timeout = max(
+                                        (getattr(self.tool_registry.get(parsed_calls[i][1]), "_timeout", 30)
+                                         for i in safe_indices),
+                                        default=30,
+                                    ) + 5.0
+                                    try:
+                                        gathered = await asyncio.wait_for(
+                                            asyncio.gather(*safe_tasks, return_exceptions=True),
+                                            timeout=gather_timeout,
+                                        )
+                                    except asyncio.TimeoutError:
+                                        gathered = []
+                                        for t in safe_tasks:
+                                            t.cancel()
+                                    for item in gathered:
+                                        if isinstance(item, Exception):
+                                            continue
+                                        idx, r = item
+                                        results_by_index[idx] = r
                                 else:
-                                    for tool_call_id, tool_name, tool_args in parsed_calls:
-                                        action_results.append(await exec_one(tool_call_id, tool_name, tool_args))
+                                    for i in safe_indices:
+                                        results_by_index[i] = await exec_one(*parsed_calls[i])
+
+                                for i in unsafe_indices:
+                                    results_by_index[i] = await exec_one(*parsed_calls[i])
+
+                                action_results = [results_by_index[i] for i in range(len(parsed_calls))]
 
                                 act_ms += sum(float(r.get("elapsed_ms", 0.0))
                                               for r in action_results)
@@ -612,8 +652,21 @@ class AgentLoop:
                     state, tool_call_id, arguments, turn
                 )
 
-            # Block write tools in plan mode (cache-safe: schemas unchanged, blocked at runtime)
-            if state.plan_mode and tool_name in _PLAN_MODE_WRITE_BLOCKED_TOOLS:
+            # Block write tools in plan mode (cache-safe: schemas unchanged, blocked at runtime).
+            # Two conditions: hardcoded frozenset (backward compat) OR read_only=False on the
+            # tool object (auto-blocks new write tools without frozenset edits).
+            # manage_plan is explicitly allowed even though it has read_only=False.
+            if state.plan_mode:
+                tool_obj = self.tool_registry.get(tool_name)
+                blocked_by_flag = (
+                    getattr(tool_obj, "read_only", True) is False
+                    and tool_name != "manage_plan"
+                )
+                blocked_by_name = tool_name in _PLAN_MODE_WRITE_BLOCKED_TOOLS
+                plan_mode_blocked = blocked_by_flag or blocked_by_name
+            else:
+                plan_mode_blocked = False
+            if plan_mode_blocked:
                 if self.emitter:
                     self.emitter.emit({
                         "type": "tool_start",
@@ -885,11 +938,13 @@ class AgentLoop:
         result_type = action_result.get("type")
 
         if result_type == "tool_call":
+            elapsed_ms = (action_result.get("metadata") or {}).get("elapsed_ms", 0)
+            timing = f" (took {elapsed_ms / 1000:.1f}s)" if elapsed_ms > 3000 else ""
             if action_result.get("success"):
-                return f"Tool '{action_result.get('tool')}' executed successfully:\n{action_result.get('output', '')}"
+                return f"Tool '{action_result.get('tool')}' executed successfully{timing}:\n{action_result.get('output', '')}"
             else:
                 err = action_result.get('error') or action_result.get('output') or 'Unknown error'
-                return f"Tool '{action_result.get('tool')}' failed: {err}"
+                return f"Tool '{action_result.get('tool')}' failed{timing}: {err}"
 
         elif result_type == "respond":
             return action_result.get("content", "")

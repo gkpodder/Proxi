@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Combined MCP Server for Gmail, Calendar, Notion, Weather, and Obsidian."""
+"""Combined MCP Server for Gmail, Calendar, Notion, and Obsidian."""
 
 import asyncio
 import json
@@ -13,20 +13,18 @@ if TYPE_CHECKING:
     from proxi.mcp.servers.gmail_tools import GmailTools
     from proxi.mcp.servers.notion_tools import NotionTools
     from proxi.mcp.servers.obsidian_tools import ObsidianTools
-    from proxi.mcp.servers.weather_tools import WeatherTools
 
 logger = get_logger(__name__)
 
 
 class CombinedMCPServer:
-    """MCP server for Gmail, Calendar, Notion, Weather, and Obsidian operations."""
+    """MCP server for Gmail, Calendar, Notion, and Obsidian operations."""
 
     def __init__(self) -> None:
         """Initialize the combined MCP server."""
         self._gmail: "GmailTools | None" = None
         self._calendar: "CalendarTools | None" = None
         self._notion: "NotionTools | None" = None
-        self._weather: "WeatherTools | None" = None
         self._obsidian: "ObsidianTools | None" = None
 
     def _get_gmail(self) -> "GmailTools":
@@ -52,14 +50,6 @@ class CombinedMCPServer:
         if self._calendar is None:
             self._calendar = CalendarTools()
         return self._calendar
-
-    def _get_weather(self) -> "WeatherTools":
-        """Lazily initialize Weather tools to avoid blocking initialize."""
-        from proxi.mcp.servers.weather_tools import WeatherTools
-
-        if self._weather is None:
-            self._weather = WeatherTools()
-        return self._weather
 
     def _get_obsidian(self) -> "ObsidianTools":
         """Lazily initialize Obsidian tools to avoid blocking initialize."""
@@ -422,59 +412,6 @@ class CombinedMCPServer:
                             "page_id": {"type": "string", "description": "Notion page ID"},
                         },
                         "required": ["page_id"],
-                    },
-                },
-                {
-                    "name": "weather_get_current",
-                    "description": (
-                        "Get current weather for a location. Default for generic weather requests. "
-                        "Use unit=celsius unless user asks for Fahrenheit. If lookup fails, retry once with a more explicit "
-                        "location string (for example include full region/country) before asking the user."
-                    ),
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "location": {
-                                "type": "string",
-                                "description": (
-                                    "City or place name. Prefer explicit locations when needed "
-                                    "(e.g., 'Hamilton, Ontario, Canada' instead of ambiguous abbreviations)."
-                                ),
-                            },
-                            "unit": {
-                                "type": "string",
-                                "description": "Temperature unit: celsius or fahrenheit (default: celsius)",
-                            },
-                        },
-                        "required": ["location"],
-                    },
-                },
-                {
-                    "name": "weather_get_forecast",
-                    "description": (
-                        "Get weather forecast for a location when user asks for upcoming days/range. "
-                        "If location lookup fails, retry once with a more explicit location string before follow-up questions."
-                    ),
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "location": {
-                                "type": "string",
-                                "description": (
-                                    "City or place name. Prefer explicit locations when needed "
-                                    "(e.g., 'Hamilton, Ontario, Canada')."
-                                ),
-                            },
-                            "days": {
-                                "type": "integer",
-                                "description": "Number of forecast days (1-7, default: 3)",
-                            },
-                            "unit": {
-                                "type": "string",
-                                "description": "Temperature unit: celsius or fahrenheit (default: celsius)",
-                            },
-                        },
-                        "required": ["location"],
                     },
                 },
                 {
@@ -860,19 +797,6 @@ class CombinedMCPServer:
             if name == "notion_get_page":
                 page_id = arguments.get("page_id")
                 result = await self._get_notion().get_page(page_id)
-                return {"content": [{"type": "text", "text": json.dumps(result)}]}
-
-            if name == "weather_get_current":
-                location = arguments.get("location")
-                unit = arguments.get("unit", "celsius")
-                result = await self._get_weather().get_current_weather(location, unit)
-                return {"content": [{"type": "text", "text": json.dumps(result)}]}
-
-            if name == "weather_get_forecast":
-                location = arguments.get("location")
-                days = arguments.get("days", 3)
-                unit = arguments.get("unit", "celsius")
-                result = await self._get_weather().get_forecast(location, days, unit)
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
             if name == "obsidian_list_vaults":

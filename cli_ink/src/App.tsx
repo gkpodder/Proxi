@@ -73,7 +73,7 @@ export default function App() {
   const [isPlanActive, setIsPlanActive] = useState(false);
 
   const reasoningEffortModeRef = useRef(false);
-  const [tuiReasoningEffort, setTuiReasoningEffort] = useState<string>("minimal");
+  const [tuiReasoningEffort, setTuiReasoningEffort] = useState<string>("low");
 
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
@@ -721,7 +721,7 @@ export default function App() {
     reasoningEffortModeRef.current = false;
     setHitlSpec(null);
     const level = String(value).trim().toLowerCase() || "minimal";
-    const valid = ["minimal", "medium", "high"];
+    const valid = ["minimal", "low", "medium", "high"];
     const resolved = valid.includes(level) ? level : "minimal";
     setTuiReasoningEffort(resolved);
     void sendToGateway({ message: `/reasoning-effort ${resolved}` });
@@ -1369,7 +1369,7 @@ export default function App() {
             type: "user_input_required" as const,
             method: "select" as const,
             prompt: "Reasoning effort",
-            options: ["minimal", "medium", "high"],
+            options: ["minimal", "low", "medium", "high"],
             ui: "reasoning-effort",
           });
           break;

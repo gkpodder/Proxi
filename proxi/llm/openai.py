@@ -317,6 +317,15 @@ class OpenAIClient:
         )
         return normalized_model.startswith(reasoning_model_prefixes)
 
+    def _responses_api_reasoning_effort(self, effort: str) -> str:
+        """Map user-facing effort labels to values accepted by the Responses API per model."""
+        e = (effort or "minimal").strip().lower()
+        normalized = self.model.strip().lower()
+        # o1/o3/o4 expose low/medium/high; TUI defaults to "minimal" (GPT-5-style ladder).
+        if normalized.startswith(("o1", "o3", "o4")) and e == "minimal":
+            return "low"
+        return e
+
     def _build_response_create_kwargs(
         self,
         input_items: list[dict[str, Any]],
@@ -335,12 +344,15 @@ class OpenAIClient:
         if stream:
             kwargs["stream"] = True
         if self._supports_reasoning_controls():
-            kwargs["reasoning"] = {"effort": reasoning_effort}
+            kwargs["reasoning"] = {
+                "effort": self._responses_api_reasoning_effort(reasoning_effort),
+            }
         if system:
             kwargs["instructions"] = system
         if response_tools:
             kwargs["tools"] = response_tools
             kwargs["tool_choice"] = "auto"
+            kwargs["parallel_tool_calls"] = True
         prompt_cache_key = self._build_prompt_cache_key(
             input_items, response_tools, system, session_id=session_id)
         kwargs["prompt_cache_key"] = prompt_cache_key

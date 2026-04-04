@@ -120,6 +120,7 @@ class ExecuteCodeTool(BaseTool):
                 },
                 "required": ["command"],
             },
+            read_only=False,
         )
         self._guard = guard
         self.working_directory = working_directory or (
