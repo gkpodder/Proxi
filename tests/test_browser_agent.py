@@ -21,7 +21,12 @@ import pytest
 
 from proxi.agents.base import AgentContext, SubAgentResult
 from proxi.agents.registry import SubAgentRegistry
-from proxi.browser.agent import BrowserSubAgent, _PROFILE_DIR, _make_browser_use_llm
+from proxi.browser.agent import (
+    BrowserSubAgent,
+    _PROFILE_DIR,
+    _make_browser_use_llm,
+    _make_fast_llm,
+)
 from proxi.browser.tools import BROWSER_TOOL_CLASSES, register_browser_tools
 from proxi.tools.registry import ToolRegistry
 
@@ -108,6 +113,100 @@ class TestMakeBrowserUseLlm:
 
 
 # --------------------------------------------------------------------------- #
+# Fast LLM factory tests                                                         #
+# --------------------------------------------------------------------------- #
+
+
+class TestMakeFastLlm:
+    """_make_fast_llm() must prefer Groq → Gemini → fall back to standard."""
+
+    def _fake_groq_llm(self) -> MagicMock:
+        llm = MagicMock()
+        llm.provider = "groq"
+        llm.model = "meta-llama/llama-4-maverick-17b-128e-instruct"
+        return llm
+
+    def _fake_google_llm(self) -> MagicMock:
+        llm = MagicMock()
+        llm.provider = "google"
+        llm.model = "gemini-2.0-flash"
+        return llm
+
+    def test_prefers_groq_when_key_available(self) -> None:
+        fake_llm = self._fake_groq_llm()
+        FakeChatGroq = MagicMock(return_value=fake_llm)
+
+        def _key(k: str) -> str | None:
+            return "gsk-groq" if k == "GROQ_API_KEY" else None
+
+        with (
+            patch("proxi.browser.agent.get_key_value", side_effect=_key),
+            patch.dict(
+                sys.modules,
+                {"browser_use.llm.groq.chat": MagicMock(ChatGroq=FakeChatGroq)},
+            ),
+        ):
+            llm = _make_fast_llm()
+
+        assert llm.provider == "groq"
+
+    def test_falls_back_to_google_when_no_groq(self) -> None:
+        fake_llm = self._fake_google_llm()
+        FakeChatGoogle = MagicMock(return_value=fake_llm)
+
+        def _key(k: str) -> str | None:
+            if k == "GOOGLE_API_KEY":
+                return "goog-key"
+            return None
+
+        with (
+            patch("proxi.browser.agent.get_key_value", side_effect=_key),
+            patch.dict(
+                sys.modules,
+                {
+                    "browser_use.llm.groq.chat": MagicMock(
+                        ChatGroq=MagicMock(side_effect=ImportError)
+                    ),
+                    "browser_use.llm.google.chat": MagicMock(ChatGoogle=FakeChatGoogle),
+                },
+            ),
+        ):
+            llm = _make_fast_llm()
+
+        assert llm.provider == "google"
+
+    def test_falls_back_to_standard_llm_when_no_fast_keys(self) -> None:
+        """Falls back to _make_browser_use_llm() when no Groq/Google key."""
+        fake_llm = MagicMock()
+        fake_llm.provider = "openai"
+
+        def _key(k: str) -> str | None:
+            return "sk-oai" if k == "OPENAI_API_KEY" else None
+
+        FakeChatOpenAI = MagicMock(return_value=fake_llm)
+
+        with (
+            patch("proxi.browser.agent.get_key_value", side_effect=_key),
+            patch.dict(
+                sys.modules,
+                {
+                    "browser_use.llm.groq.chat": MagicMock(
+                        ChatGroq=MagicMock(side_effect=ImportError)
+                    ),
+                    "browser_use.llm.google.chat": MagicMock(
+                        ChatGoogle=MagicMock(side_effect=ImportError)
+                    ),
+                    "browser_use.llm.openai.chat": MagicMock(ChatOpenAI=FakeChatOpenAI),
+                },
+            ),
+        ):
+            llm = _make_fast_llm()
+
+        # Fell back to standard LLM (openai)
+        assert llm.provider in ("openai", "anthropic", "groq", "google")
+
+
+# --------------------------------------------------------------------------- #
 # BrowserSubAgent registration & schema tests                                   #
 # --------------------------------------------------------------------------- #
 
@@ -136,6 +235,12 @@ class TestBrowserSubAgentRegistration:
         props = agent.input_schema.get("properties", {})
         assert "start_url" in props
         assert "max_steps" in props
+        assert "fast" in props
+
+    def test_fast_field_is_boolean_type(self) -> None:
+        agent = BrowserSubAgent()
+        fast_schema = agent.input_schema["properties"]["fast"]
+        assert fast_schema.get("type") == "boolean"
 
     def test_description_is_informative(self) -> None:
         agent = BrowserSubAgent()
@@ -269,6 +374,145 @@ class TestBrowserSubAgentRun:
         assert "RTX 4070" in result.summary
         assert result.confidence > 0
         assert result.artifacts.get("steps_taken") == 8
+
+
+    @pytest.mark.asyncio
+    async def test_fast_mode_uses_fast_llm_and_flash_mode(self) -> None:
+        """fast=True wires up flash_mode=True and calls _make_fast_llm."""
+        agent = BrowserSubAgent()
+
+        mock_history = MagicMock()
+        mock_history.final_result.return_value = "Price: $1,499"
+        mock_history.urls.return_value = ["https://bestbuy.com"]
+        mock_history.number_of_steps.return_value = 12
+
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=mock_history)
+
+        mock_bu_profile = MagicMock()
+        mock_bu_profile.BrowserProfile = MagicMock(return_value=MagicMock())
+        mock_bu_agent = MagicMock()
+        captured_kwargs: dict[str, Any] = {}
+
+        def _capture_agent(**kwargs: Any) -> Any:
+            captured_kwargs.update(kwargs)
+            return mock_agent_instance
+
+        mock_bu_agent.Agent = MagicMock(side_effect=_capture_agent)
+        fake_fast_llm = MagicMock()
+        fake_fast_llm.provider = "groq"
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "browser_use": mock_bu_agent,
+                    "browser_use.browser.profile": mock_bu_profile,
+                },
+            ),
+            patch("proxi.browser.agent._make_fast_llm", return_value=fake_fast_llm),
+            patch("proxi.browser.agent._make_browser_use_llm") as mock_standard_llm,
+        ):
+            ctx = AgentContext(
+                task="find laptop price",
+                context_refs={"task": "find laptop price", "fast": True},
+            )
+            result = await agent.run(ctx)
+
+        assert result.success is True
+        assert result.artifacts.get("fast_mode") is True
+        # flash_mode must be True when fast=True
+        assert captured_kwargs.get("flash_mode") is True
+        # Standard LLM factory must NOT be called
+        mock_standard_llm.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_slow_mode_does_not_use_flash(self) -> None:
+        """fast=False (default) must NOT enable flash_mode."""
+        agent = BrowserSubAgent()
+
+        mock_history = MagicMock()
+        mock_history.final_result.return_value = "Done"
+        mock_history.urls.return_value = []
+        mock_history.number_of_steps.return_value = 5
+
+        mock_agent_instance = AsyncMock()
+        mock_agent_instance.run = AsyncMock(return_value=mock_history)
+
+        mock_bu_profile = MagicMock()
+        mock_bu_profile.BrowserProfile = MagicMock(return_value=MagicMock())
+        mock_bu_agent = MagicMock()
+        captured_kwargs: dict[str, Any] = {}
+
+        def _capture_agent(**kwargs: Any) -> Any:
+            captured_kwargs.update(kwargs)
+            return mock_agent_instance
+
+        mock_bu_agent.Agent = MagicMock(side_effect=_capture_agent)
+        fake_llm = MagicMock()
+        fake_llm.provider = "anthropic"
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "browser_use": mock_bu_agent,
+                    "browser_use.browser.profile": mock_bu_profile,
+                },
+            ),
+            patch("proxi.browser.agent._make_browser_use_llm", return_value=fake_llm),
+            patch("proxi.browser.agent._make_fast_llm") as mock_fast_llm,
+        ):
+            ctx = AgentContext(task="find laptop", context_refs={"task": "find laptop"})
+            result = await agent.run(ctx)
+
+        assert result.success is True
+        assert captured_kwargs.get("flash_mode") is False
+        mock_fast_llm.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fast_mode_uses_fewer_default_steps(self) -> None:
+        """fast=True should default to 40 steps, not 75."""
+        agent = BrowserSubAgent()
+
+        mock_history = MagicMock()
+        mock_history.final_result.return_value = "Done"
+        mock_history.urls.return_value = []
+        mock_history.number_of_steps.return_value = 3
+
+        mock_agent_instance = AsyncMock()
+        captured_run_kwargs: dict[str, Any] = {}
+
+        async def _capture_run(**kwargs: Any) -> Any:
+            captured_run_kwargs.update(kwargs)
+            return mock_history
+
+        mock_agent_instance.run = _capture_run
+
+        mock_bu_profile = MagicMock()
+        mock_bu_profile.BrowserProfile = MagicMock(return_value=MagicMock())
+        mock_bu_agent = MagicMock()
+        mock_bu_agent.Agent = MagicMock(return_value=mock_agent_instance)
+        fake_llm = MagicMock()
+        fake_llm.provider = "groq"
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "browser_use": mock_bu_agent,
+                    "browser_use.browser.profile": mock_bu_profile,
+                },
+            ),
+            patch("proxi.browser.agent._make_fast_llm", return_value=fake_llm),
+        ):
+            ctx = AgentContext(
+                task="lookup price",
+                context_refs={"task": "lookup price", "fast": True},
+            )
+            await agent.run(ctx)
+
+        assert captured_run_kwargs.get("max_steps") == 40
 
 
 # --------------------------------------------------------------------------- #
