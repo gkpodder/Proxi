@@ -12,6 +12,7 @@ from proxi.agents.summarizer import SummarizerAgent
 from proxi.core.loop import AgentLoop
 from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
+from proxi.llm.vllm import VLLMClient
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
 from proxi.observability.logging import get_logger, init_log_manager
@@ -41,7 +42,7 @@ DEFAULT_INTEGRATIONS_CONFIG: dict[str, Any] = {
 def create_llm_client(
     provider: str = "openai",
     model: str | None = None,
-) -> OpenAIClient | AnthropicClient:
+) -> OpenAIClient | AnthropicClient | VLLMClient:
     """Create an LLM client based on provider."""
     if provider.lower() == "anthropic":
         api_key = get_key_value("ANTHROPIC_API_KEY")
@@ -50,6 +51,14 @@ def create_llm_client(
         return AnthropicClient(
             api_key=api_key,
             model=(model or "claude-3-5-sonnet-20241022"),
+        )
+    elif provider.lower() == "vllm":
+        base_url = get_key_value("VLLM_BASE_URL") or "http://localhost:8000/v1"
+        api_key = get_key_value("VLLM_API_KEY")  # optional — vLLM may run without auth
+        return VLLMClient(
+            api_key=api_key or None,
+            base_url=base_url,
+            model=(model or "local"),
         )
     else:
         api_key = get_key_value("OPENAI_API_KEY")
@@ -83,7 +92,7 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     return registry
 
 
-def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentManager:
+def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient | VLLMClient) -> SubAgentManager:
     """Set up the sub-agent registry and manager."""
     registry = SubAgentRegistry()
 

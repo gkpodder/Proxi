@@ -1648,7 +1648,6 @@ export default function App() {
           isCompacting={isCompacting}
           isPlanMode={isPlanActive}
           reasoningEffort={tuiReasoningEffort}
-          llmProvider={tuiLlmProvider}
           autoCompactPercent={autoCompactPercent}
         />
         {hitlSpec ? (

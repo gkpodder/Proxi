@@ -197,7 +197,8 @@ def _resolve_model(provider: str, model: str | None) -> str:
         return DEFAULT_LLM_MODELS[provider]
 
     allowed = SUPPORTED_LLM_MODELS.get(provider, [])
-    if requested not in allowed:
+    # Empty allowed list means models are user-defined (e.g. vllm) — skip validation.
+    if allowed and requested not in allowed:
         raise ValueError(f"Unsupported model for {provider}: {requested}")
     return requested
 

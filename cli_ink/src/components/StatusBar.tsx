@@ -20,8 +20,6 @@ type Props = {
   isCompacting?: boolean;
   isPlanMode?: boolean;
   reasoningEffort?: string;
-  /** Gateway LLM provider (openai, anthropic, …). */
-  llmProvider?: string | null;
   autoCompactPercent?: number | null;
 };
 
@@ -38,7 +36,6 @@ export function StatusBar({
   isCompacting,
   isPlanMode,
   reasoningEffort,
-  llmProvider,
   autoCompactPercent,
 }: Props) {
   const showTool = statusKind === "tool" && statusLabel;
@@ -74,12 +71,6 @@ export function StatusBar({
       <Text color={theme.purple}>◆ {agentId ?? "—"}</Text>
       <Text color={theme.purpleDim}>  ·  </Text>
       <Text color={theme.mist}>session {sessionId ?? "—"}</Text>
-      {llmProvider ? (
-        <>
-          <Text color={theme.purpleDim}>  ·  </Text>
-          <Text color={theme.lavender}>{llmProvider}</Text>
-        </>
-      ) : null}
       {isBtw && (
         <>
           <Text color={theme.purpleDim}>  ·  </Text>
