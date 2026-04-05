@@ -95,36 +95,89 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
     return manager
 
 
-def auto_load_cli_tools(tool_registry: ToolRegistry) -> None:
-    """Load CLI tools from config/integrations.json into the tool registry."""
+def build_cli_tool_lists(
+    *,
+    config: dict[str, Any] | None = None,
+    enabled_integration_names: set[str] | None = None,
+    db_path: str | Path | None = None,
+) -> tuple[list[Any], list[Any]]:
+    """Build live and deferred CLI tool instances from integrations.json + key store.
+
+    Integration-backed tools are omitted when the integration is disabled in the key
+    store, missing from config, or not of type ``cli``. Core tools (no
+    ``integration_name``) follow each class's ``defer_loading`` flag.
+    """
+    from proxi.security.key_store import get_enabled_integrations
     from proxi.tools.cli_tool import CLI_TOOLS
 
-    config = load_integrations_config()
+    if config is None:
+        config = load_integrations_config()
     integrations = config.get("integrations", {})
+    if enabled_integration_names is None:
+        enabled_integration_names = set(get_enabled_integrations(db_path))
 
-    # Build a merged always_load set across all CLI integrations.
-    always_load: set[str] = set()
-    for entry in integrations.values():
-        if entry.get("type", "cli") == "cli":
-            always_load.update(entry.get("always_load", []))
+    live: list[Any] = []
+    deferred: list[Any] = []
 
     for tool_class in CLI_TOOLS:
-        tool = tool_class()
+        tool = tool_class()  # type: ignore[call-arg]
         integration_name = getattr(tool_class, "integration_name", None)
-        if integration_name and integration_name in integrations:
-            int_cfg = integrations[integration_name]
-            defer = bool(int_cfg.get("defer_loading", True))
-            int_always = set(int_cfg.get("always_load", []))
-            if not defer or tool.name in int_always:
-                tool_registry.register(tool)
-                logger.info("cli_tool_registered", tool=tool.name)
-            else:
-                tool_registry.register_deferred(tool)
+
+        if integration_name is None:
+            if tool.defer_loading:
+                deferred.append(tool)
                 logger.info("cli_tool_deferred", tool=tool.name)
-        else:
-            # Core tools (no integration) are always registered live.
-            tool_registry.register(tool)
+            else:
+                live.append(tool)
+                logger.info("cli_tool_registered", tool=tool.name)
+            continue
+
+        if integration_name not in integrations:
+            logger.info(
+                "cli_tool_skipped_no_config",
+                tool=tool.name,
+                integration=integration_name,
+            )
+            continue
+
+        if integration_name not in enabled_integration_names:
+            logger.info(
+                "cli_tool_skipped_disabled",
+                tool=tool.name,
+                integration=integration_name,
+            )
+            continue
+
+        int_cfg = integrations[integration_name]
+        if int_cfg.get("type", "cli") != "cli":
+            logger.info(
+                "cli_tool_skipped_wrong_type",
+                tool=tool.name,
+                integration=integration_name,
+            )
+            continue
+
+        defer = bool(int_cfg.get("defer_loading", True))
+        int_always = set(int_cfg.get("always_load", []))
+        if not defer or tool.name in int_always:
+            live.append(tool)
             logger.info("cli_tool_registered", tool=tool.name)
+        else:
+            deferred.append(tool)
+            logger.info("cli_tool_deferred", tool=tool.name)
+
+    return live, deferred
+
+
+def auto_load_cli_tools(
+    tool_registry: ToolRegistry, db_path: str | Path | None = None
+) -> None:
+    """Load CLI tools from config/integrations.json into the tool registry."""
+    live, deferred = build_cli_tool_lists(db_path=db_path)
+    for tool in live:
+        tool_registry.register(tool)
+    for tool in deferred:
+        tool_registry.register_deferred(tool)
 
 
 async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]:

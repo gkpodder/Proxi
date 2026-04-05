@@ -367,6 +367,38 @@ class AgentLane:
             from proxi.tools.call_tool_tool import CallToolTool
             reg.register(CallToolTool(reg))
 
+    def sync_cli_tools(
+        self,
+        live_tools: Sequence[Any],
+        deferred_tools: Sequence[Any] = (),
+    ) -> None:
+        """Replace CLI-backed integration tools on an existing loop."""
+        if self._loop is None:
+            return
+        from proxi.tools.call_tool_tool import CallToolTool
+        from proxi.tools.cli_tool import cli_integration_tool_names
+
+        reg = self._loop.tool_registry
+        cli_names = cli_integration_tool_names()
+        deferred_touched = False
+        for name in cli_names:
+            if reg._tools.pop(name, None) is not None:
+                pass
+            if reg._deferred_tools.pop(name, None) is not None:
+                deferred_touched = True
+        if deferred_touched:
+            reg._rebuild_deferred_index()
+        reg._schema_injected -= cli_names
+
+        for tool in live_tools:
+            reg.register(tool)
+        for tool in deferred_tools:
+            reg.register_deferred(tool)
+
+        reg._tools.pop("call_tool", None)
+        if reg.has_deferred_tools():
+            reg.register(CallToolTool(reg))
+
     def _sync_state_if_history_cleared(self) -> None:
         """Align memory with disk when history.jsonl is empty (e.g. /clear raced ahead of _state reset)."""
         try:

@@ -119,6 +119,15 @@ class LaneManager:
         for lane in self._lanes.values():
             lane.sync_mcp_tools(list(mcp_tools), list(deferred_tools))
 
+    def sync_cli_tools_to_loops(
+        self,
+        live_tools: Sequence[Any],
+        deferred_tools: Sequence[Any] = (),
+    ) -> None:
+        """After gateway CLI integration refresh, update tool registries on running loops."""
+        for lane in self._lanes.values():
+            lane.sync_cli_tools(list(live_tools), list(deferred_tools))
+
     def sync_coding_tools_to_loops(self, working_dir: Path) -> None:
         """After a working-dir change, re-root coding tools on all active loops."""
         for lane in self._lanes.values():

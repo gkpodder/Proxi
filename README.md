@@ -77,6 +77,19 @@ uv run proxi keys upsert --key OPENAI_API_KEY --value "your-key-here"
 uv run proxi keys upsert --key ANTHROPIC_API_KEY --value "your-key-here"
 ```
 
+### Integrations (enable / disable)
+
+Enable flags for integrations (Gmail, Calendar, Spotify, weather, etc.) are stored in the same SQLite DB as API keys (`config/api_keys.db`). From the repo root you can list and flip them with:
+
+```bash
+uv run proxi keys list-integrations
+uv run proxi keys enable-integration gmail
+uv run proxi keys disable-integration gmail
+```
+
+You can also turn integrations on or off from the **TUI** with `/integrations` or from the **React app** settings.
+
+**When tool lists update:** The running gateway reloads which integration tools are registered (live, deferred, and `call_tool`) when you toggle from the TUI or React UI, and again when a session **sends a message** (so changes made only with `proxi keys` while the gateway is up usually apply on the next send without restarting). After that refresh, the model’s tool list in logs like `api_calls.json` should match—disabled integrations drop out. There are also execute-time checks so a disabled integration won’t run even if something were stale. **`uv run proxi gateway restart`** is still the simplest way to force everything in sync with the database.
 
 ## Architecture
 

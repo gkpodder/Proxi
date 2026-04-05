@@ -203,12 +203,8 @@ def _resolve_model(provider: str, model: str | None) -> str:
 
 
 async def _refresh_integration_tools() -> None:
-    """Reload MCP-type integration tools when the enabled-integration set has changed."""
+    """Reload MCP and CLI integration tools when config or enable flags change."""
     global _mcp_adapters, _integration_tools, _integration_deferred_tools, _last_integration_signature
-
-    no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
-    if no_mcp:
-        return
 
     async with _integration_refresh_lock:
         from proxi.cli.main import load_integrations_config
@@ -226,35 +222,50 @@ async def _refresh_integration_tools() -> None:
             return
         _last_integration_signature = sig
 
-        for adapter in _mcp_adapters:
+        no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
+        if not no_mcp:
+            for adapter in _mcp_adapters:
+                try:
+                    await asyncio.wait_for(adapter.close(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("mcp_close_timeout")
+                except Exception as exc:
+                    logger.warning("mcp_close_error", error=str(exc))
+            _mcp_adapters.clear()
+            _integration_tools.clear()
+            _integration_deferred_tools.clear()
+
             try:
-                await asyncio.wait_for(adapter.close(), timeout=5.0)
-            except asyncio.TimeoutError:
-                logger.warning("mcp_close_timeout")
+                from proxi.tools.registry import ToolRegistry as _TR
+
+                tmp_registry = _TR()
+                _mcp_adapters[:] = await asyncio.wait_for(
+                    auto_load_mcp_servers(tmp_registry), timeout=30.0
+                )
+                _integration_tools[:] = list(tmp_registry._tools.values())
+                _integration_deferred_tools[:] = list(
+                    tmp_registry._deferred_tools.values())
+                logger.info(
+                    "integrations_refreshed",
+                    adapters=len(_mcp_adapters),
+                    tools=len(_integration_tools),
+                    deferred=len(_integration_deferred_tools),
+                )
             except Exception as exc:
-                logger.warning("mcp_close_error", error=str(exc))
-        _mcp_adapters.clear()
-        _integration_tools.clear()
-        _integration_deferred_tools.clear()
+                logger.warning("integration_refresh_error", error=str(exc))
+        else:
+            for adapter in _mcp_adapters:
+                try:
+                    await asyncio.wait_for(adapter.close(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("mcp_close_timeout")
+                except Exception as exc:
+                    logger.warning("mcp_close_error", error=str(exc))
+            _mcp_adapters.clear()
+            _integration_tools.clear()
+            _integration_deferred_tools.clear()
 
-        try:
-            from proxi.tools.registry import ToolRegistry as _TR
-
-            tmp_registry = _TR()
-            _mcp_adapters[:] = await asyncio.wait_for(
-                auto_load_mcp_servers(tmp_registry), timeout=30.0
-            )
-            _integration_tools[:] = list(tmp_registry._tools.values())
-            _integration_deferred_tools[:] = list(
-                tmp_registry._deferred_tools.values())
-            logger.info(
-                "integrations_refreshed",
-                adapters=len(_mcp_adapters),
-                tools=len(_integration_tools),
-                deferred=len(_integration_deferred_tools),
-            )
-        except Exception as exc:
-            logger.warning("integration_refresh_error", error=str(exc))
+        _refresh_cli_tools()
 
         # Existing lanes keep the same AgentLoop + ToolRegistry; refresh replaces
         # global tool objects — push the new tools into every active loop so
@@ -262,39 +273,20 @@ async def _refresh_integration_tools() -> None:
         if lane_manager is not None:
             lane_manager.sync_mcp_tools_to_loops(
                 _integration_tools, _integration_deferred_tools)
+            lane_manager.sync_cli_tools_to_loops(
+                _cli_tools, _cli_deferred_tools)
 
 
 def _refresh_cli_tools() -> None:
-    """Load CLI tools from config/integrations.json into global lists."""
+    """Load CLI tools from config + key store into global lists."""
     global _cli_tools, _cli_deferred_tools
-    from proxi.cli.main import load_integrations_config
-    from proxi.tools.cli_tool import CLI_TOOLS
+    from proxi.cli.main import build_cli_tool_lists
 
-    config = load_integrations_config()
-    integrations = config.get("integrations", {})
-
-    # Build per-integration defer + always_load settings.
-    defer_map: dict[str, bool] = {}
-    always_map: dict[str, set[str]] = {}
-    for name, entry in integrations.items():
-        defer_map[name] = bool(entry.get("defer_loading", True))
-        always_map[name] = set(entry.get("always_load", []))
-
+    live, deferred = build_cli_tool_lists()
     _cli_tools.clear()
     _cli_deferred_tools.clear()
-    for tool_class in CLI_TOOLS:
-        tool = tool_class()
-        integration_name = getattr(tool_class, "integration_name", None)
-        if integration_name and integration_name in defer_map:
-            defer = defer_map[integration_name]
-            int_always = always_map.get(integration_name, set())
-            if not defer or tool.name in int_always:
-                _cli_tools.append(tool)
-            else:
-                _cli_deferred_tools.append(tool)
-        else:
-            # Core tools (no integration) are always live.
-            _cli_tools.append(tool)
+    _cli_tools.extend(live)
+    _cli_deferred_tools.extend(deferred)
     logger.info(
         "cli_tools_loaded",
         live=len(_cli_tools),
@@ -415,10 +407,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 
-    # Load MCP-type integration adapters once so their tools are available to all lanes.
+    # Load MCP + CLI integration tools once (shared across all lanes).
     await _refresh_integration_tools()
-    # Load CLI tools once so they are available to all lanes.
-    _refresh_cli_tools()
 
     lane_manager = LaneManager(config, create_loop=_create_agent_loop)
     lane_manager.discord_broadcast_factory = _discord_channels_for_agent

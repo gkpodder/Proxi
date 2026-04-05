@@ -170,12 +170,14 @@ class CLITool(BaseTool):
                 # Truncate and always annotate — applies to both success and failure paths.
                 truncated = len(out) > _MAX_OUTPUT
                 if truncated:
-                    out = out[:_MAX_OUTPUT] + "\n[output truncated at 15,000 chars]"
+                    out = out[:_MAX_OUTPUT] + \
+                        "\n[output truncated at 15,000 chars]"
 
                 if rc != 0:
                     # Exit code 3 signals a transient failure — retry with backoff.
                     if rc == 3 and attempt < self._max_retries:
-                        delay = self._retry_base_delay * (2 ** attempt) * (0.9 + 0.2 * random.random())
+                        delay = self._retry_base_delay * \
+                            (2 ** attempt) * (0.9 + 0.2 * random.random())
                         await asyncio.sleep(delay)
                         continue
 
@@ -302,7 +304,8 @@ class GetWeatherForecastTool(CLITool):
                 },
                 "required": ["location"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.weather", "forecast"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.weather", "forecast"],
             timeout=30,
             # parallel_safe: stateless HTTP calls, no shared mutable state.
             parallel_safe=True,
@@ -335,7 +338,8 @@ class NotionListChildrenTool(CLITool):
                 },
                 "required": [],
             },
-            command=[sys.executable, "-m", "proxi.scripts.notion", "list-children"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.notion", "list-children"],
             timeout=30,
             # parallel_safe: stateless HTTP calls, no shared mutable state.
             parallel_safe=True,
@@ -372,7 +376,8 @@ class NotionCreatePageTool(CLITool):
                 },
                 "required": ["title"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.notion", "create-page"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.notion", "create-page"],
             timeout=30,
             parallel_safe=True,
             read_only=False,
@@ -408,7 +413,8 @@ class NotionAppendToPageTool(CLITool):
                 },
                 "required": ["page_id", "content"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.notion", "append-to-page"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.notion", "append-to-page"],
             timeout=30,
             parallel_safe=True,
             read_only=False,
@@ -569,7 +575,8 @@ class CalendarListEventsTool(CLITool):
                 },
                 "required": [],
             },
-            command=[sys.executable, "-m", "proxi.scripts.calendar", "list-events"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.calendar", "list-events"],
             timeout=30,
             parallel_safe=True,
             read_only=True,
@@ -608,7 +615,8 @@ class CalendarCreateEventTool(CLITool):
                 },
                 "required": ["summary", "start_time", "end_time", "timezone", "attendees"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.calendar", "create-event"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.calendar", "create-event"],
             timeout=30,
             parallel_safe=True,
             read_only=False,
@@ -634,7 +642,8 @@ class CalendarGetEventTool(CLITool):
                 },
                 "required": ["event_id"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.calendar", "get-event"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.calendar", "get-event"],
             timeout=30,
             parallel_safe=True,
             read_only=True,
@@ -674,7 +683,8 @@ class CalendarUpdateEventTool(CLITool):
                 },
                 "required": ["event_id"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.calendar", "update-event"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.calendar", "update-event"],
             timeout=30,
             parallel_safe=True,
             read_only=False,
@@ -700,7 +710,8 @@ class CalendarDeleteEventTool(CLITool):
                 },
                 "required": ["event_id"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.calendar", "delete-event"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.calendar", "delete-event"],
             timeout=30,
             parallel_safe=True,
             read_only=False,
@@ -723,7 +734,8 @@ class ObsidianListVaultsTool(CLITool):
                 "properties": {},
                 "required": [],
             },
-            command=[sys.executable, "-m", "proxi.scripts.obsidian", "list-vaults"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.obsidian", "list-vaults"],
             timeout=30,
             parallel_safe=True,
             read_only=True,
@@ -750,7 +762,8 @@ class ObsidianListNotesTool(CLITool):
                 },
                 "required": [],
             },
-            command=[sys.executable, "-m", "proxi.scripts.obsidian", "list-notes"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.obsidian", "list-notes"],
             timeout=30,
             parallel_safe=True,
             read_only=True,
@@ -777,7 +790,8 @@ class ObsidianReadNoteTool(CLITool):
                 },
                 "required": ["note_path"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.obsidian", "read-note"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.obsidian", "read-note"],
             timeout=30,
             parallel_safe=True,
             read_only=True,
@@ -806,7 +820,8 @@ class ObsidianCreateNoteTool(CLITool):
                 },
                 "required": ["note_path", "content"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.obsidian", "create-note"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.obsidian", "create-note"],
             timeout=30,
             parallel_safe=False,
             read_only=False,
@@ -835,7 +850,8 @@ class ObsidianUpdateNoteTool(CLITool):
                 },
                 "required": ["note_path", "content"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.obsidian", "update-note"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.obsidian", "update-note"],
             timeout=30,
             parallel_safe=False,
             read_only=False,
@@ -863,7 +879,8 @@ class ObsidianSearchNotesTool(CLITool):
                 },
                 "required": ["query"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.obsidian", "search-notes"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.obsidian", "search-notes"],
             timeout=30,
             parallel_safe=True,
             read_only=True,
@@ -890,7 +907,8 @@ class ObsidianGetNoteMetadataTool(CLITool):
                 },
                 "required": ["note_path"],
             },
-            command=[sys.executable, "-m", "proxi.scripts.obsidian", "get-note-metadata"],
+            command=[sys.executable, "-m",
+                     "proxi.scripts.obsidian", "get-note-metadata"],
             timeout=30,
             parallel_safe=True,
             read_only=True,
@@ -932,7 +950,7 @@ class WebSearchTool(CLITool):
             timeout=30,
             parallel_safe=True,
             read_only=True,
-            defer_loading=True,
+            defer_loading=False,
             max_retries=1,
         )
 
@@ -968,7 +986,7 @@ class WebExtractTool(CLITool):
             timeout=30,
             parallel_safe=True,
             read_only=True,
-            defer_loading=True,
+            defer_loading=False,
             max_retries=1,
         )
 
@@ -1001,3 +1019,12 @@ CLI_TOOLS: list[type[CLITool]] = [
     WebSearchTool,
     WebExtractTool,
 ]
+
+
+def cli_integration_tool_names() -> frozenset[str]:
+    """Names of all tools tied to an integration (for registry sync / teardown)."""
+    return frozenset(
+        tool_class().name  # type: ignore[call-arg]
+        for tool_class in CLI_TOOLS
+        if getattr(tool_class, "integration_name", None) is not None
+    )
