@@ -326,6 +326,50 @@ class SpotifyTools:
             "artists": ", ".join(artist.get("name", "") for artist in item.get("artists", [])),
         }
 
+    async def add_to_queue(self, item_uri: str, device_id: str | None = None) -> dict[str, Any]:
+        """Add a track or episode to the playback queue."""
+        params: dict[str, Any] = {"uri": item_uri}
+        if device_id:
+            params["device_id"] = device_id
+
+        self._spotify_request(
+            "POST",
+            "/me/player/queue",
+            params=params,
+            expected_statuses={200, 204},
+        )
+        return {
+            "status": "ok",
+            "action": "queue_add",
+            "queued_uri": item_uri,
+            "device_id": device_id,
+        }
+
+    async def get_queue(self) -> dict[str, Any]:
+        """Return the user's current queue."""
+        response = self._spotify_request("GET", "/me/player/queue")
+        payload = response.json()
+
+        def _simplify(item: dict[str, Any] | None) -> dict[str, Any] | None:
+            if not item:
+                return None
+            artists = ", ".join(artist.get("name", "") for artist in item.get("artists", []))
+            return {
+                "name": item.get("name"),
+                "uri": item.get("uri"),
+                "artists": artists,
+                "album": (item.get("album") or {}).get("name"),
+                "duration_ms": item.get("duration_ms"),
+            }
+
+        queue_items = [_simplify(item) for item in (payload.get("queue") or [])]
+        return {
+            "currently_playing": _simplify(payload.get("currently_playing")),
+            "next": queue_items[0] if queue_items else None,
+            "queue": queue_items,
+            "count": len(queue_items),
+        }
+
     async def list_devices(self) -> dict[str, Any]:
         """List available Spotify playback devices for the connected account."""
         response = self._spotify_request("GET", "/me/player/devices")
@@ -597,6 +641,51 @@ class SpotifyTools:
         ]
         return {"playlists": playlists, "count": len(playlists)}
 
+    async def get_playlist(self, playlist_id: str, include_tracks: bool = False) -> dict[str, Any]:
+        """Get details for a Spotify playlist."""
+        params: dict[str, Any] | None = None
+        if include_tracks:
+            params = {
+                "fields": (
+                    "id,name,uri,public,collaborative,owner(id,display_name,uri),"
+                    "tracks.total,tracks.items(track(name,uri,artists(name),album(name)))"
+                )
+            }
+
+        response = self._spotify_request("GET", f"/playlists/{playlist_id}", params=params)
+        payload = response.json()
+        owner = payload.get("owner") or {}
+        tracks = payload.get("tracks") or {}
+        track_items: list[dict[str, Any]] = []
+        for item in tracks.get("items") or []:
+            track = item.get("track") if isinstance(item, dict) else None
+            if not track:
+                continue
+            track_items.append(
+                {
+                    "name": track.get("name"),
+                    "uri": track.get("uri"),
+                    "artists": ", ".join(
+                        artist.get("name", "") for artist in track.get("artists", [])
+                    ),
+                    "album": (track.get("album") or {}).get("name"),
+                }
+            )
+        return {
+            "id": payload.get("id"),
+            "name": payload.get("name"),
+            "uri": payload.get("uri"),
+            "public": payload.get("public"),
+            "collaborative": payload.get("collaborative"),
+            "owner": {
+                "id": owner.get("id"),
+                "display_name": owner.get("display_name"),
+                "uri": owner.get("uri"),
+            },
+            "tracks_total": tracks.get("total"),
+            "tracks": track_items if include_tracks else None,
+        }
+
     async def create_playlist(
         self,
         name: str,
@@ -652,6 +741,25 @@ class SpotifyTools:
 
     async def add_track_to_playlist(self, playlist_id: str, track_uri: str) -> dict[str, Any]:
         """Add a track URI to a playlist."""
+        me = self._spotify_request("GET", "/me").json()
+        playlist = await self.get_playlist(playlist_id, include_tracks=False)
+        owner_id = ((playlist.get("owner") or {}).get("id"))
+        collaborative = bool(playlist.get("collaborative"))
+
+        if owner_id and owner_id != me.get("id") and not collaborative:
+            return {
+                "error": (
+                    "This playlist is not owned by your connected Spotify account and is not collaborative. "
+                    "Spotify only allows track adds for playlists you own or collaborative playlists."
+                ),
+                "playlist": playlist,
+                "account": {
+                    "id": me.get("id"),
+                    "display_name": me.get("display_name"),
+                    "email": me.get("email"),
+                },
+            }
+
         response = self._spotify_request(
             "POST",
             f"/playlists/{playlist_id}/tracks",
@@ -664,6 +772,7 @@ class SpotifyTools:
             "playlist_id": playlist_id,
             "track_uri": track_uri,
             "snapshot_id": payload.get("snapshot_id"),
+            "playlist": playlist,
         }
 
     async def get_profile(self) -> dict[str, Any]:

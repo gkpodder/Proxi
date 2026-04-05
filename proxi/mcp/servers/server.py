@@ -523,6 +523,24 @@ class CombinedMCPServer:
                     },
                 },
                 {
+                    "name": "spotify_get_playlist",
+                    "description": "Get details for a Spotify playlist, including owner and collaborative status.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "playlist_id": {
+                                "type": "string",
+                                "description": "Spotify playlist ID.",
+                            },
+                            "include_tracks": {
+                                "type": "boolean",
+                                "description": "Include playlist track items when Spotify allows it.",
+                            }
+                        },
+                        "required": ["playlist_id"],
+                    },
+                },
+                {
                     "name": "spotify_create_playlist",
                     "description": "Create a playlist in the connected Spotify account.",
                     "inputSchema": {
@@ -592,6 +610,59 @@ class CombinedMCPServer:
                             }
                         },
                         "required": ["playlist_id"],
+                    },
+                },
+                {
+                    "name": "spotify_queue_add",
+                    "description": (
+                        "Add a track or episode to the Spotify playback queue. "
+                        "Use this to queue something to play next without interrupting playback."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "item_uri": {
+                                "type": "string",
+                                "description": "Spotify track/episode URI to queue.",
+                            },
+                            "track_uri": {
+                                "type": "string",
+                                "description": "Compat alias for item_uri.",
+                            },
+                            "uri": {
+                                "type": "string",
+                                "description": "Compat alias for item_uri.",
+                            },
+                            "device_id": {
+                                "type": "string",
+                                "description": "Optional Spotify device ID.",
+                            },
+                            "device_name": {
+                                "type": "string",
+                                "description": "Optional Spotify device name.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_queue_next",
+                    "description": (
+                        "Show the next item currently queued in Spotify and the full queue snapshot."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_list_queue",
+                    "description": "List the Spotify queue, including currently playing and upcoming items.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
                     },
                 },
                 {
@@ -1156,6 +1227,23 @@ class CombinedMCPServer:
                 )
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
+            if name == "spotify_get_playlist":
+                playlist_id = (arguments.get("playlist_id") or "").strip()
+                if not playlist_id:
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps({"error": "Missing required field: 'playlist_id'"}),
+                            }
+                        ]
+                    }
+                result = await self._get_spotify().get_playlist(
+                    playlist_id,
+                    include_tracks=bool(arguments.get("include_tracks", False)),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
             if name == "spotify_play_playlist":
                 playlist_id = arguments.get("playlist_id") or ""
                 if not playlist_id.strip():
@@ -1220,6 +1308,47 @@ class CombinedMCPServer:
                 result = await self._get_spotify().add_current_track_to_playlist(
                     playlist_id=playlist_id
                 )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_queue_add":
+                item_uri = (
+                    arguments.get("item_uri")
+                    or arguments.get("track_uri")
+                    or arguments.get("uri")
+                    or ""
+                ).strip()
+                if not item_uri:
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps({"error": "Missing required field: 'item_uri'"}),
+                            }
+                        ]
+                    }
+
+                device_id = arguments.get("device_id")
+                device_name = arguments.get("device_name")
+                if not device_id and device_name:
+                    device_id = await self._get_spotify().resolve_device_id(device_name=device_name)
+
+                result = await self._get_spotify().add_to_queue(
+                    item_uri=item_uri,
+                    device_id=device_id,
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_queue_next":
+                result = await self._get_spotify().get_queue()
+                payload = {
+                    "next": result.get("next"),
+                    "currently_playing": result.get("currently_playing"),
+                    "count": result.get("count", 0),
+                }
+                return {"content": [{"type": "text", "text": json.dumps(payload)}]}
+
+            if name == "spotify_list_queue":
+                result = await self._get_spotify().get_queue()
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
             if name == "notion_list_children":
