@@ -83,6 +83,12 @@
       setLlmModel,
       saveLlmConfig,
       loadLlmConfig,
+      generaFeedback,
+      generaBusy,
+      generaReasoningEffort,
+      runCompactCommand,
+      runReasoningEffortCommand,
+      clearSessionHistory,
       webhooks,
       webhookLoading,
       webhookSaving,
@@ -98,14 +104,16 @@
     } = props;
 
     const [openSections, setOpenSections] = useState({
+      genera: true,
       agent: true,
       profile: true,
       keys: false,
       integrations: false,
       cron: false,
       webhooks: false,
-      llm: false,
     });
+    const [compactHint, setCompactHint] = useState("");
+    const [selectedReasoningEffort, setSelectedReasoningEffort] = useState("minimal");
     const [scheduleMode, setScheduleMode] = useState("quick");
     const [everyValue, setEveryValue] = useState("30");
     const [everyUnit, setEveryUnit] = useState("minute");
@@ -115,16 +123,22 @@
 
     const sectionItems = useMemo(
       () => [
+        { key: "genera", label: "General" },
         { key: "agent", label: "Agent" },
         { key: "profile", label: "Profile" },
         { key: "keys", label: "API Keys" },
         { key: "integrations", label: "Integrations" },
         { key: "cron", label: "Cron Jobs" },
         { key: "webhooks", label: "Webhooks" },
-        { key: "llm", label: "LLM Provider" },
       ],
       []
     );
+
+    useEffect(() => {
+      const normalized = String(generaReasoningEffort || "minimal").trim().toLowerCase();
+      const valid = ["minimal", "low", "medium", "high"];
+      setSelectedReasoningEffort(valid.includes(normalized) ? normalized : "minimal");
+    }, [generaReasoningEffort]);
 
     useEffect(() => {
       if (scheduleMode !== "quick") return;
@@ -200,6 +214,137 @@
             </aside>
 
             <div className="settingsContent">
+              <Section
+                sectionKey="genera"
+                title="General"
+                openSections={openSections}
+                toggleSection={toggleSection}
+                sectionRefs={sectionRefs}
+              >
+                <div className="settingsHint">Fast controls for context clearing, reasoning depth, compaction, and active LLM selection.</div>
+
+                <div className="formActions">
+                  <button
+                    className="primaryBtn"
+                    onClick={clearSessionHistory}
+                    disabled={generaBusy}
+                  >
+                    Clear History
+                  </button>
+                </div>
+
+                <div className="profileGrid">
+                  <label className="profileField">
+                    <span>Reasoning Effort</span>
+                    <select
+                      className="profileSelect"
+                      value={selectedReasoningEffort}
+                      disabled={generaBusy}
+                      onChange={(e) => setSelectedReasoningEffort(e.target.value)}
+                    >
+                      <option value="minimal">minimal</option>
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                    </select>
+                  </label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", justifyContent: "flex-end" }}>
+                    <button
+                      className="primaryBtn"
+                      onClick={() => runReasoningEffortCommand(selectedReasoningEffort)}
+                      disabled={
+                        generaBusy ||
+                        String(selectedReasoningEffort || "").trim().toLowerCase() ===
+                          String(generaReasoningEffort || "").trim().toLowerCase()
+                      }
+                    >
+                      Switch Reasoning
+                    </button>
+                  </div>
+                </div>
+
+                <div className="profileGrid">
+                  <label className="profileField profileFieldFull">
+                    <span>Compact Focus Hint (optional)</span>
+                    <input
+                      type="text"
+                      value={compactHint}
+                      disabled={generaBusy}
+                      placeholder="Optional focus, e.g. summarize only unresolved tasks"
+                      onChange={(e) => setCompactHint(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <div className="formActions generaCommandActions">
+                  <button
+                    className="primaryBtn"
+                    onClick={() => runCompactCommand(compactHint)}
+                    disabled={generaBusy}
+                  >
+                    Compact
+                  </button>
+                  <button
+                    onClick={() => setCompactHint("")}
+                    disabled={generaBusy || !compactHint.trim()}
+                  >
+                    Clear Focus Hint
+                  </button>
+                </div>
+
+                <div className="settingsHint">Choose the provider and model used for all new turns.</div>
+                <div className="profileGrid">
+                  <label className="profileField">
+                    <span>Provider</span>
+                    <select
+                      className="profileSelect"
+                      value={llmProvider}
+                      disabled={llmLoading || llmSaving || generaBusy}
+                      onChange={(e) => changeLlmProvider(e.target.value)}
+                    >
+                      {(llmProviders || []).map((provider) => (
+                        <option key={provider} value={provider}>
+                          {provider}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="profileField">
+                    <span>Model</span>
+                    <select
+                      className="profileSelect"
+                      value={llmModel}
+                      disabled={llmLoading || llmSaving || generaBusy}
+                      onChange={(e) => setLlmModel(e.target.value)}
+                    >
+                      {((llmModelsByProvider && llmModelsByProvider[llmProvider]) || []).map((modelName) => (
+                        <option key={modelName} value={modelName}>
+                          {modelName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="formActions">
+                  <button
+                    className="primaryBtn"
+                    onClick={saveLlmConfig}
+                    disabled={
+                      llmLoading ||
+                      llmSaving ||
+                      generaBusy ||
+                      ((llmProvider === bootInfo?.llm_provider) && (llmModel === bootInfo?.llm_model))
+                    }
+                  >
+                    {((llmProvider !== bootInfo?.llm_provider) || (llmModel !== bootInfo?.llm_model)) ? "Switch LLM Provider" : "LLM Provider Selected"}
+                  </button>
+                  <button onClick={() => loadLlmConfig()} disabled={llmLoading || llmSaving || generaBusy}>
+                    Refresh
+                  </button>
+                </div>
+
+                {(generaFeedback || llmFeedback) && <div className="formHint">{generaFeedback || llmFeedback}</div>}
+              </Section>
+
               <Section
                 sectionKey="agent"
                 title="Agent"
@@ -854,64 +999,6 @@
                 </div>
               </Section>
 
-              <Section
-                sectionKey="llm"
-                title="LLM Provider"
-                openSections={openSections}
-                toggleSection={toggleSection}
-                sectionRefs={sectionRefs}
-              >
-                <div className="settingsHint">Choose the provider and model used for all new turns.</div>
-                <div className="profileGrid">
-                  <label className="profileField">
-                    <span>Provider</span>
-                    <select
-                      className="profileSelect"
-                      value={llmProvider}
-                      disabled={llmLoading || llmSaving}
-                      onChange={(e) => changeLlmProvider(e.target.value)}
-                    >
-                      {(llmProviders || []).map((provider) => (
-                        <option key={provider} value={provider}>
-                          {provider}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="profileField">
-                    <span>Model</span>
-                    <select
-                      className="profileSelect"
-                      value={llmModel}
-                      disabled={llmLoading || llmSaving}
-                      onChange={(e) => setLlmModel(e.target.value)}
-                    >
-                      {((llmModelsByProvider && llmModelsByProvider[llmProvider]) || []).map((modelName) => (
-                        <option key={modelName} value={modelName}>
-                          {modelName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {llmFeedback && <div className="formHint">{llmFeedback}</div>}
-                <div className="formActions">
-                  <button
-                    className="primaryBtn"
-                    onClick={saveLlmConfig}
-                    disabled={
-                      llmLoading ||
-                      llmSaving ||
-                      ((llmProvider === bootInfo?.llm_provider) && (llmModel === bootInfo?.llm_model))
-                    }
-                  >
-                    {((llmProvider !== bootInfo?.llm_provider) || (llmModel !== bootInfo?.llm_model)) ? "Switch LLM Provider" : "LLM Provider Selected"}
-                  </button>
-                  <button onClick={() => loadLlmConfig()} disabled={llmLoading || llmSaving}>
-                    Refresh
-                  </button>
-                </div>
-              </Section>
             </div>
           </div>
         </div>

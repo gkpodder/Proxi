@@ -703,6 +703,22 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname.startsWith("/api/sessions/") && url.pathname.endsWith("/clear-history") && method === "POST") {
+    try {
+      const sessionId = decodeURIComponent(url.pathname.replace("/api/sessions/", "").replace("/clear-history", "")).trim();
+      if (!sessionId) {
+        sendJson(res, 400, { error: "Session id is required" });
+        return;
+      }
+
+      const payload = await gatewayPost(`/v1/sessions/${encodeURIComponent(sessionId)}/clear-history`, {});
+      sendJson(res, 200, { ok: true, ...payload });
+    } catch (error) {
+      sendError(res, error);
+    }
+    return;
+  }
+
   if (url.pathname === "/api/cron-capabilities" && method === "GET") {
     try {
       const capabilities = await getCronCapabilities();

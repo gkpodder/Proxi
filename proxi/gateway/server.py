@@ -872,7 +872,7 @@ async def stream_session(session_id: str, subscriber: str = Query(default="sse")
     await sse.send_event({
         "type": "boot_complete",
         "agentId": agent_id,
-        "sessionId": session_name,
+        "sessionId": session_id,
     })
 
     async def event_generator():

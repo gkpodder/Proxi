@@ -63,6 +63,9 @@ function App() {
   const [llmLoading, setLlmLoading] = useState(false);
   const [llmSaving, setLlmSaving] = useState(false);
   const [llmFeedback, setLlmFeedback] = useState("");
+  const [generaFeedback, setGeneraFeedback] = useState("");
+  const [generaBusy, setGeneraBusy] = useState(false);
+  const [generaReasoningEffort, setGeneraReasoningEffort] = useState("minimal");
   const [cronDraft, setCronDraft] = useState({
     sourceId: "",
     schedule: "",
@@ -820,6 +823,98 @@ function App() {
     ws.send(JSON.stringify(payload));
   }
 
+  function runSlashCommand(rawCommand, options = {}) {
+    const { echo = false, successMessage = "" } = options;
+    const command = String(rawCommand || "").trim();
+    if (!command) return false;
+    if (isPromptActive) {
+      setGeneraFeedback("Complete the current prompt first.");
+      addSystem("Complete the current prompt first.");
+      return false;
+    }
+    if (!hasSelectedAgent) {
+      setGeneraFeedback("Select an agent first.");
+      addSystem("Select an agent first.");
+      return false;
+    }
+
+    if (echo) addUser(command);
+    setInput("");
+    setStatusLabel("Running...");
+    setStreaming("");
+    send({ type: "start", task: command });
+    if (successMessage) setGeneraFeedback(successMessage);
+    return true;
+  }
+
+  async function clearSessionHistory() {
+    if (isPromptActive) {
+      setGeneraFeedback("Complete the current prompt first.");
+      addSystem("Complete the current prompt first.");
+      return;
+    }
+    if (!hasSelectedAgent) {
+      setGeneraFeedback("Select an agent first.");
+      addSystem("Select an agent first.");
+      return;
+    }
+
+    const sessionId = String(bootInfo?.sessionId || "").trim();
+    if (!sessionId) {
+      setGeneraFeedback("Error: active session id is unavailable.");
+      return;
+    }
+
+    setGeneraBusy(true);
+    setGeneraFeedback("");
+    try {
+      // Match TUI behavior: clear UI immediately, then clear persisted session history.
+      setMessages([]);
+      setActivityItems([]);
+      setStreaming("");
+      setInput("");
+      setBootstrapInput(null);
+      setFormUi(null);
+      setStatusLabel("Idle");
+
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/clear-history`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Failed to clear session history");
+
+      setGeneraFeedback("Session cleared (UI and persisted history).");
+      addSystem("Session cleared.");
+    } catch (error) {
+      setGeneraFeedback(`Error: ${String(error)}`);
+    } finally {
+      setGeneraBusy(false);
+    }
+  }
+
+  function runCompactCommand(focusHint) {
+    const hint = String(focusHint || "").trim();
+    const command = hint ? `/compact ${hint}` : "/compact";
+    const ok = runSlashCommand(command, {
+      echo: true,
+      successMessage: hint
+        ? `Running /compact with focus hint: ${hint}`
+        : "Running /compact.",
+    });
+    if (ok) setGeneraFeedback((prev) => prev || "Compaction requested.");
+  }
+
+  function runReasoningEffortCommand(level) {
+    const normalized = String(level || "").trim().toLowerCase();
+    const valid = ["minimal", "low", "medium", "high"];
+    const resolved = valid.includes(normalized) ? normalized : "minimal";
+    const ok = runSlashCommand(`/reasoning-effort ${resolved}`, {
+      echo: true,
+      successMessage: `Reasoning effort set to ${resolved}.`,
+    });
+    if (ok) setGeneraReasoningEffort(resolved);
+  }
+
   function onSwitchAgent() {
     switchAgentToSelected();
   }
@@ -1123,11 +1218,7 @@ function App() {
     }
     if (!task) return;
 
-    addUser(task);
-    setInput("");
-    setStatusLabel("Running...");
-    setStreaming("");
-    send({ type: "start", task });
+    runSlashCommand(task, { echo: true });
   }
 
   function onAbort() {
@@ -1318,6 +1409,12 @@ function App() {
         setLlmModel={setLlmModel}
         saveLlmConfig={saveLlmConfig}
         loadLlmConfig={loadLlmConfig}
+        generaFeedback={generaFeedback}
+        generaBusy={generaBusy}
+        generaReasoningEffort={generaReasoningEffort}
+        runCompactCommand={runCompactCommand}
+        runReasoningEffortCommand={runReasoningEffortCommand}
+        clearSessionHistory={clearSessionHistory}
         webhooks={webhooks}
         webhookLoading={webhookLoading}
         webhookSaving={webhookSaving}
