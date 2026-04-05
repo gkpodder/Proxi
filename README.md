@@ -1,19 +1,9 @@
 # Proxi
 
-Developer names: Gourob, Ajay, Aman, Savinay  
-Project start: Sep 15, 2025
+<p align="center">
+  <img src="proxi_logo.png" alt="Proxi Logo" width="500"/>
+</p>
 
-## Table Of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Workspace Layout](#workspace-layout)
-- [Tech Stack](#tech-stack)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [TUI Slash Commands](#tui-slash-commands)
-- [Development](#development)
 
 ## Overview
 
@@ -23,7 +13,70 @@ Proxi is a dynamic AI assisstant focused on making computers more accessible for
 
 Proxi can access virtually any integration such as your google workspace, weather, spotify, browser and do work on your behalf. Feel free to open an issue if you'd like for any other integrations to be added!
 
-Proxi can be accessed via a terminal TUI, our own GUI(react_frontend) or a supported channel like whatsapp or discord. Currently the GUI is the only way to access the setup wizard and play with settings and setup cron jobs etc. 
+Proxi can be accessed via a terminal TUI, our own GUI(react_frontend) or a supported channel like discord or whatsapp(pending). Currently the GUI is the only way to access the setup wizard and play with settings and setup cron jobs etc. 
+
+## Table Of Contents
+
+- [Tech Stack](#tech-stack)
+- [Installation](#installation)
+- [Architecture](#architecture)
+- [Workspace Layout](#workspace-layout)
+- [Memory](#memory)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [TUI Slash Commands](#tui-slash-commands)
+- [Development](#development)
+
+
+## Tech Stack
+
+- Python 3.12+
+- `uv` for Python environment and task execution
+- FastAPI + Uvicorn for gateway server runtime
+- Pydantic + asyncio + structlog
+- Bun + Ink for the terminal TUI
+- React for GUI frontent
+
+## Installation
+
+Prerequisites:
+
+- Python 3.12+
+- [`uv`](https://docs.astral.sh/uv/)
+- [`bun`](https://bun.sh) (for TUI dependencies)
+
+From the repository root:
+
+```bash
+uv sync
+```
+
+Install TUI dependencies once:
+
+```bash
+cd cli_ink
+bun install
+```
+
+## Configuration
+
+### API keys
+
+API keys are stored in `config/api_keys.db`.
+
+Initialize explicitly (optional; many flows do this automatically):
+
+```bash
+uv run python scripts/init_api_keys_db.py
+```
+
+Set keys via CLI:
+
+```bash
+uv run proxi keys upsert --key OPENAI_API_KEY --value "your-key-here"
+uv run proxi keys upsert --key ANTHROPIC_API_KEY --value "your-key-here"
+```
+
 
 ## Architecture
 
@@ -116,54 +169,23 @@ Default workspace root is `~/.proxi` (overridable with `PROXI_HOME`):
 
 `gateway.yml` is the source of truth for configured agents and channel/source settings.
 
-## Tech Stack
+## Memory
 
-- Python 3.12+
-- `uv` for Python environment and task execution
-- FastAPI + Uvicorn for gateway server runtime
-- Pydantic + asyncio + structlog
-- Bun + Ink for the terminal TUI
-- React for GUI frontent
+Proxi maintains persistent memory across sessions so agents can recall past conversations, reuse proven workflows, and build up a model of the user over time.
 
-## Installation
+There are three memory types:
 
-Prerequisites:
+| Type | What it stores | Storage |
+|---|---|---|
+| **Episodic** | Summaries of past sessions with topic tags | SQLite FTS5 (`memory.db`) |
+| **Skills** | Reusable multi-step workflows (agentskills.io format) | Markdown files (`skills/<name>/SKILL.md`) |
+| **User model** | User preferences, style, environment, coding conventions | `USER.md` (capped at ~600 tokens) |
 
-- Python 3.12+
-- [`uv`](https://docs.astral.sh/uv/)
-- [`bun`](https://bun.sh) (for TUI dependencies)
+At the end of each session a background task summarizes the conversation using a cheap model (provider-appropriate: Haiku for Anthropic, `gpt-4o-mini` for OpenAI, or the active model as a fallback) and stores the result as an episode. The agent can query all three memory types via the `search_memory` tool, write new skills via `save_skill`, and update the user profile via `update_user_model`.
 
-From the repository root:
+For a full breakdown of the architecture, skill lifecycle, summarization pipeline, and configuration options see **[instruction_manual/memory.md](instruction_manual/memory.md)**.
 
-```bash
-uv sync
-```
 
-Install TUI dependencies once:
-
-```bash
-cd cli_ink
-bun install
-```
-
-## Configuration
-
-### API keys
-
-API keys are stored in `config/api_keys.db`.
-
-Initialize explicitly (optional; many flows do this automatically):
-
-```bash
-uv run python scripts/init_api_keys_db.py
-```
-
-Set keys via CLI:
-
-```bash
-uv run proxi keys upsert --key OPENAI_API_KEY --value "your-key-here"
-uv run proxi keys upsert --key ANTHROPIC_API_KEY --value "your-key-here"
-```
 
 ### Useful environment variables
 
