@@ -559,76 +559,76 @@ export default function App() {
     commitStreamToScrollback();
   }, [commitStreamToScrollback]);
 
-  // --- MCP management state ---
-  const mcpModeRef = useRef(false);
+  // --- Integration management state ---
+  const integrationModeRef = useRef(false);
   const deleteModeRef = useRef(false);
   const workDirModeRef = useRef(false);
   const compactModeRef = useRef(false);
 
-  const startMcpManagement = useCallback(async () => {
-    mcpModeRef.current = true;
-    const showMcpList = async () => {
+  const startIntegrationManagement = useCallback(async () => {
+    integrationModeRef.current = true;
+    const showIntegrationList = async () => {
       try {
-        const res = await fetch(`${GATEWAY}/v1/mcps`);
+        const res = await fetch(`${GATEWAY}/v1/integrations`);
         if (!res.ok) {
           setScrollback((s) => [
           ...s,
-          { type: "agent_line", content: `MCP fetch failed: ${res.status}`, isFirst: true, isSystem: true },
+          { type: "agent_line", content: `Integration fetch failed: ${res.status}`, isFirst: true, isSystem: true },
         ]);
-          mcpModeRef.current = false;
+          integrationModeRef.current = false;
           return;
         }
-        const data = (await res.json()) as { mcps?: { name: string; enabled: boolean }[] };
-        const mcps = data.mcps ?? [];
+        const data = (await res.json()) as { integrations?: { name: string; enabled: boolean }[] };
+        const integrations = data.integrations ?? [];
         const doneLabel = "[Done]";
-        const options = mcps.map(
+        const options = integrations.map(
           (m) => `${m.name} [${m.enabled ? "Enabled" : "Disabled"}] → ${m.enabled ? "Disable" : "Enable"}`
         );
         options.push(doneLabel);
         setHitlSpec({
           type: "user_input_required" as const,
           method: "select" as const,
-          prompt: "MCP Settings: choose an MCP to toggle, or select [Done]",
+          prompt: "Integration Settings: choose an integration to toggle, or select [Done]",
           options,
         });
       } catch (err: any) {
         setScrollback((s) => [
           ...s,
-          { type: "agent_line", content: `MCP error: ${err.message}`, isFirst: true, isSystem: true },
+          { type: "agent_line", content: `Integration error: ${err.message}`, isFirst: true, isSystem: true },
         ]);
-        mcpModeRef.current = false;
+        integrationModeRef.current = false;
       }
     };
-    await showMcpList();
+    await showIntegrationList();
   }, []);
 
-  const handleMcpSelection = useCallback(async (value: string | boolean | number) => {
+  const handleIntegrationSelection = useCallback(async (value: string | boolean | number) => {
     const choice = String(value);
     if (choice === "[Done]" || choice === "false") {
-      mcpModeRef.current = false;
+      integrationModeRef.current = false;
       setHitlSpec(null);
       setScrollback((s) => [
         ...s,
-        { type: "agent_line", content: "MCP settings updated.", isFirst: true, isSystem: true },
+        { type: "agent_line", content: "Integration settings updated.", isFirst: true, isSystem: true },
       ]);
       return;
     }
-    // Extract MCP name from option string: "name [Enabled] → Disable"
-    const mcpName = choice.split(" ")[0];
-    if (!mcpName) {
-      mcpModeRef.current = false;
+    // Extract integration name from option string: "name [Enabled] → Disable"
+    const integrationName = choice.split(" ")[0];
+    if (!integrationName) {
+      integrationModeRef.current = false;
       setHitlSpec(null);
       return;
     }
     try {
-      const res = await fetch(`${GATEWAY}/v1/mcps/${encodeURIComponent(mcpName)}/toggle`, { method: "POST" });
+      const res = await fetch(`${GATEWAY}/v1/integrations/${encodeURIComponent(integrationName)}/toggle`, { method: "POST" });
       if (res.ok) {
         const result = (await res.json()) as { enabled?: boolean };
         setScrollback((s) => [
           ...s,
           {
             type: "agent_line",
-            content: `MCP '${mcpName}' ${result.enabled ? "enabled" : "disabled"}.`,
+            content: `Integration '${integrationName}' ${result.enabled ? "enabled" : "disabled"}.`,
             isFirst: true,
             isSystem: true,
           },
@@ -640,13 +640,13 @@ export default function App() {
         { type: "agent_line", content: `Toggle failed: ${err.message}`, isFirst: true, isSystem: true },
       ]);
     }
-    // Re-show the list only if the user is still in MCP settings. If they hit [Done] or Esc
-    // while the toggle request was in flight, mcpModeRef is false — do not reopen the picker
+    // Re-show the list only if the user is still in integration settings. If they hit [Done] or Esc
+    // while the toggle request was in flight, integrationModeRef is false — do not reopen the picker
     // (would steal focus from chat and strand in-flight replies).
-    if (mcpModeRef.current) {
-      await startMcpManagement();
+    if (integrationModeRef.current) {
+      await startIntegrationManagement();
     }
-  }, [startMcpManagement]);
+  }, [startIntegrationManagement]);
 
   const startWorkDirFlow = useCallback(async () => {
     workDirModeRef.current = true;
@@ -1132,8 +1132,8 @@ export default function App() {
         void handleAgentSelection(value);
         return;
       }
-      if (mcpModeRef.current) {
-        handleMcpSelection(value);
+      if (integrationModeRef.current) {
+        handleIntegrationSelection(value);
         return;
       }
       if (workDirModeRef.current) {
@@ -1156,7 +1156,7 @@ export default function App() {
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit, handlePlanGoalSubmit, handleReasoningEffortSubmit]
+    [sendToGateway, handleIntegrationSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit, handlePlanGoalSubmit, handleReasoningEffortSubmit]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -1186,8 +1186,8 @@ export default function App() {
       setHitlSpec(null);
       return;
     }
-    if (mcpModeRef.current) {
-      mcpModeRef.current = false;
+    if (integrationModeRef.current) {
+      integrationModeRef.current = false;
       setHitlSpec(null);
       return;
     }
@@ -1310,8 +1310,8 @@ export default function App() {
             prompt: `Delete agent '${bootInfo.agentId}' and all sessions? This cannot be undone.`,
           });
           break;
-        case "mcps":
-          startMcpManagement();
+        case "integrations":
+          startIntegrationManagement();
           break;
         case "work-dir":
           void startWorkDirFlow();
@@ -1339,7 +1339,7 @@ export default function App() {
           setHitlSpec(null);
           setUsageOverlay(null);
           agentModeRef.current = false;
-          mcpModeRef.current = false;
+          integrationModeRef.current = false;
           deleteModeRef.current = false;
           setStatusLabel(null);
           setStatusKind(null);
@@ -1430,7 +1430,7 @@ export default function App() {
             { type: "agent_line", content: "/branch   - Clone current agent with full session history", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/btw      - Temporary side session (Esc from empty input to return)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/delete   - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/mcps     - Enable/disable MCPs", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/integrations - Enable/disable integrations (gmail, spotify, etc.)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/work-dir - View or change working directory", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/compact  - Summarize context to save tokens (optionally add a focus hint)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
@@ -1446,7 +1446,7 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent, startMcpManagement, startWorkDirFlow, bootInfo, handleBranch, handleBtw]
+    [onSwitchAgent, startIntegrationManagement, startWorkDirFlow, bootInfo, handleBranch, handleBtw]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);

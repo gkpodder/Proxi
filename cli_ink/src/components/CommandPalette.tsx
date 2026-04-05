@@ -19,7 +19,7 @@ const COMMANDS: Omit<CommandDef, "handler">[] = [
   { id: "branch", name: "/branch", description: "Clone this agent with current history" },
   { id: "btw", name: "/btw", description: "Quick side session (Esc to return)" },
   { id: "delete", name: "/delete", description: "Delete current agent (gateway + disk)" },
-  { id: "mcps", name: "/mcps", description: "Enable or disable MCPs" },
+  { id: "integrations", name: "/integrations", description: "Enable or disable integrations (gmail, spotify, etc.)" },
   { id: "work-dir", name: "/work-dir", description: "View or change working directory" },
   { id: "compact", name: "/compact", description: "Summarize context to save tokens (optional: add focus hint)" },
   { id: "clear", name: "/clear", description: "Clear UI + disk history (fresh session)" },

@@ -8,9 +8,11 @@ Pattern for adding a new CLI tool:
        total network failure). Always print a structured JSON error to stdout, not a
        raw traceback.
   2. Subclass CLITool, set command=[sys.executable, "-m", "proxi.scripts.<name>", ...].
-  3. Append the new class to CLI_TOOLS at the bottom of this file.
-  4. Adjust config/mcp.json cliTools.always_load if it should be live instead of deferred.
-  5. Mark parallel_safe=True only if the script has no shared mutable state between
+  3. Set integration_name to the integration key from proxi/integrations/catalog.py,
+     or None for core tools that are always available (e.g. web_search).
+  4. Append the new class to CLI_TOOLS at the bottom of this file.
+  5. Adjust config/integrations.json always_load if it should be live instead of deferred.
+  6. Mark parallel_safe=True only if the script has no shared mutable state between
      concurrent invocations (stateless HTTP calls are fine; file writes are not).
 """
 
@@ -44,7 +46,14 @@ class CLITool(BaseTool):
     Timeout handling uses a two-stage escalation:
       1. SIGTERM — gives the process a chance to flush output and clean up.
       2. After _SIGTERM_GRACE_SECONDS, SIGKILL — unconditional termination.
+
+    Set ``integration_name`` on the subclass to the integration key from
+    proxi/integrations/catalog.py (e.g. "gmail", "spotify").  Tools with
+    ``integration_name = None`` are always available (e.g. web_search).
     """
+
+    # Subclasses set this to the integration they belong to, or None for core tools.
+    integration_name: str | None = None
 
     def __init__(
         self,
@@ -105,6 +114,18 @@ class CLITool(BaseTool):
         return argv
 
     async def execute(self, arguments: dict[str, Any]) -> ToolResult:
+        if self.integration_name is not None:
+            from proxi.security.key_store import is_integration_enabled
+            if not is_integration_enabled(self.integration_name):
+                return ToolResult(
+                    success=False,
+                    output="",
+                    error=(
+                        f"Integration '{self.integration_name}' is not enabled. "
+                        "Enable it in Settings → Integrations."
+                    ),
+                )
+
         argv = self._command + self._build_argv(arguments)
         start = time.monotonic()
         last_result: ToolResult | None = None
@@ -200,6 +221,8 @@ class CLITool(BaseTool):
 class GetWeatherTool(CLITool):
     """Get current weather for a location via Open-Meteo."""
 
+    integration_name = "weather"
+
     def __init__(self) -> None:
         super().__init__(
             name="get_weather",
@@ -244,6 +267,8 @@ class GetWeatherTool(CLITool):
 
 class GetWeatherForecastTool(CLITool):
     """Get a multi-day weather forecast for a location via Open-Meteo."""
+
+    integration_name = "weather"
 
     def __init__(self) -> None:
         super().__init__(
@@ -290,6 +315,8 @@ class GetWeatherForecastTool(CLITool):
 class NotionListChildrenTool(CLITool):
     """List child pages/databases under the configured Notion parent page."""
 
+    integration_name = "notion"
+
     def __init__(self) -> None:
         super().__init__(
             name="notion_list_children",
@@ -320,6 +347,8 @@ class NotionListChildrenTool(CLITool):
 
 class NotionCreatePageTool(CLITool):
     """Create a Notion page under the configured parent page."""
+
+    integration_name = "notion"
 
     def __init__(self) -> None:
         super().__init__(
@@ -355,6 +384,8 @@ class NotionCreatePageTool(CLITool):
 class NotionAppendToPageTool(CLITool):
     """Append paragraph content to an existing Notion page."""
 
+    integration_name = "notion"
+
     def __init__(self) -> None:
         super().__init__(
             name="notion_append_to_page",
@@ -389,6 +420,8 @@ class NotionAppendToPageTool(CLITool):
 class NotionGetPageTool(CLITool):
     """Get details for a Notion page by page ID."""
 
+    integration_name = "notion"
+
     def __init__(self) -> None:
         super().__init__(
             name="notion_get_page",
@@ -417,6 +450,8 @@ class NotionGetPageTool(CLITool):
 
 class ReadEmailsTool(CLITool):
     """Read Gmail inbox messages via CLI wrapper."""
+
+    integration_name = "gmail"
 
     def __init__(self) -> None:
         super().__init__(
@@ -452,6 +487,8 @@ class ReadEmailsTool(CLITool):
 class SendEmailTool(CLITool):
     """Send Gmail message via CLI wrapper."""
 
+    integration_name = "gmail"
+
     def __init__(self) -> None:
         super().__init__(
             name="send_email",
@@ -482,6 +519,8 @@ class SendEmailTool(CLITool):
 class GetEmailTool(CLITool):
     """Get a specific Gmail message by ID via CLI wrapper."""
 
+    integration_name = "gmail"
+
     def __init__(self) -> None:
         super().__init__(
             name="get_email",
@@ -509,6 +548,8 @@ class GetEmailTool(CLITool):
 
 class CalendarListEventsTool(CLITool):
     """List calendar events via CLI wrapper."""
+
+    integration_name = "google_calendar"
 
     def __init__(self) -> None:
         super().__init__(
@@ -539,6 +580,8 @@ class CalendarListEventsTool(CLITool):
 
 class CalendarCreateEventTool(CLITool):
     """Create a calendar event via CLI wrapper."""
+
+    integration_name = "google_calendar"
 
     def __init__(self) -> None:
         super().__init__(
@@ -577,6 +620,8 @@ class CalendarCreateEventTool(CLITool):
 class CalendarGetEventTool(CLITool):
     """Get a calendar event by ID via CLI wrapper."""
 
+    integration_name = "google_calendar"
+
     def __init__(self) -> None:
         super().__init__(
             name="calendar_get_event",
@@ -600,6 +645,8 @@ class CalendarGetEventTool(CLITool):
 
 class CalendarUpdateEventTool(CLITool):
     """Update a calendar event via CLI wrapper."""
+
+    integration_name = "google_calendar"
 
     def __init__(self) -> None:
         super().__init__(
@@ -639,6 +686,8 @@ class CalendarUpdateEventTool(CLITool):
 class CalendarDeleteEventTool(CLITool):
     """Delete a calendar event via CLI wrapper."""
 
+    integration_name = "google_calendar"
+
     def __init__(self) -> None:
         super().__init__(
             name="calendar_delete_event",
@@ -663,6 +712,8 @@ class CalendarDeleteEventTool(CLITool):
 class ObsidianListVaultsTool(CLITool):
     """List discovered Obsidian vaults via CLI wrapper."""
 
+    integration_name = "obsidian"
+
     def __init__(self) -> None:
         super().__init__(
             name="obsidian_list_vaults",
@@ -683,6 +734,8 @@ class ObsidianListVaultsTool(CLITool):
 
 class ObsidianListNotesTool(CLITool):
     """List notes in selected Obsidian vault via CLI wrapper."""
+
+    integration_name = "obsidian"
 
     def __init__(self) -> None:
         super().__init__(
@@ -709,6 +762,8 @@ class ObsidianListNotesTool(CLITool):
 class ObsidianReadNoteTool(CLITool):
     """Read an Obsidian note via CLI wrapper."""
 
+    integration_name = "obsidian"
+
     def __init__(self) -> None:
         super().__init__(
             name="obsidian_read_note",
@@ -733,6 +788,8 @@ class ObsidianReadNoteTool(CLITool):
 
 class ObsidianCreateNoteTool(CLITool):
     """Create an Obsidian note via CLI wrapper."""
+
+    integration_name = "obsidian"
 
     def __init__(self) -> None:
         super().__init__(
@@ -761,6 +818,8 @@ class ObsidianCreateNoteTool(CLITool):
 class ObsidianUpdateNoteTool(CLITool):
     """Update an Obsidian note via CLI wrapper."""
 
+    integration_name = "obsidian"
+
     def __init__(self) -> None:
         super().__init__(
             name="obsidian_update_note",
@@ -788,6 +847,8 @@ class ObsidianUpdateNoteTool(CLITool):
 class ObsidianSearchNotesTool(CLITool):
     """Search notes in Obsidian vault via CLI wrapper."""
 
+    integration_name = "obsidian"
+
     def __init__(self) -> None:
         super().__init__(
             name="obsidian_search_notes",
@@ -813,6 +874,8 @@ class ObsidianSearchNotesTool(CLITool):
 
 class ObsidianGetNoteMetadataTool(CLITool):
     """Get Obsidian note metadata via CLI wrapper."""
+
+    integration_name = "obsidian"
 
     def __init__(self) -> None:
         super().__init__(
@@ -911,8 +974,8 @@ class WebExtractTool(CLITool):
 
 
 # Registry of all CLI tools.  auto_load_cli_tools() iterates this list and
-# applies the defer_loading / always_load config from config/mcp.json.
-# To add a new CLI tool: subclass CLITool above, then append it here.
+# applies the defer_loading / always_load config from config/integrations.json.
+# To add a new CLI tool: subclass CLITool above, set integration_name, then append it here.
 CLI_TOOLS: list[type[CLITool]] = [
     GetWeatherTool,
     GetWeatherForecastTool,

@@ -81,15 +81,15 @@ DEFAULT_LLM_MODELS: dict[str, str] = dict(DEFAULT_MODELS)
 llm_provider: str = "openai"
 llm_model: str = DEFAULT_LLM_MODELS["openai"]
 
-# MCP adapters loaded once at startup; their tools are injected into each lane.
+# MCP-type integration adapters loaded once at startup; injected into each lane.
 _mcp_adapters: list[Any] = []
-_mcp_tools: list[Any] = []           # live (always-loaded) MCP tools
-# deferred MCP tools (loaded via search_tools)
-_mcp_deferred_tools: list[Any] = []
-_last_mcp_signature: str | None = None
-_mcp_refresh_lock = asyncio.Lock()
+_integration_tools: list[Any] = []           # live (always-loaded) integration tools
+# deferred integration tools (loaded via search_tools)
+_integration_deferred_tools: list[Any] = []
+_last_integration_signature: str | None = None
+_integration_refresh_lock = asyncio.Lock()
 
-# CLI tools loaded once at startup; share the same lane injection as MCP tools.
+# CLI tools loaded once at startup; share the same lane injection as integration tools.
 _cli_tools: list[Any] = []           # live CLI tools
 _cli_deferred_tools: list[Any] = []  # deferred CLI tools (found via call_tool)
 
@@ -202,29 +202,29 @@ def _resolve_model(provider: str, model: str | None) -> str:
     return requested
 
 
-async def _refresh_mcp_tools() -> None:
-    """Reload MCP tools when the enabled-MCP set has changed."""
-    global _mcp_adapters, _mcp_tools, _mcp_deferred_tools, _last_mcp_signature
+async def _refresh_integration_tools() -> None:
+    """Reload MCP-type integration tools when the enabled-integration set has changed."""
+    global _mcp_adapters, _integration_tools, _integration_deferred_tools, _last_integration_signature
 
     no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
     if no_mcp:
         return
 
-    async with _mcp_refresh_lock:
-        from proxi.cli.main import load_mcp_config
-        from proxi.security.key_store import get_enabled_mcps
+    async with _integration_refresh_lock:
+        from proxi.cli.main import load_integrations_config
+        from proxi.security.key_store import get_enabled_integrations
 
         sig_payload = {
-            "enabled": sorted(get_enabled_mcps()),
-            "config": load_mcp_config(),
+            "enabled": sorted(get_enabled_integrations()),
+            "config": load_integrations_config(),
         }
         sig = hashlib.sha256(
             json.dumps(sig_payload, sort_keys=True,
                        separators=(",", ":")).encode()
         ).hexdigest()
-        if sig == _last_mcp_signature:
+        if sig == _last_integration_signature:
             return
-        _last_mcp_signature = sig
+        _last_integration_signature = sig
 
         for adapter in _mcp_adapters:
             try:
@@ -234,8 +234,8 @@ async def _refresh_mcp_tools() -> None:
             except Exception as exc:
                 logger.warning("mcp_close_error", error=str(exc))
         _mcp_adapters.clear()
-        _mcp_tools.clear()
-        _mcp_deferred_tools.clear()
+        _integration_tools.clear()
+        _integration_deferred_tools.clear()
 
         try:
             from proxi.tools.registry import ToolRegistry as _TR
@@ -244,45 +244,57 @@ async def _refresh_mcp_tools() -> None:
             _mcp_adapters[:] = await asyncio.wait_for(
                 auto_load_mcp_servers(tmp_registry), timeout=30.0
             )
-            _mcp_tools[:] = list(tmp_registry._tools.values())
-            _mcp_deferred_tools[:] = list(
+            _integration_tools[:] = list(tmp_registry._tools.values())
+            _integration_deferred_tools[:] = list(
                 tmp_registry._deferred_tools.values())
             logger.info(
-                "mcp_refreshed",
+                "integrations_refreshed",
                 adapters=len(_mcp_adapters),
-                tools=len(_mcp_tools),
-                deferred=len(_mcp_deferred_tools),
+                tools=len(_integration_tools),
+                deferred=len(_integration_deferred_tools),
             )
         except Exception as exc:
-            logger.warning("mcp_refresh_error", error=str(exc))
+            logger.warning("integration_refresh_error", error=str(exc))
 
         # Existing lanes keep the same AgentLoop + ToolRegistry; refresh replaces
-        # global tool objects and closes old MCP stdio clients — push the new tools
-        # into every active loop so toggles take effect without restarting the gateway.
+        # global tool objects — push the new tools into every active loop so
+        # toggles take effect without restarting the gateway.
         if lane_manager is not None:
             lane_manager.sync_mcp_tools_to_loops(
-                _mcp_tools, _mcp_deferred_tools)
+                _integration_tools, _integration_deferred_tools)
 
 
 def _refresh_cli_tools() -> None:
-    """Load CLI tools from config/mcp.json cliTools section into global lists."""
+    """Load CLI tools from config/integrations.json into global lists."""
     global _cli_tools, _cli_deferred_tools
-    from proxi.cli.main import load_mcp_config
+    from proxi.cli.main import load_integrations_config
     from proxi.tools.cli_tool import CLI_TOOLS
 
-    config = load_mcp_config()
-    cli_config = config.get("cliTools", {})
-    defer_by_default = cli_config.get("defer_loading", True)
-    always_load = set(cli_config.get("always_load", []))
+    config = load_integrations_config()
+    integrations = config.get("integrations", {})
+
+    # Build per-integration defer + always_load settings.
+    defer_map: dict[str, bool] = {}
+    always_map: dict[str, set[str]] = {}
+    for name, entry in integrations.items():
+        defer_map[name] = bool(entry.get("defer_loading", True))
+        always_map[name] = set(entry.get("always_load", []))
 
     _cli_tools.clear()
     _cli_deferred_tools.clear()
     for tool_class in CLI_TOOLS:
         tool = tool_class()
-        if not defer_by_default or tool.name in always_load:
-            _cli_tools.append(tool)
+        integration_name = getattr(tool_class, "integration_name", None)
+        if integration_name and integration_name in defer_map:
+            defer = defer_map[integration_name]
+            int_always = always_map.get(integration_name, set())
+            if not defer or tool.name in int_always:
+                _cli_tools.append(tool)
+            else:
+                _cli_deferred_tools.append(tool)
         else:
-            _cli_deferred_tools.append(tool)
+            # Core tools (no integration) are always live.
+            _cli_tools.append(tool)
     logger.info(
         "cli_tools_loaded",
         live=len(_cli_tools),
@@ -318,9 +330,9 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 
     workspace_config.curr_working_dir = str(working_dir)
 
-    for mcp_tool in _mcp_tools:
+    for mcp_tool in _integration_tools:
         tool_registry.register(mcp_tool)
-    for mcp_tool in _mcp_deferred_tools:
+    for mcp_tool in _integration_deferred_tools:
         tool_registry.register_deferred(mcp_tool)
     for cli_tool in _cli_tools:
         tool_registry.register(cli_tool)
@@ -366,7 +378,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     global config, router, lane_manager, heartbeat_mgr
-    global _mcp_adapters, _mcp_tools
+    global _mcp_adapters, _integration_tools
     global llm_provider, llm_model
     global memory_manager
 
@@ -403,9 +415,9 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 
-    # Load MCP adapters once so their tools are available to all lanes.
-    await _refresh_mcp_tools()
-    # Load CLI tools once so they are available to all lanes alongside MCP tools.
+    # Load MCP-type integration adapters once so their tools are available to all lanes.
+    await _refresh_integration_tools()
+    # Load CLI tools once so they are available to all lanes.
     _refresh_cli_tools()
 
     lane_manager = LaneManager(config, create_loop=_create_agent_loop)
@@ -437,7 +449,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         "gateway_started",
         agents=list(config.agents.keys()),
         sources=list(config.sources.keys()),
-        mcp_tools=len(_mcp_tools),
+        integration_tools=len(_integration_tools),
     )
 
     # Clean up any plans left over from a previous crash.
@@ -454,7 +466,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         except Exception as exc:
             logger.warning("mcp_close_error", error=str(exc))
     _mcp_adapters.clear()
-    _mcp_tools.clear()
+    _integration_tools.clear()
     # Plans are ephemeral — delete them on every shutdown.
     _purge_all_plans(workspace_root)
     logger.info("gateway_stopped")
@@ -811,8 +823,8 @@ async def send_to_session(session_id: str, body: SendRequest, request: Request) 
     if lane is not None and lane.try_resolve_pending_form_with_text(msg):
         return {"event_id": "", "status": "form_answer_injected"}
 
-    # Re-evaluate MCP toggles before each task (mirrors bridge behaviour).
-    await _refresh_mcp_tools()
+    # Re-evaluate integration toggles before each task (mirrors bridge behaviour).
+    await _refresh_integration_tools()
 
     # Identify the caller: React frontend sends X-Proxi-Source: react.
     # Otherwise fall back to tui (if configured) or http.
@@ -937,35 +949,38 @@ async def get_lane(session_id: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# MCP management
+# Integration management
 # ---------------------------------------------------------------------------
-@app.get("/v1/mcps")
-async def list_mcps_endpoint() -> dict[str, Any]:
-    """List all MCPs with their enabled/disabled status."""
-    from proxi.security.key_store import list_mcps as _list_mcps
+@app.get("/v1/integrations")
+async def list_integrations_endpoint() -> dict[str, Any]:
+    """List all integrations with their enabled/disabled status."""
+    from proxi.security.key_store import list_integrations as _list_integrations
 
-    records = _list_mcps()
+    records = _list_integrations()
     return {
-        "mcps": [
-            {"name": r.mcp_name, "enabled": r.enabled}
-            for r in sorted(records, key=lambda r: r.mcp_name)
+        "integrations": [
+            {"name": r.integration_name, "enabled": r.enabled}
+            for r in sorted(records, key=lambda r: r.integration_name)
         ]
     }
 
 
-@app.post("/v1/mcps/{mcp_name}/toggle")
-async def toggle_mcp_endpoint(mcp_name: str) -> dict[str, Any]:
-    """Toggle an MCP between enabled and disabled."""
-    from proxi.security.key_store import enable_mcp as _enable_mcp, is_mcp_enabled
+@app.post("/v1/integrations/{integration_name}/toggle")
+async def toggle_integration_endpoint(integration_name: str) -> dict[str, Any]:
+    """Toggle an integration between enabled and disabled."""
+    from proxi.security.key_store import (
+        enable_integration as _enable_integration,
+        is_integration_enabled,
+    )
 
-    currently_enabled = is_mcp_enabled(mcp_name)
+    currently_enabled = is_integration_enabled(integration_name)
     new_state = not currently_enabled
-    _enable_mcp(mcp_name, enabled=new_state)
+    _enable_integration(integration_name, enabled=new_state)
 
-    # Immediately refresh loaded MCP tools so the change takes effect.
-    await _refresh_mcp_tools()
+    # Immediately refresh MCP-type integration tools so the change takes effect.
+    await _refresh_integration_tools()
 
-    return {"name": mcp_name, "enabled": new_state}
+    return {"name": integration_name, "enabled": new_state}
 
 
 # ---------------------------------------------------------------------------

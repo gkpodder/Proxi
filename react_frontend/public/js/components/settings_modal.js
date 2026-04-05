@@ -52,12 +52,12 @@
       setNewKeyValue,
       saveKey,
       loadApiKeys,
-      mcpsLoading,
-      mcpsSaving,
-      mcpFeedback,
-      mcps,
-      toggleMcp,
-      loadMcps,
+      integrationsLoading,
+      integrationsSaving,
+      integrationFeedback,
+      integrations,
+      toggleIntegration,
+      loadIntegrations,
       cronJobs,
       cronLoading,
       cronSaving,
@@ -101,7 +101,7 @@
       agent: true,
       profile: true,
       keys: false,
-      mcps: false,
+      integrations: false,
       cron: false,
       webhooks: false,
       llm: false,
@@ -118,7 +118,7 @@
         { key: "agent", label: "Agent" },
         { key: "profile", label: "Profile" },
         { key: "keys", label: "API Keys" },
-        { key: "mcps", label: "MCPs" },
+        { key: "integrations", label: "Integrations" },
         { key: "cron", label: "Cron Jobs" },
         { key: "webhooks", label: "Webhooks" },
         { key: "llm", label: "LLM Provider" },
@@ -434,28 +434,28 @@
               </Section>
 
               <Section
-                sectionKey="mcps"
-                title="MCPs"
+                sectionKey="integrations"
+                title="Integrations"
                 openSections={openSections}
                 toggleSection={toggleSection}
                 sectionRefs={sectionRefs}
               >
                 <div className="settingsHint">Changes take effect on the next agent session.</div>
-                {mcpsLoading ? (
-                  <div className="formHint">Loading MCPs...</div>
+                {integrationsLoading ? (
+                  <div className="formHint">Loading integrations...</div>
                 ) : (
                   <div className="mcpList">
-                    {mcps.length === 0 && <div className="formHint">No MCPs available.</div>}
-                    {mcps.map((item) => (
-                      <div key={item.mcp_name} className="mcpRow">
+                    {integrations.length === 0 && <div className="formHint">No integrations available.</div>}
+                    {integrations.map((item) => (
+                      <div key={item.integration_name} className="mcpRow">
                         <div className="mcpMeta">
-                          <div className="mcpName">{item.mcp_name}</div>
+                          <div className="mcpName">{item.integration_name}</div>
                           <div className="mcpStatus">{item.enabled ? "Enabled" : "Disabled"}</div>
                         </div>
                         <button
                           className={`primaryBtn ${item.enabled ? "disableBtn" : ""}`}
-                          disabled={mcpsSaving}
-                          onClick={() => toggleMcp(item.mcp_name, item.enabled)}
+                          disabled={integrationsSaving}
+                          onClick={() => toggleIntegration(item.integration_name, item.enabled)}
                         >
                           {item.enabled ? "Disable" : "Enable"}
                         </button>
@@ -464,9 +464,9 @@
                   </div>
                 )}
 
-                {mcpFeedback && <div className="formHint">{mcpFeedback}</div>}
+                {integrationFeedback && <div className="formHint">{integrationFeedback}</div>}
                 <div className="formActions">
-                  <button onClick={() => loadMcps()} disabled={mcpsLoading || mcpsSaving}>
+                  <button onClick={() => loadIntegrations()} disabled={integrationsLoading || integrationsSaving}>
                     Refresh
                   </button>
                 </div>

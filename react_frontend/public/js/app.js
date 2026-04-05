@@ -30,10 +30,10 @@ function App() {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyValue, setNewKeyValue] = useState("");
   const [keyFeedback, setKeyFeedback] = useState("");
-  const [mcps, setMcps] = useState([]);
-  const [mcpsLoading, setMcpsLoading] = useState(false);
-  const [mcpsSaving, setMcpsSaving] = useState(false);
-  const [mcpFeedback, setMcpFeedback] = useState("");
+  const [integrations, setIntegrations] = useState([]);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [integrationsSaving, setIntegrationsSaving] = useState(false);
+  const [integrationFeedback, setIntegrationFeedback] = useState("");
   const [cronJobs, setCronJobs] = useState([]);
   const [cronLoading, setCronLoading] = useState(false);
   const [cronSaving, setCronSaving] = useState(false);
@@ -153,7 +153,7 @@ function App() {
     if (!settingsOpen) return;
     loadAgents();
     loadApiKeys();
-    loadMcps();
+    loadIntegrations();
     loadCronCapabilities();
     loadCronJobs();
     loadUserProfile();
@@ -394,40 +394,40 @@ function App() {
     }
   }
 
-  async function loadMcps() {
-    setMcpsLoading(true);
-    setMcpFeedback("");
+  async function loadIntegrations() {
+    setIntegrationsLoading(true);
+    setIntegrationFeedback("");
     try {
-      const response = await fetch("/api/mcps");
+      const response = await fetch("/api/integrations");
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Failed to load MCPs");
-      setMcps(Array.isArray(payload.mcps) ? payload.mcps : []);
+      if (!response.ok) throw new Error(payload.error || "Failed to load integrations");
+      setIntegrations(Array.isArray(payload.integrations) ? payload.integrations : []);
     } catch (error) {
-      setMcpFeedback(`Error: ${String(error)}`);
+      setIntegrationFeedback(`Error: ${String(error)}`);
     } finally {
-      setMcpsLoading(false);
+      setIntegrationsLoading(false);
     }
   }
 
-  async function toggleMcp(mcpName, enabled) {
-    setMcpsSaving(true);
-    setMcpFeedback("");
+  async function toggleIntegration(integrationName, enabled) {
+    setIntegrationsSaving(true);
+    setIntegrationFeedback("");
     try {
-      const response = await fetch(`/api/mcps/${encodeURIComponent(mcpName)}`, {
+      const response = await fetch(`/api/integrations/${encodeURIComponent(integrationName)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: !enabled }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Failed to update MCP");
+      if (!response.ok) throw new Error(payload.error || "Failed to update integration");
 
       const action = !enabled ? "enabled" : "disabled";
-      setMcpFeedback(`${mcpName} has been ${action}. Restart the agent for changes to take effect.`);
-      await loadMcps();
+      setIntegrationFeedback(`${integrationName} has been ${action}. Restart the agent for changes to take effect.`);
+      await loadIntegrations();
     } catch (error) {
-      setMcpFeedback(`Error: ${String(error)}`);
+      setIntegrationFeedback(`Error: ${String(error)}`);
     } finally {
-      setMcpsSaving(false);
+      setIntegrationsSaving(false);
     }
   }
 
@@ -1287,12 +1287,12 @@ function App() {
         setNewKeyValue={setNewKeyValue}
         saveKey={saveKey}
         loadApiKeys={loadApiKeys}
-        mcpsLoading={mcpsLoading}
-        mcpsSaving={mcpsSaving}
-        mcpFeedback={mcpFeedback}
-        mcps={mcps}
-        toggleMcp={toggleMcp}
-        loadMcps={loadMcps}
+        integrationsLoading={integrationsLoading}
+        integrationsSaving={integrationsSaving}
+        integrationFeedback={integrationFeedback}
+        integrations={integrations}
+        toggleIntegration={toggleIntegration}
+        loadIntegrations={loadIntegrations}
         cronJobs={cronJobs}
         cronLoading={cronLoading}
         cronSaving={cronSaving}

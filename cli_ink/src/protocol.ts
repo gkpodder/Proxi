@@ -219,10 +219,10 @@ export const AbortSchema = z.object({
 });
 export type Abort = z.infer<typeof AbortSchema>;
 
-export const ManageMcpsSchema = z.object({
-  type: z.literal("manage_mcps"),
+export const ManageIntegrationsSchema = z.object({
+  type: z.literal("manage_integrations"),
 });
-export type ManageMcps = z.infer<typeof ManageMcpsSchema>;
+export type ManageIntegrations = z.infer<typeof ManageIntegrationsSchema>;
 
 export const TuiToBridgeSchema = z.union([
   StartTaskSchema,
@@ -230,7 +230,7 @@ export const TuiToBridgeSchema = z.union([
   UserInputResponseFormSchema,
   SwitchAgentSchema,
   AbortSchema,
-  ManageMcpsSchema,
+  ManageIntegrationsSchema,
 ]);
 export type TuiToBridge = z.infer<typeof TuiToBridgeSchema>;
 
