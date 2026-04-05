@@ -9,6 +9,7 @@ MCP_CATEGORIES: tuple[str, ...] = (
     "proxi",
     "gmail",
     "calendar",
+    "spotify",
     "notion",
     "weather",
     "obsidian",
@@ -17,6 +18,7 @@ MCP_CATEGORIES: tuple[str, ...] = (
 # Prefix-based tool category routing.
 TOOL_CATEGORY_PREFIXES: tuple[tuple[str, str], ...] = (
     ("calendar_", "calendar"),
+    ("spotify_", "spotify"),
     ("notion_", "notion"),
     ("weather_", "weather"),
     ("obsidian_", "obsidian"),

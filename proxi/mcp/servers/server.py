@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Combined MCP Server for Gmail, Calendar, Notion, and Obsidian."""
+"""Combined MCP Server for Gmail, Calendar, Spotify, Notion, and Obsidian."""
 
 import asyncio
 import json
@@ -13,17 +13,19 @@ if TYPE_CHECKING:
     from proxi.mcp.servers.gmail_tools import GmailTools
     from proxi.mcp.servers.notion_tools import NotionTools
     from proxi.mcp.servers.obsidian_tools import ObsidianTools
+    from proxi.mcp.servers.spotify_tools import SpotifyTools
 
 logger = get_logger(__name__)
 
 
 class CombinedMCPServer:
-    """MCP server for Gmail, Calendar, Notion, and Obsidian operations."""
+    """MCP server for Gmail, Calendar, Spotify, Notion, and Obsidian operations."""
 
     def __init__(self) -> None:
         """Initialize the combined MCP server."""
         self._gmail: "GmailTools | None" = None
         self._calendar: "CalendarTools | None" = None
+        self._spotify: "SpotifyTools | None" = None
         self._notion: "NotionTools | None" = None
         self._obsidian: "ObsidianTools | None" = None
 
@@ -50,6 +52,14 @@ class CombinedMCPServer:
         if self._calendar is None:
             self._calendar = CalendarTools()
         return self._calendar
+
+    def _get_spotify(self) -> "SpotifyTools":
+        """Lazily initialize Spotify tools to avoid blocking initialize."""
+        from proxi.mcp.servers.spotify_tools import SpotifyTools
+
+        if self._spotify is None:
+            self._spotify = SpotifyTools()
+        return self._spotify
 
     def _get_obsidian(self) -> "ObsidianTools":
         """Lazily initialize Obsidian tools to avoid blocking initialize."""
@@ -340,6 +350,248 @@ class CombinedMCPServer:
                             },
                         },
                         "required": ["event_id"],
+                    },
+                },
+                {
+                    "name": "spotify_get_profile",
+                    "description": (
+                        "Get the Spotify profile for the connected account. "
+                        "Use this first to confirm Spotify OAuth is connected and which account is active."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_get_playback",
+                    "description": (
+                        "Get current Spotify playback state including device and currently playing track."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_list_devices",
+                    "description": "List available Spotify playback devices.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_get_current_track",
+                    "description": "Get the URI/details of the currently playing Spotify track.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {},
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_play",
+                    "description": (
+                        "Start or resume Spotify playback. "
+                        "Optionally provide context_uri (album/artist/playlist URI), uris (track URIs), and device_id."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "track_uri": {
+                                "type": "string",
+                                "description": "Single Spotify track URI (compat alias for uris=[...]).",
+                            },
+                            "context_uri": {
+                                "type": "string",
+                                "description": "Spotify context URI (e.g., spotify:playlist:...).",
+                            },
+                            "uris": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of Spotify track URIs.",
+                            },
+                            "device_id": {
+                                "type": "string",
+                                "description": "Optional Spotify device ID.",
+                            },
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_pause",
+                    "description": "Pause Spotify playback.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "device_id": {
+                                "type": "string",
+                                "description": "Optional Spotify device ID.",
+                            }
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_next_track",
+                    "description": "Skip to the next Spotify track.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "device_id": {
+                                "type": "string",
+                                "description": "Optional Spotify device ID.",
+                            }
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_previous_track",
+                    "description": "Go to the previous Spotify track.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "device_id": {
+                                "type": "string",
+                                "description": "Optional Spotify device ID.",
+                            }
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_set_volume",
+                    "description": "Set Spotify volume (0-100).",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "volume_percent": {
+                                "type": "integer",
+                                "description": "Target volume from 0 to 100.",
+                            },
+                            "device_id": {
+                                "type": "string",
+                                "description": "Optional Spotify device ID.",
+                            },
+                        },
+                        "required": ["volume_percent"],
+                    },
+                },
+                {
+                    "name": "spotify_search",
+                    "description": (
+                        "Search Spotify for tracks, artists, albums, or playlists. "
+                        "Use this to find URIs before starting playback or adding tracks."
+                    ),
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Search query text.",
+                            },
+                            "search_type": {
+                                "type": "string",
+                                "description": "One of: track, artist, album, playlist.",
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum results (1-50, default: 10).",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+                {
+                    "name": "spotify_list_playlists",
+                    "description": "List playlists from the connected Spotify account.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum playlists to return (1-50, default: 20).",
+                            }
+                        },
+                        "required": [],
+                    },
+                },
+                {
+                    "name": "spotify_create_playlist",
+                    "description": "Create a playlist in the connected Spotify account.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Playlist name.",
+                            },
+                            "public": {
+                                "type": "boolean",
+                                "description": "Whether playlist should be public (default: false).",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Optional playlist description.",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                },
+                {
+                    "name": "spotify_play_playlist",
+                    "description": "Start playback for a playlist by playlist ID.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "playlist_id": {
+                                "type": "string",
+                                "description": "Spotify playlist ID.",
+                            },
+                            "device_id": {
+                                "type": "string",
+                                "description": "Optional Spotify device ID.",
+                            },
+                        },
+                        "required": ["playlist_id"],
+                    },
+                },
+                {
+                    "name": "spotify_add_track_to_playlist",
+                    "description": "Add a track URI to a playlist.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "playlist_id": {
+                                "type": "string",
+                                "description": "Spotify playlist ID.",
+                            },
+                            "track_uri": {
+                                "type": "string",
+                                "description": "Track URI (for example spotify:track:...).",
+                            },
+                        },
+                        "required": ["playlist_id", "track_uri"],
+                    },
+                },
+                {
+                    "name": "spotify_add_current_track_to_playlist",
+                    "description": "Add the currently playing track to a playlist.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "playlist_id": {
+                                "type": "string",
+                                "description": "Spotify playlist ID.",
+                            }
+                        },
+                        "required": ["playlist_id"],
                     },
                 },
                 {
@@ -773,6 +1025,201 @@ class CombinedMCPServer:
 
                 calendar_id = arguments.get("calendar_id", "primary")
                 result = await self._get_calendar().delete_event(event_id=event_id, calendar_id=calendar_id)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_get_profile":
+                result = await self._get_spotify().get_profile()
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_get_playback":
+                result = await self._get_spotify().get_current_playback()
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_list_devices":
+                result = await self._get_spotify().list_devices()
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_get_current_track":
+                result = await self._get_spotify().get_current_track_uri()
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_play":
+                uris = arguments.get("uris")
+                if uris is None:
+                    # Backward compatibility with prior prompt/tool argument names.
+                    uris = arguments.get("track_uris")
+                if uris is None and arguments.get("track_uri"):
+                    uris = [arguments.get("track_uri")]
+
+                device_id = arguments.get("device_id")
+                device_name = arguments.get("device_name")
+                if not device_id and device_name:
+                    device_id = await self._get_spotify().resolve_device_id(device_name=device_name)
+
+                result = await self._get_spotify().play(
+                    context_uri=arguments.get("context_uri"),
+                    uris=uris,
+                    device_id=device_id,
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_pause":
+                device_id = arguments.get("device_id")
+                device_name = arguments.get("device_name")
+                if not device_id and device_name:
+                    device_id = await self._get_spotify().resolve_device_id(device_name=device_name)
+                result = await self._get_spotify().pause(device_id=device_id)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_next_track":
+                device_id = arguments.get("device_id")
+                device_name = arguments.get("device_name")
+                if not device_id and device_name:
+                    device_id = await self._get_spotify().resolve_device_id(device_name=device_name)
+                result = await self._get_spotify().next_track(device_id=device_id)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_previous_track":
+                device_id = arguments.get("device_id")
+                device_name = arguments.get("device_name")
+                if not device_id and device_name:
+                    device_id = await self._get_spotify().resolve_device_id(device_name=device_name)
+                result = await self._get_spotify().previous_track(device_id=device_id)
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_set_volume":
+                if "volume_percent" not in arguments:
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(
+                                    {"error": "Missing required field: 'volume_percent'"}
+                                ),
+                            }
+                        ]
+                    }
+                result = await self._get_spotify().set_volume(
+                    volume_percent=int(arguments.get("volume_percent", 0)),
+                    device_id=(
+                        arguments.get("device_id")
+                        or (
+                            await self._get_spotify().resolve_device_id(
+                                device_name=arguments.get("device_name")
+                            )
+                            if arguments.get("device_name")
+                            else None
+                        )
+                    ),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_search":
+                query = arguments.get("query") or ""
+                if not query.strip():
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps({"error": "Missing required field: 'query'"}),
+                            }
+                        ]
+                    }
+                result = await self._get_spotify().search(
+                    query=query,
+                    search_type=arguments.get("search_type", "track"),
+                    limit=int(arguments.get("limit", arguments.get("max_results", 10))),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_list_playlists":
+                result = await self._get_spotify().list_playlists(
+                    limit=int(arguments.get("limit", 20))
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_create_playlist":
+                playlist_name = (arguments.get("name") or "").strip()
+                if not playlist_name:
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps({"error": "Missing required field: 'name'"}),
+                            }
+                        ]
+                    }
+                result = await self._get_spotify().create_playlist(
+                    name=playlist_name,
+                    public=bool(arguments.get("public", False)),
+                    description=arguments.get("description"),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_play_playlist":
+                playlist_id = arguments.get("playlist_id") or ""
+                if not playlist_id.strip():
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(
+                                    {"error": "Missing required field: 'playlist_id'"}
+                                ),
+                            }
+                        ]
+                    }
+                result = await self._get_spotify().play_playlist(
+                    playlist_id=playlist_id,
+                    device_id=arguments.get("device_id"),
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_add_track_to_playlist":
+                playlist_id = arguments.get("playlist_id") or ""
+                track_uri = arguments.get("track_uri") or ""
+                if not playlist_id.strip():
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(
+                                    {"error": "Missing required field: 'playlist_id'"}
+                                ),
+                            }
+                        ]
+                    }
+                if not track_uri.strip():
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps(
+                                    {"error": "Missing required field: 'track_uri'"}
+                                ),
+                            }
+                        ]
+                    }
+                result = await self._get_spotify().add_track_to_playlist(
+                    playlist_id=playlist_id,
+                    track_uri=track_uri,
+                )
+                return {"content": [{"type": "text", "text": json.dumps(result)}]}
+
+            if name == "spotify_add_current_track_to_playlist":
+                playlist_id = (arguments.get("playlist_id") or "").strip()
+                if not playlist_id:
+                    return {
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": json.dumps({"error": "Missing required field: 'playlist_id'"}),
+                            }
+                        ]
+                    }
+                result = await self._get_spotify().add_current_track_to_playlist(
+                    playlist_id=playlist_id
+                )
                 return {"content": [{"type": "text", "text": json.dumps(result)}]}
 
             if name == "notion_list_children":

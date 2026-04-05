@@ -9,7 +9,7 @@
         "-m",
         "proxi.mcp.servers.server"
       ],
-      "description": "Default local Proxi MCP server (gmail, calendar, notion, obsidian)",
+      "description": "Default local Proxi MCP server (gmail, calendar, spotify, notion, obsidian)",
       "defer_loading": true,
       "always_load": [
         "read_emails",
