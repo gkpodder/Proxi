@@ -13,7 +13,7 @@ from typing import Any
 import uvicorn
 import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -409,6 +409,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     _refresh_cli_tools()
 
     lane_manager = LaneManager(config, create_loop=_create_agent_loop)
+    lane_manager.discord_broadcast_factory = _discord_channels_for_agent
 
     cron_registry = CronRegistry(config, lane_manager, router)
     cron_registry.load_all(scheduler)
@@ -510,6 +511,26 @@ def _discord_agent_for_channel(source: Any, channel_id: str) -> str:
     return source.target_agent
 
 
+# Tracks channel_id → agent_id for every Discord channel that has sent a message.
+# Populated at runtime so cron/heartbeat/webhook can broadcast back to active channels.
+_discord_active_channels: dict[str, str] = {}
+
+
+def _record_discord_channel(channel_id: str, agent_id: str) -> None:
+    if channel_id:
+        _discord_active_channels[channel_id] = agent_id
+
+
+def _discord_channels_for_agent(agent_id: str) -> list[Any]:
+    """Return DiscordReplyChannel instances for all channels currently mapped to *agent_id*."""
+    from proxi.gateway.channels.discord import DiscordReplyChannel
+    return [
+        DiscordReplyChannel(destination=ch)
+        for ch, ag in _discord_active_channels.items()
+        if ag == agent_id
+    ]
+
+
 def _resolve_discord_session(source: Any, raw: dict[str, Any]) -> str:
     channel_id = _discord_channel_id(raw)
     user_id = _discord_user_id(raw)
@@ -520,7 +541,7 @@ def _resolve_discord_session(source: Any, raw: dict[str, Any]) -> str:
             status_code=400, detail=f"Unknown Discord target agent: {agent_id}")
 
     mode = str(source.extras.get(
-        "discord_session_mode", "channel")).strip().lower()
+        "discord_session_mode", "fixed")).strip().lower()
     base_session = str(source.target_session or "").strip()
     agent_default = config.agents[agent_id].default_session
 
@@ -673,6 +694,7 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
                 status_code=400, detail="Discord channel_id is required for switch")
 
         _set_discord_channel_agent(channel_id, next_agent_id)
+        _record_discord_channel(channel_id, next_agent_id)
         source = _discord_source()
         switched_session_id = _resolve_discord_session(source, raw_payload)
         lane_manager._get_or_create(switched_session_id)
@@ -697,8 +719,22 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
         return {"ok": True, "ignored": True, "reason": "empty_task"}
 
     event.session_id = session_id
+    channel_id = _discord_channel_id(raw_payload)
+    agent_id = session_id.split("/", 1)[0]
+    _record_discord_channel(channel_id, agent_id)
     await lane_manager.route(event)
     return {"ok": True, "action": "start", "queued": True, "session_id": session_id}
+
+
+@app.post("/channels/discord/deregister")
+async def discord_deregister(request: Request) -> dict[str, bool]:
+    """Called by the Discord relay on shutdown to stop cron/webhook broadcasts to Discord."""
+    source = config.sources.get("discord")
+    if source is not None:
+        await verify_discord_signature(request)
+    _discord_active_channels.clear()
+    logger.info("discord_active_channels_cleared")
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -761,7 +797,7 @@ class SendRequest(BaseModel):
 
 
 @app.post("/v1/sessions/{session_id:path}/send")
-async def send_to_session(session_id: str, body: SendRequest) -> dict[str, str]:
+async def send_to_session(session_id: str, body: SendRequest, request: Request) -> dict[str, str]:
     """Non-blocking: enqueue a message or form answer, return event_id immediately."""
     if body.form_answer is not None:
         await lane_manager.resume(session_id, form_answer=body.form_answer)
@@ -778,17 +814,21 @@ async def send_to_session(session_id: str, body: SendRequest) -> dict[str, str]:
     # Re-evaluate MCP toggles before each task (mirrors bridge behaviour).
     await _refresh_mcp_tools()
 
-    # Build a lightweight event using the tui source (if configured) or http fallback
-    source_id = "tui"
-    source = config.sources.get(source_id)
-    if source is None:
-        source_id = "http"
+    # Identify the caller: React frontend sends X-Proxi-Source: react.
+    # Otherwise fall back to tui (if configured) or http.
+    proxi_source_header = request.headers.get("X-Proxi-Source", "").strip().lower()
+    if proxi_source_header == "react":
+        source_id = "react"
+    else:
+        source_id = "tui"
+        if config.sources.get(source_id) is None:
+            source_id = "http"
 
     event = GatewayEvent(
         source_id=source_id,
         source_type="http",
         payload={"text": msg},
-        reply_channel=HttpNoopReplyChannel(destination=f"tui:{session_id}"),
+        reply_channel=HttpNoopReplyChannel(destination=f"{source_id}:{session_id}"),
         session_id=session_id,
         priority=0,
     )
@@ -800,8 +840,12 @@ _SSE_KEEPALIVE_INTERVAL = 15  # seconds
 
 
 @app.get("/v1/sessions/{session_id:path}/stream")
-async def stream_session(session_id: str) -> StreamingResponse:
-    """SSE stream of agent output for a session."""
+async def stream_session(session_id: str, subscriber: str = Query(default="sse")) -> StreamingResponse:
+    """SSE stream of agent output for a session.
+
+    ``subscriber`` identifies the client type (e.g. 'tui', 'react') so multiple
+    clients can connect to the same session simultaneously without stomping each other.
+    """
     lane = lane_manager.get_lane(session_id)
     if lane is None:
         try:
@@ -813,9 +857,9 @@ async def stream_session(session_id: str) -> StreamingResponse:
             except Exception:
                 raise HTTPException(status_code=404, detail="Unknown session")
 
-    sse = HttpSseReplyChannel(destination=f"sse:{session_id}")
+    sse = HttpSseReplyChannel(destination=f"sse:{session_id}:{subscriber}")
     form_bridge = HttpFormBridge(sse)
-    lane.attach_sse(sse, form_bridge)
+    lane.attach_sse(sse, subscriber, form_bridge)
 
     await sse.send_event({"type": "ready"})
 
@@ -835,7 +879,7 @@ async def stream_session(session_id: str) -> StreamingResponse:
         except Exception:
             pass
         finally:
-            lane.detach_sse(sse)
+            lane.detach_sse(sse, subscriber)
 
     async def keepalive_generator():
         """Merge data events with periodic SSE comments to keep the connection alive."""
@@ -1587,16 +1631,13 @@ async def accept_plan(session_id: str) -> dict[str, str]:
     # Inject plan content as the next user turn so the agent auto-executes
     execute_message = f"Execute the following plan:\n\n{plan_content}"
 
-    if lane._sse_channel is not None:
-        try:
-            await lane._sse_channel.send_event({
-                "type": "status_update",
-                "label": "Executing plan",
-                "status": "running",
-                "tui_abortable": True,
-            })
-        except Exception:
-            pass
+    if lane._sse_channels:
+        await lane._broadcast_sse({
+            "type": "status_update",
+            "label": "Executing plan",
+            "status": "running",
+            "tui_abortable": True,
+        })
 
     # Route the execution message through the lane (async background task)
     event = GatewayEvent(
@@ -1631,20 +1672,17 @@ async def reject_plan(session_id: str) -> dict[str, str]:
     lane._state.workspace.active_plan_path = None
     lane.workspace_config.active_plan_path = None
 
-    if lane._sse_channel is not None:
-        try:
-            await lane._sse_channel.send_event({
-                "type": "text_stream",
-                "content": "Plan rejected.",
-            })
-            await lane._sse_channel.send_event({
-                "type": "status_update",
-                "label": "Plan rejected",
-                "status": "done",
-                "tui_abortable": False,
-            })
-        except Exception:
-            pass
+    if lane._sse_channels:
+        await lane._broadcast_sse({
+            "type": "text_stream",
+            "content": "Plan rejected.",
+        })
+        await lane._broadcast_sse({
+            "type": "status_update",
+            "label": "Plan rejected",
+            "status": "done",
+            "tui_abortable": False,
+        })
 
     return {"status": "rejected"}
 

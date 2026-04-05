@@ -57,7 +57,7 @@ async function gatewayGet(pathname) {
 async function gatewayPost(pathname, body = {}) {
   const response = await fetch(`${gatewayBaseUrl}${pathname}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Proxi-Source": "react" },
     body: JSON.stringify(body),
   });
   const payload = await response.json().catch(() => ({}));
@@ -158,7 +158,7 @@ function createGatewaySessionController(ws) {
 
     try {
       const response = await fetch(
-        `${gatewayBaseUrl}/v1/sessions/${encodeURIComponent(sessionId)}/stream`,
+        `${gatewayBaseUrl}/v1/sessions/${encodeURIComponent(sessionId)}/stream?subscriber=react`,
         { signal: controller.signal }
       );
 
@@ -176,6 +176,19 @@ function createGatewaySessionController(ws) {
         sseBuffer += decoder.decode(value, { stream: true });
         sseBuffer = parseSseChunk(sseBuffer, (eventData) => {
           if (!eventData || eventData.startsWith(":")) return;
+          // Only forward events from this client's own prompts or from broadcast sources.
+          // Events from other interactive channels (tui, discord) are filtered out.
+          try {
+            const evt = JSON.parse(eventData);
+            const sid = evt?.source_id;
+            const stype = evt?.source_type;
+            const BROADCAST_TYPES = new Set(["cron", "heartbeat", "webhook"]);
+            const isReact = sid === "react";
+            const isBroadcast = BROADCAST_TYPES.has(stype) || BROADCAST_TYPES.has(sid);
+            if ((sid || stype) && !isReact && !isBroadcast) return;
+          } catch {
+            // Non-JSON or parse error — let it through (boot/ready events)
+          }
           sendToClient(eventData);
         });
       }

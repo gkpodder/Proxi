@@ -345,7 +345,7 @@ sources:
         # Optional extras (all optional):
         # discord_command_prefix: /proxi
         # discord_allow_plain: false
-        # discord_session_mode: channel   # fixed | channel | user
+        # discord_session_mode: fixed   # fixed | channel | user  (default: fixed)
         # discord_agent_overrides: {}     # auto-managed by /proxi switch <agent_id>
 ```
 

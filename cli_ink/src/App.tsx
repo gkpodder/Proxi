@@ -158,6 +158,23 @@ export default function App() {
   }, []);
 
   handleMsgRef.current = (msg: BridgeMessage) => {
+    // Only show events from the TUI's own prompts or from broadcast sources (cron/heartbeat/webhook).
+    // Events from other interactive channels (discord, react) are filtered out.
+    // source_id identifies the named source; source_type identifies its kind.
+    const msgSourceId = (msg as { source_id?: string }).source_id;
+    const msgSourceType = (msg as { source_type?: string }).source_type;
+    if (msgSourceId || msgSourceType) {
+      const BROADCAST_TYPES = new Set(["cron", "heartbeat", "webhook"]);
+      const isTui = msgSourceId === "tui";
+      const isBroadcast = BROADCAST_TYPES.has(msgSourceType ?? "") || BROADCAST_TYPES.has(msgSourceId ?? "");
+      if (!isTui && !isBroadcast) {
+        const DISPLAY_TYPES = new Set([
+          "text_stream", "tool_start", "tool_log", "tool_done",
+          "subagent_start", "subagent_done", "inbound_turn", "status_update",
+        ]);
+        if (DISPLAY_TYPES.has(msg.type)) return;
+      }
+    }
     switch (msg.type) {
       case "ready":
         setBridgeReady(true);
@@ -289,7 +306,7 @@ export default function App() {
 
     const connect = async () => {
       try {
-        const res = await fetch(`${GATEWAY}/v1/sessions/${session}/stream`, {
+        const res = await fetch(`${GATEWAY}/v1/sessions/${session}/stream?subscriber=tui`, {
           signal: controller.signal,
           headers: { Accept: "text/event-stream" },
         });
