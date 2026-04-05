@@ -25,6 +25,7 @@ const COMMANDS: Omit<CommandDef, "handler">[] = [
   { id: "clear", name: "/clear", description: "Clear UI + disk history (fresh session)" },
   { id: "plan", name: "/plan", description: "Start an interactive planning session" },
   { id: "reasoning-effort", name: "/reasoning-effort", description: "Set TUI reasoning depth (minimal · low · medium · high)" },
+  { id: "provider", name: "/provider", description: "Switch LLM provider (OpenAI · Anthropic)" },
   { id: "todos", name: "/todos", description: "View open todos" },
   { id: "usage", name: "/usage", description: "Show context and turn usage" },
   { id: "help", name: "/help", description: "Show all commands" },

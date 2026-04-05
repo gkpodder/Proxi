@@ -25,6 +25,8 @@ _USER_MD_TEMPLATE = """\
 ## Environment
 
 ## Coding Conventions
+
+## Relationships
 """
 
 # Maximum character length of USER.md (~600 tokens ≈ 2400 chars)
@@ -59,7 +61,8 @@ class MemoryManager:
         self._conn = init_db(self._db_path)
         if not self.user_md_path.exists():
             self.user_md_path.write_text(_USER_MD_TEMPLATE, encoding="utf-8")
-        logger.info("memory_manager_initialized", memory_dir=str(self.memory_dir))
+        logger.info("memory_manager_initialized",
+                    memory_dir=str(self.memory_dir))
 
     def close(self) -> None:
         if self._conn is not None:
@@ -83,7 +86,8 @@ class MemoryManager:
             return True
         try:
             import yaml  # type: ignore[import-untyped]
-            raw = yaml.safe_load(self._gateway_config_path.read_text(encoding="utf-8"))
+            raw = yaml.safe_load(
+                self._gateway_config_path.read_text(encoding="utf-8"))
             agent_cfg = (raw or {}).get("agents", {}).get(agent_id, {})
             memory_cfg = agent_cfg.get("memory", {})
             if isinstance(memory_cfg, dict):
@@ -161,7 +165,8 @@ class MemoryManager:
     def _fts_search_episodes(self, query: str, limit: int) -> list[sqlite3.Row]:
         assert self._conn is not None
         # Sanitise the query: strip special FTS5 operators that could cause syntax errors
-        safe_query = query.replace('"', "").replace("*", "").replace("^", "").strip()
+        safe_query = query.replace('"', "").replace(
+            "*", "").replace("^", "").strip()
         if not safe_query:
             return []
         try:
@@ -205,7 +210,8 @@ class MemoryManager:
                 content = skill_md.read_text(encoding="utf-8")
                 doc = SkillDoc.from_skill_md(skill_dir.name, content)
                 # Simple term-frequency scoring
-                text = (doc.name + " " + doc.description + " " + doc.body).lower()
+                text = (doc.name + " " + doc.description +
+                        " " + doc.body).lower()
                 score = sum(text.count(t) for t in terms)
                 if score > 0:
                     skills.append((score, doc))
@@ -227,7 +233,8 @@ class MemoryManager:
             compatibility=doc.compatibility,
             version=doc.version,
             created_by=doc.created_by,
-            created_at=doc.created_at or datetime.now(timezone.utc).date().isoformat(),
+            created_at=doc.created_at or datetime.now(
+                timezone.utc).date().isoformat(),
             use_count=doc.use_count,
         )
 
@@ -241,7 +248,8 @@ class MemoryManager:
 
         if skill_md.exists():
             # Patch: bump version, update sections that appear in new body
-            existing = SkillDoc.from_skill_md(doc.name, skill_md.read_text(encoding="utf-8"))
+            existing = SkillDoc.from_skill_md(
+                doc.name, skill_md.read_text(encoding="utf-8"))
             doc = _patch_skill(existing, doc)
 
         skill_md.write_text(doc.to_skill_md(), encoding="utf-8")
@@ -296,7 +304,8 @@ class MemoryManager:
             await loop.run_in_executor(None, self._update_user_model_sync, patch)
 
     def _update_user_model_sync(self, patch: str) -> None:
-        current = self.user_md_path.read_text(encoding="utf-8") if self.user_md_path.exists() else _USER_MD_TEMPLATE
+        current = self.user_md_path.read_text(
+            encoding="utf-8") if self.user_md_path.exists() else _USER_MD_TEMPLATE
         updated = _merge_sections(current, patch)
         # Enforce max length
         if len(updated) > _USER_MD_MAX_CHARS:

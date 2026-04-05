@@ -73,7 +73,9 @@ export default function App() {
   const [isPlanActive, setIsPlanActive] = useState(false);
 
   const reasoningEffortModeRef = useRef(false);
+  const providerModeRef = useRef(false);
   const [tuiReasoningEffort, setTuiReasoningEffort] = useState<string>("low");
+  const [tuiLlmProvider, setTuiLlmProvider] = useState<string | null>(null);
 
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
@@ -188,6 +190,7 @@ export default function App() {
         setUserSendPending(false);
         setIsCompacting(false);
         void refreshSessionStats();
+        void refreshLlmConfig();
         break;
       case "text_stream":
         streamingRef.current += msg.content;
@@ -554,6 +557,144 @@ export default function App() {
       setUserSendPending(false);
     }
   }, []);
+
+  const refreshLlmConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${GATEWAY}/v1/llm-config`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { provider?: string };
+      if (data.provider) setTuiLlmProvider(data.provider);
+    } catch {
+      // best effort
+    }
+  }, []);
+
+  const startProviderFlow = useCallback(async () => {
+    providerModeRef.current = true;
+    try {
+      const res = await fetch(`${GATEWAY}/v1/llm-config`);
+      if (!res.ok) {
+        providerModeRef.current = false;
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Could not load LLM config (${res.status}). Is the gateway running?`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+        return;
+      }
+      const data = (await res.json()) as { provider: string; model: string; providers: string[] };
+      setTuiLlmProvider(data.provider);
+      const title =
+        data.provider === "openai"
+          ? "OpenAI"
+          : data.provider === "anthropic"
+            ? "Anthropic"
+            : data.provider;
+      setHitlSpec({
+        type: "user_input_required" as const,
+        method: "select" as const,
+        prompt: `Gateway LLM\nCurrent: ${title} — ${data.model}\nApplies to every session until you switch again.`,
+        options: [...data.providers].sort(),
+        ui: "provider",
+        preferredOption: data.provider,
+      });
+    } catch (err: unknown) {
+      providerModeRef.current = false;
+      const m = err instanceof Error ? err.message : String(err);
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `LLM config error: ${m}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handleProviderSubmit = useCallback(
+    async (value: string | boolean | number) => {
+      providerModeRef.current = false;
+      setHitlSpec(null);
+      const chosen = String(value).trim().toLowerCase();
+      if (!chosen) return;
+      if (chosen === tuiLlmProvider) {
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Already using provider '${chosen}'.`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+        return;
+      }
+      try {
+        const res = await fetch(`${GATEWAY}/v1/llm-config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: chosen, model: "" }),
+        });
+        const raw = await res.text();
+        if (res.ok) {
+          try {
+            const data = JSON.parse(raw) as { provider: string; model: string };
+            setTuiLlmProvider(data.provider);
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: `LLM → ${data.provider} · ${data.model}`,
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+          } catch {
+            setTuiLlmProvider(chosen);
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: `LLM provider updated to ${chosen}.`,
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+          }
+          return;
+        }
+        let errDetail = raw || res.statusText;
+        try {
+          const j = JSON.parse(raw) as { detail?: string };
+          if (j.detail) errDetail = String(j.detail);
+        } catch {
+          /* keep text */
+        }
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Provider switch failed: ${errDetail}`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+      } catch (err: unknown) {
+        const m = err instanceof Error ? err.message : String(err);
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Provider switch failed: ${m}`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+      }
+    },
+    [tuiLlmProvider]
+  );
 
   const commitStreaming = useCallback(() => {
     commitStreamToScrollback();
@@ -1092,8 +1233,12 @@ export default function App() {
     }
   }, [connectSse, scrollback]);
 
-  const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
+  const onSubmit = useCallback((task: string, _provider: string, _maxTurns: number) => {
     if (!task.trim()) return;
+    if (task.trim() === "/provider") {
+      void startProviderFlow();
+      return;
+    }
     setInputHistory((prev) => {
       const next = [task, ...prev.filter((t) => t !== task)].slice(0, 50);
       return next;
@@ -1112,7 +1257,7 @@ export default function App() {
     });
     setUserSendPending(true);
     sendToGateway({ message: task });
-  }, [commitStreamToScrollback, sendToGateway]);
+  }, [commitStreamToScrollback, sendToGateway, startProviderFlow]);
 
   const onHitlSubmit = useCallback(
     (value: string | boolean | number) => {
@@ -1148,6 +1293,10 @@ export default function App() {
         handlePlanGoalSubmit(value);
         return;
       }
+      if (providerModeRef.current) {
+        void handleProviderSubmit(value);
+        return;
+      }
       if (reasoningEffortModeRef.current) {
         handleReasoningEffortSubmit(value);
         return;
@@ -1156,7 +1305,18 @@ export default function App() {
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleIntegrationSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit, handlePlanGoalSubmit, handleReasoningEffortSubmit]
+    [
+      sendToGateway,
+      handleIntegrationSelection,
+      handleAgentSelection,
+      handleCreateAgentFlowSubmit,
+      performDeleteAgent,
+      handleWorkDirSubmit,
+      handleCompactSubmit,
+      handlePlanGoalSubmit,
+      handleProviderSubmit,
+      handleReasoningEffortSubmit,
+    ]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -1209,6 +1369,11 @@ export default function App() {
     }
     if (reasoningEffortModeRef.current) {
       reasoningEffortModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    if (providerModeRef.current) {
+      providerModeRef.current = false;
       setHitlSpec(null);
       return;
     }
@@ -1390,6 +1555,9 @@ export default function App() {
             ui: "reasoning-effort",
           });
           break;
+        case "provider":
+          void startProviderFlow();
+          break;
         case "todos":
           setPlanTodosOverlay("todos");
           break;
@@ -1435,6 +1603,7 @@ export default function App() {
             { type: "agent_line", content: "/compact  - Summarize context to save tokens (optionally add a focus hint)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/plan     - Start an interactive planning session", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/provider - Switch LLM provider (OpenAI · Anthropic)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/todos    - View open todos", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/usage    - Show context and turn usage", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/help     - Show all commands", isFirst: false, isSystem: true },
@@ -1446,7 +1615,7 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent, startIntegrationManagement, startWorkDirFlow, bootInfo, handleBranch, handleBtw]
+    [onSwitchAgent, startIntegrationManagement, startWorkDirFlow, bootInfo, handleBranch, handleBtw, startProviderFlow]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
@@ -1479,6 +1648,7 @@ export default function App() {
           isCompacting={isCompacting}
           isPlanMode={isPlanActive}
           reasoningEffort={tuiReasoningEffort}
+          llmProvider={tuiLlmProvider}
           autoCompactPercent={autoCompactPercent}
         />
         {hitlSpec ? (
@@ -1531,6 +1701,7 @@ export default function App() {
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             inputHistory={inputHistory}
             onEscapeEmpty={btwMode ? handleBtwReturn : undefined}
+            activeProvider={tuiLlmProvider ?? "openai"}
           />
         )}
       </Box>
