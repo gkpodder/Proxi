@@ -836,6 +836,80 @@ class ObsidianGetNoteMetadataTool(CLITool):
         )
 
 
+class WebSearchTool(CLITool):
+    """Search the web using DuckDuckGo from natural language queries."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="web_search",
+            description=(
+                "Search the web for information on any topic. Returns up to 5 relevant "
+                "results with titles, URLs, and descriptions. Use natural language queries "
+                "like 'weather today' or 'Python async patterns'. If results seem limited, "
+                "try a more specific query. For current-events and news requests, do not "
+                "ask the user for a time window, source preference, or format preference "
+                "unless they explicitly request customization; use a sensible default and "
+                "search immediately."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language search query (e.g., 'climate change impacts')",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default: 5, max: 20)",
+                    },
+                },
+                "required": ["query"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.web_search"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=1,
+        )
+
+
+class WebExtractTool(CLITool):
+    """Extract and convert web page content to markdown from URLs."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="web_extract",
+            description=(
+                "Extract content from web page URLs and convert to markdown. Returns page "
+                "content in markdown format. Also works with PDF URLs — pass the PDF link "
+                "directly. Pages under 10,000 characters return full content; larger pages "
+                "are truncated with a note. Useful for reading articles, documentation, "
+                "and web content without leaving the conversation."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "Full URL to fetch (e.g., 'https://example.com/article')",
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "Maximum characters to return before summarizing/truncating (default: 10000)",
+                    },
+                },
+                "required": ["url"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.web_extract"],
+            timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=True,
+            max_retries=1,
+        )
+
+
 # Registry of all CLI tools.  auto_load_cli_tools() iterates this list and
 # applies the defer_loading / always_load config from config/mcp.json.
 # To add a new CLI tool: subclass CLITool above, then append it here.
@@ -861,4 +935,6 @@ CLI_TOOLS: list[type[CLITool]] = [
     ObsidianUpdateNoteTool,
     ObsidianSearchNotesTool,
     ObsidianGetNoteMetadataTool,
+    WebSearchTool,
+    WebExtractTool,
 ]
