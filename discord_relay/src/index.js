@@ -169,9 +169,8 @@ async function deregisterFromGateway() {
     });
     // eslint-disable-next-line no-console
     console.log("Discord relay deregistered from gateway.");
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error("Failed to deregister from gateway:", err);
+  } catch {
+    // Gateway may already be down — deregister is best-effort, ignore errors.
   }
 }
 
