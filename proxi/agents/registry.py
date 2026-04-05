@@ -39,7 +39,8 @@ class SubAgentRegistry:
             SubAgentSpec(
                 name=agent.name,
                 description=agent.description,
-                input_schema=agent.input_schema if hasattr(agent, "input_schema") else {},
+                input_schema=agent.input_schema if hasattr(
+                    agent, "input_schema") else {},
             )
             for agent in self._agents.values()
         ]
@@ -57,9 +58,9 @@ class SubAgentManager:
         self,
         agent_name: str,
         context: AgentContext,
-        max_turns: int = 10,
-        max_tokens: int = 2000,
-        max_time: float = 30.0,
+        max_turns: int = 100,
+        max_tokens: int = 20000,
+        max_time: float = 300.0,
     ) -> SubAgentResult:
         """
         Run a sub-agent with budgets and lifecycle management.
@@ -83,6 +84,11 @@ class SubAgentManager:
                 success=False,
                 error=f"Sub-agent '{agent_name}' not found in registry",
             )
+
+        # Respect the agent's declared minimum time budget so that heavy agents
+        # (e.g. browser) are not killed by the loop's conservative default.
+        agent_min_time = getattr(agent, "default_max_time", max_time)
+        max_time = max(max_time, agent_min_time)
 
         self.logger.info(
             "sub_agent_start",

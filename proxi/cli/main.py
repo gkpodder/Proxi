@@ -72,6 +72,7 @@ def create_llm_client(
 
 def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     """Set up the tool registry with default tools."""
+    from proxi.browser.tools import register_browser_tools
     from proxi.tools.path_guard import PathGuard
 
     registry = ToolRegistry()
@@ -89,16 +90,24 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
         else:
             registry.register(tool)
 
+    register_browser_tools(registry)
+
     return registry
 
 
 def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient | VLLMClient) -> SubAgentManager:
     """Set up the sub-agent registry and manager."""
+    from proxi.browser.agent import BrowserSubAgent
+
     registry = SubAgentRegistry()
 
     # Register summarizer agent
     summarizer = SummarizerAgent(llm_client)
     registry.register(summarizer)
+
+    # Register browser agent
+    browser_agent = BrowserSubAgent()
+    registry.register(browser_agent)
 
     manager = SubAgentManager(registry)
     return manager

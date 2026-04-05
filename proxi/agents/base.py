@@ -8,20 +8,28 @@ from pydantic import BaseModel, Field
 class SubAgentResult(BaseModel):
     """Result from sub-agent execution."""
 
-    summary: Annotated[str, Field(description="Summary of what the sub-agent did")]
-    artifacts: Annotated[dict[str, Any], Field(default_factory=dict, description="Artifacts produced (code, files, diffs, answers)")]
-    confidence: Annotated[float, Field(ge=0.0, le=1.0, description="Confidence score (0.0 to 1.0)")]
-    success: Annotated[bool, Field(description="Whether the sub-agent succeeded")]
-    error: Annotated[str | None, Field(default=None, description="Error message if failed")]
-    follow_up_suggestions: Annotated[list[str], Field(default_factory=list, description="Optional follow-up suggestions")]
+    summary: Annotated[str, Field(
+        description="Summary of what the sub-agent did")]
+    artifacts: Annotated[dict[str, Any], Field(
+        default_factory=dict, description="Artifacts produced (code, files, diffs, answers)")]
+    confidence: Annotated[float, Field(
+        ge=0.0, le=1.0, description="Confidence score (0.0 to 1.0)")]
+    success: Annotated[bool, Field(
+        description="Whether the sub-agent succeeded")]
+    error: Annotated[str | None, Field(
+        default=None, description="Error message if failed")]
+    follow_up_suggestions: Annotated[list[str], Field(
+        default_factory=list, description="Optional follow-up suggestions")]
 
 
 class AgentContext(BaseModel):
     """Context provided to sub-agents."""
 
     task: Annotated[str, Field(description="Task description")]
-    context_refs: Annotated[dict[str, Any], Field(default_factory=dict, description="Context references")]
-    history_snapshot: Annotated[list[dict[str, Any]], Field(default_factory=list, description="Relevant history snapshot")]
+    context_refs: Annotated[dict[str, Any], Field(
+        default_factory=dict, description="Context references")]
+    history_snapshot: Annotated[list[dict[str, Any]], Field(
+        default_factory=list, description="Relevant history snapshot")]
 
 
 class SubAgent(Protocol):
@@ -34,9 +42,9 @@ class SubAgent(Protocol):
     async def run(
         self,
         context: AgentContext,
-        max_turns: int = 10,
-        max_tokens: int = 2000,
-        max_time: float = 30.0,
+        max_turns: int = 100,
+        max_tokens: int = 20000,
+        max_time: float = 300.0,
     ) -> SubAgentResult:
         """
         Run the sub-agent with given context and budgets.
@@ -55,6 +63,10 @@ class SubAgent(Protocol):
 
 class BaseSubAgent:
     """Base implementation for sub-agents."""
+
+    # Sub-agents that need more than the caller's default can declare a floor
+    # here.  SubAgentManager will use max(caller_max_time, default_max_time).
+    default_max_time: float = 120.0
 
     def __init__(
         self,
