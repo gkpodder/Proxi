@@ -1,420 +1,592 @@
-\documentclass{article}
+\documentclass[12pt]{article}
 
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
 \usepackage{booktabs}
 \usepackage{tabularx}
-\usepackage{hyperref}
-\usepackage{longtable}
 \usepackage{array}
-\usepackage{geometry}
-\usepackage{float} 
+\usepackage{longtable}
+\usepackage{rotating}
+\usepackage{pdflscape}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{caption}
 
 \hypersetup{
-    colorlinks=true,       % false: boxed links; true: colored links
-    linkcolor=red,          % color of internal links (change box color with linkbordercolor)
-    citecolor=green,        % color of links to bibliography
-    filecolor=magenta,      % color of file links
-    urlcolor=cyan           % color of external links
+  bookmarks=true,
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=green,
+  filecolor=magenta,
+  urlcolor=cyan
 }
 
-\title{Hazard Analysis\\\progname}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.75em}
+\renewcommand{\arraystretch}{1.15}
 
-\author{\authname}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
 
-\date{}
-
-\input{../Comments}
-\input{../Common}
+\title{Hazard Analysis\\Project Proxi}
+\author{%
+  Team \#23\\
+  Savinay Chhabra\\
+  Amanbeer Singh Minhas\\
+  Gourob Podder\\
+  Ajay Singh Grewal
+}
+\date{April 6, 2026}
 
 \begin{document}
 
 \maketitle
 \thispagestyle{empty}
-
-~\newpage
+\newpage
 
 \pagenumbering{roman}
 
-\begin{table}[hp]
-\caption{Revision History} \label{TblRevisionHistory}
-\begin{tabularx}{\textwidth}{llX}
+\begin{table}[h!]
+\centering
+\caption{Revision History}
+\label{tab:revhist}
+\begin{tabularx}{\textwidth}{l l Y}
 \toprule
-\textbf{Date} & \textbf{Developer(s)} & \textbf{Change}\\
+\textbf{Date} & \textbf{Ver.} & \textbf{Notes} \\
 \midrule
-10/10/2025 & Amanbeer Minhas & Added Sections 2, 4 and reflection\\
-10/10/2025 & Gourob Podder & Added Sections 1, 3 and reflection\\
-10/10/2025 & Savinay Chhabra & Added Sections 5 and reflection\\
-10/10/2025 & Ajay Singh Grewal & Added Sections 6, 7 and reflection\\
-
+10/10/2025 & 1.0 & Added initial hazard analysis. \\
+06/04/2026 & 1.1 & Reformatted revision history to one item per row. \\
+06/04/2026 & 1.1 & Added in-text references to all tables. \\
+06/04/2026 & 1.1 & Replaced ruled tables with Booktabs styling. \\
+06/04/2026 & 1.1 & Rotated the FMEA table for readability. \\
+06/04/2026 & 1.1 & Added external LLM privacy hazard and mitigations. \\
+06/04/2026 & 1.1 & Aligned hazard requirement IDs with the SRS and V\&V \\
+           &     & terminology. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-~\newpage
-
+\newpage
 \tableofcontents
-
-~\newpage
+\listoftables
+\listoffigures
+\newpage
 
 \pagenumbering{arabic}
 
 \section{Introduction}
 
-In the context of this project, a hazard is defined as any potential source of 
-harm or adverse effect that could result from the use, misuse, or failure of the 
-AI-powered assistive technology platform. 
-Hazards may arise from interactions between the system and the user, the system 
-and the computing environment, or from internal system errors. 
-They can manifest as physical, cognitive, or informational risks, and may affect 
-user safety, privacy, accessibility, or the integrity of computer operations.
+In Project Proxi, a hazard is any system condition that can lead to harm,
+loss, or an unacceptable outcome during normal use, foreseeable misuse, or
+failure. For this project, the most relevant harms are not physical injury,
+but unintended file changes, privacy loss, accessibility failure, incorrect
+automation, and loss of user trust.
 
-By documenting hazards in a structured and traceable manner, the development team 
-can make informed design and operational decisions, while also providing guidance 
-for future maintenance, updates, and testing of the system.
+The purpose of this document is to identify important hazards early and to
+connect them to mitigations and requirements that remain consistent with the
+Software Requirements Specification (SRS), Module Guide (MG), Module
+Interface Specification (MIS), and Verification and Validation (V\&V)
+artifacts. Table~\ref{tab:revhist} summarizes the evolution of this
+revision.
+
+The rest of the document is organized as follows. Section~2 defines the
+scope and purpose of the analysis. Section~3 describes system boundaries and
+major components. Section~4 records critical assumptions. Section~5 presents
+our Failure Modes and Effects Analysis (FMEA) in
+Table~\ref{tab:fmea}. Section~6 derives safety and security requirements.
+Finally, Section~7 prioritizes the mitigation roadmap using
+Tables~\ref{tab:ship} and~\ref{tab:later}.
 
 \section{Scope and Purpose of Hazard Analysis}
-The purpose of this hazard analysis is to identify and evaluate possible
-hazards linked to the Proxi system, a voice and text driven assistant
-designed to improve accessibility and productivity for all users.
-The scope of this analysis includes the software components of Proxi such
-as the voice and text input handling, MCP integration, system automation
-features, and interaction with the desktop operating system. It also
-covers potential issues related to data handling, user commands, and
-accessibility features. Hardware failures, external network infrastructure,
-and third-party service outages are outside the scope of this analysis.
-The main losses that could occur due to these hazards include accidental
-file deletion or modification, loss or exposure of user data, compromised
-accessibility for people with disabilities, and reduced user trust caused
-by incorrect or misleading actions. These issues could also lead to major
-productivity loss if important commands fail, run incorrectly, or if key
-accessibility features stop working as expected. Even though Proxi does
-not control hardware or other safety-critical devices, failures in the
-software could still cause real harm through data loss, security breaches,
-inefficiency, or user frustration.
-The goal of this hazard analysis is to find and understand these risks
-early in the project so that effective prevention and mitigation
-strategies can be planned and built into the design.
 
+Proxi is an AI-powered desktop assistant that supports voice and text input
+for accessible, high-level computer interaction. Its baseline scope includes
+speech input, text input, natural-language interpretation, task planning,
+controlled execution through MCP tools or desktop automation, and textual or
+spoken feedback.
+
+This hazard analysis focuses on software and interaction hazards within that
+scope. It covers failures in speech and text handling, intent
+interpretation, confirmation logic, automation, logging, privacy handling,
+external service use, and accessibility support. It also considers hazards
+introduced by interactions with external applications and services when they
+are part of a supported Proxi workflow.
+
+The following items are outside the direct scope of this analysis:
+\begin{itemize}[noitemsep]
+  \item physical hardware failure of the user's computer,
+  \item failures of the operating system itself,
+  \item outages of unrelated third-party applications,
+  \item failures of the wider network infrastructure, and
+  \item specialized medical or life-critical device control.
+\end{itemize}
+
+Even with these exclusions, the consequences of software hazards are still
+significant. Incorrect actions may delete or alter files, disclose personal
+information, reduce accessibility for target users, or make the system feel
+unsafe to use. The goal of this document is therefore to identify credible
+hazards, estimate their effects, and derive practical controls that fit the
+actual Proxi architecture.
 
 \section{System Boundaries and Components}
 
 \subsection{System Boundaries}
 
-The boundaries of the system are defined by its scope of control and interaction:
-\begin{itemize}
-    \item The system accepts user input through \textbf{speech} or \textbf{text} 
-    interfaces.
-    \item It processes these inputs internally using natural language understanding 
-    and task planning components.
-    \item It interacts with external computer applications and operating system 
-    tools to perform user-requested actions (e.g., sending emails, opening 
-    documents, managing files).
-    \item It outputs responses or task results back to the user through 
-    \textbf{text} or \textbf{speech synthesis}.
+Proxi operates at the level of high-level desktop assistance. Inside the
+system boundary are the components that accept user input, interpret intent,
+plan actions, enforce confirmation and permission checks, execute supported
+actions, and present results.
+
+Within the system boundary, Proxi:
+\begin{itemize}[noitemsep]
+  \item accepts input through speech and text,
+  \item processes requests using intent interpretation and task planning,
+  \item invokes MCP tools or desktop automation for supported actions,
+  \item stores limited local state such as logs and settings, and
+  \item returns visible or spoken feedback to the user.
 \end{itemize}
 
-Elements outside the system boundary include:
-\begin{itemize}
-    \item The underlying \textbf{operating system} and \textbf{hardware} on which 
-    the platform runs.
-    \item Third-party applications or APIs that the platform may invoke.
-    \item The user’s physical hardware devices such as microphones, speakers, or 
-    assistive peripherals.
-    \item Network infrastructure and external AI services (if used for speech 
-    recognition or task execution).
-\end{itemize}
+Outside the system boundary are the operating system, physical hardware,
+third-party applications, and cloud services that Proxi may depend on but
+does not fully control. This means hazards can arise both from internal
+logic and from interfaces with adjacent systems.
 
 \subsection{Major System Components}
 
-The system can be conceptually divided into the following major components:
-
-\begin{enumerate}
-    \item \textbf{User Interface Module (UI):}
-    Handles all communication with the user, including speech-to-text (STT) 
-    input, text input, and text-to-speech (TTS) or visual feedback output.
-
-    \item \textbf{Natural Language Understanding (NLU) Engine:}
-    Interprets user intent from raw speech or text input and converts it into 
-    structured commands for the planning module.
-
-    \item \textbf{Task Planning and Agent Manager:}
-    Responsible for decomposing user intent into executable subtasks, invoking 
-    specialized software agents, and monitoring task progress.
-
-    \item \textbf{Tool and System Integration Layer:}
-    Provides controlled access to the computer’s applications and resources 
-    (e.g., file manager, web browser, email client) through APIs or system 
-    commands.
-
-    \item \textbf{Knowledge Base and Context Manager:}
-    Maintains context about the user’s current session, preferences, and system 
-    state to support coherent interactions and task continuity.
-
-    \item \textbf{Data Storage and Logging Component:}
-    Stores session logs, error reports, and user preferences while ensuring 
-    compliance with privacy and data protection requirements.
-
-    \item \textbf{Security and Permissions Module:}
-    Manages access control, ensures safe execution of actions on behalf of the 
-    user, and prevents unauthorized or unsafe operations.
+For hazard analysis purposes, the most important conceptual components are:
+\begin{enumerate}[label=\arabic*., noitemsep]
+  \item \textbf{User Interface Module:} accepts speech or text input and
+  presents feedback.
+  \item \textbf{Natural Language Understanding Engine:} converts raw input
+  into structured intent.
+  \item \textbf{Task Planning and Execution Manager:} decides how to carry
+  out the requested task.
+  \item \textbf{Tool and System Integration Layer:} invokes MCP tools and
+  desktop automation.
+  \item \textbf{Context and Session Manager:} keeps short-term interaction
+  state.
+  \item \textbf{Data Storage and Logging Component:} stores logs, settings,
+  and support information.
+  \item \textbf{Security and Permissions Module:} enforces confirmation,
+  permission scope, and access policies.
+  \item \textbf{External AI Service Interface:} sends approved task-relevant
+  data to external LLM or speech services when those services are enabled.
 \end{enumerate}
 
-These components collectively form the system boundary for hazard analysis. 
-Hazards may arise from failures, misuse, or unexpected interactions among these 
-components or between the system and its external environment.
+The last component is especially important in this revision. Because the SRS
+allows the use of off-the-shelf LLM services, privacy hazards must consider
+what information is transmitted externally and whether that transmission is
+necessary and consented to.
 
 \section{Critical Assumptions}
-The hazard analysis is based on a few key assumptions about how Proxi will
-be used and the environment it will run in:
-\begin{enumerate}
-\item The system will run on supported desktop operating systems like
-Windows, macOS, or Linux with the needed permissions already set.
-\item Users will give clear and intentional commands. Some commands may be
-misunderstood, but we do not assume the system will be used in a harmful way.
-\item The MCP integration layer, system APIs, and other tools Proxi works
-with are expected to behave as described, even though failures are still
-possible.
-\item Network issues may slow down some features, but basic local actions
-and automation will still work without an internet connection.
-\item A working microphone or similar input device is expected to be
-available and set up correctly for voice input on the user's device.
+
+This analysis is based on the following assumptions:
+\begin{enumerate}[label=A\arabic*., noitemsep]
+  \item Proxi runs on supported desktop systems such as Windows and macOS
+  using standard consumer hardware.
+  \item Users have a working microphone and display, and can fall back to
+  text interaction when voice input is unreliable.
+  \item Supported MCP tools, automation adapters, and adjacent applications
+  generally behave according to their documented interfaces.
+  \item Internet connectivity may be unavailable or unstable, but local
+  workflows still remain possible where designed.
+  \item High-risk actions are expected to pass through explicit confirmation
+  logic before execution.
+  \item When external LLM or speech services are used, Proxi sends only the
+  minimum task-relevant content needed for the requested operation, not a
+  continuous full-screen stream by default.
+  \item Users are informed when a workflow requires external processing of
+  personal or sensitive content.
 \end{enumerate}
-These assumptions help us focus on realistic hazards and plan how to handle
-them. They guide the analysis and reflect how Proxi is expected to work in
-everyday use.
 
+Assumptions A6 and A7 were made explicit in this revision because privacy
+risk depends strongly on whether Proxi transmits only selected content or an
+excessive amount of desktop context.
 
+\section{Failure Mode and Effects Analysis}
 
-\section{Failure Mode and Effect Analysis}
+Table~\ref{tab:fmea} presents the main FMEA results. The table is rotated to
+improve readability and to avoid overly compressed text.
 
-\begin{table}[H]
-\centering
-\begin{tiny}
-\setlength{\tabcolsep}{2pt}
+\clearpage
+\begin{landscape}
+\small
+\setlength{\LTleft}{0pt}
+\setlength{\LTright}{0pt}
 
-\caption{Failure Modes and Effects Analysis (FMEA) Table}
-\label{tab:fmea}
-
-\begin{tabularx}{\textwidth}{
-    |>{\raggedright\arraybackslash}p{1.2cm}
-    |>{\raggedright\arraybackslash}X
-    |>{\raggedright\arraybackslash}X
-    |c 
-    |>{\raggedright\arraybackslash}X 
-    |c
-    |c
-    |>{\raggedright\arraybackslash}p{2.3cm}
-    |c
-    |c|
-}
+\begin{longtable}{p{2.7cm} p{2.9cm} p{3.0cm} c p{3.2cm} c c p{4.0cm}
+  p{2.2cm} p{1.5cm}}
+\caption{Failure Modes and Effects Analysis (FMEA)}
+\label{tab:fmea}\\
 \toprule
-\multicolumn{1}{|c|}{\textbf{Component}} &
-\multicolumn{1}{c|}{\textbf{Failure Mode}} &
-\multicolumn{1}{c|}{\textbf{Effect of Failure}} &
-\multicolumn{1}{c|}{\textbf{S}} & % Abbreviated
-\multicolumn{1}{c|}{\textbf{Cause of Failure}} &
-\multicolumn{1}{c|}{\textbf{O}} & % Abbreviated
-\multicolumn{1}{c|}{\textbf{D}} & % Abbreviated
-\multicolumn{1}{c|}{\textbf{Recommended Action}} &
-\multicolumn{1}{c|}{\textbf{SR Ref.}} &
-\multicolumn{1}{c|}{\textbf{Ref. ID}} \\
+\textbf{Component} &
+\textbf{Failure Mode} &
+\textbf{Effect of Failure} &
+\textbf{S} &
+\textbf{Cause of Failure} &
+\textbf{O} &
+\textbf{D} &
+\textbf{Recommended Action} &
+\textbf{SRS Ref.} &
+\textbf{Hazard ID} \\
 \midrule
+\endfirsthead
 
-Speech-to-Text (STT)&Misinterprets voice commands&Wrong action or no action 
-taken&8&Background noise, accent, poor mic&5&6&Improve model, noise filtering, 
-allow correction&POA.R.1&H1-1\\ \hline
+\multicolumn{10}{l}{\textbf{Table \thetable{} continued from previous
+page}}\\
+\toprule
+\textbf{Component} &
+\textbf{Failure Mode} &
+\textbf{Effect of Failure} &
+\textbf{S} &
+\textbf{Cause of Failure} &
+\textbf{O} &
+\textbf{D} &
+\textbf{Recommended Action} &
+\textbf{SRS Ref.} &
+\textbf{Hazard ID} \\
+\midrule
+\endhead
 
-Command Interpreter&Fails to understand user intent&Task not completed or 
-incorrect action&7&Ambiguous phrasing or missing context&4&6&Add clarification 
-prompts, context handling&FUNC.R.3&H2-1\\ \hline
+\midrule
+\multicolumn{10}{r}{\textbf{Continued on next page}}\\
+\endfoot
 
-MCP Integration Layer&Wrong tool triggered&Unintended app or function 
-runs&8&Incorrect mapping, version mismatch&4&6&Validate inputs, add fallback 
-defaults&SAF.R.2&H3-1\\ \hline
-OS Automation&Command crashes or freezes&User tasks fail or system 
-slows&6&Permission errors, unresponsive apps&5&5&Retry logic, timeouts, 
-graceful error handling&ROFT.R.2&H4-1\\ \hline
+\bottomrule
+\endlastfoot
 
-Confirmation Layer&Fails to ask for confirmation&Accidental deletion or system 
-changes&9&Logic bug or skipped validation&3&7&Mandatory confirmation before 
-high-risk actions&SAF.R.1&H5-1\\ \hline
+Speech-to-Text (STT) &
+Misinterprets voice commands &
+Wrong action or no action taken &
+8 &
+Background noise, accent variation, or poor microphone quality &
+5 &
+6 &
+Improve STT robustness, provide transcript visibility, and allow
+correction before execution &
+POA.R.1 &
+H1-1 \\
 
-Accessibility Layer&Screen reader or assistive tools fail&Users with 
-disabilities cannot use system&9&Missing WCAG compliance, poor ARIA&4&6&Test 
-with AT, comply with WCAG 2.2 and AODA&ACC.R.2&H6-1\\ \hline
+Command Interpreter &
+Fails to understand user intent &
+Task not completed or incorrect action &
+7 &
+Ambiguous phrasing or missing context &
+4 &
+6 &
+Add clarification prompts and stronger context handling &
+FUNC.R.3 &
+H2-1 \\
 
-Text-to-Speech Feedback&Response delayed or missing&User repeats commands or is 
-confused&5&High load, slow network, TTS errors&5&5&Optimize response, add status 
-indicator&SAL.R.1&H7-1\\ \hline
+Tool / MCP Integration &
+Wrong tool is triggered &
+Unintended application or function runs &
+8 &
+Incorrect tool mapping, stale registry entry, or version mismatch &
+4 &
+6 &
+Validate tool selection, constrain tool scope, and provide safer
+fallbacks &
+SAF.R.2, IAS.R.1 &
+H3-1 \\
 
-Update \& Deployment&New release breaks features&Commands stop working&6&Lack of
- regression testing&4&5&Automated tests, rollback support&LON.R.2&H8-1\\ \hline
+Desktop Automation &
+Command crashes, freezes, or affects the wrong target &
+User task fails or unrelated application state changes &
+7 &
+Permission errors, fragile selectors, or unresponsive applications &
+5 &
+5 &
+Add timeouts, retry logic, targeted application checks, and graceful
+failure handling &
+ROFT.R.2, WER.R.1 &
+H4-1 \\
 
-Logging System&Missing logs or corrupted data&Harder to debug and trace 
-issues&5&Logging disabled or storage full&4&5&Continuous logging, storage 
-monitoring&ROFT.R.1&H9-1\\ \hline
+Confirmation Layer &
+High-risk action executes without approval &
+Accidental deletion, overwrite, or external action &
+9 &
+Logic bug, missing risk tag, or skipped validation path &
+3 &
+7 &
+Require explicit confirmation for privileged or destructive actions &
+SAF.R.1, FUNC.R.9 &
+H5-1 \\
 
-OS Compatibility&Inconsistent performance across OS&Features fail on some 
-platforms&7&API differences, OS permissions&4&5&Multi-OS testing, abstraction 
-layers&EPE.R.1&H10-1\\ \hline
+Accessibility Layer &
+Captions, screen reader flow, or other assistive support fails &
+Users with disabilities cannot complete supported tasks &
+9 &
+Missing WCAG support, poor semantics, or inaccessible feedback timing &
+4 &
+6 &
+Test with assistive technologies and validate against WCAG 2.2 and
+AODA expectations &
+ACC.R.2 &
+H6-1 \\
 
-\end{tabularx}
+Feedback Manager &
+Response is delayed, missing, or unclear &
+User confusion, repeated commands, or loss of trust &
+5 &
+High load, TTS failure, or poor status messaging &
+5 &
+5 &
+Provide visible status indicators and clear, plain-language responses &
+SAL.R.1, UAP.R.1 &
+H7-1 \\
 
-\vspace{10pt}
+Update and Deployment &
+New release breaks a working feature &
+Supported commands stop working or become inconsistent &
+6 &
+Incomplete regression testing or packaging errors &
+4 &
+5 &
+Use regression testing, rollback support, and versioned release
+artifacts &
+LON.R.2, REL.R.1 &
+H8-1 \\
 
-% Legend
-\begin{tabular}{ll}
-\textbf{Legend:} \\
-\textbf{S}: & Severity (1-10) \\
-\textbf{O}: & Occurrence (1-10) \\
-\textbf{D}: & Detection (1-10) \\
-\end{tabular}
+Logging and Storage &
+Logs are missing, corrupted, or over-collected &
+Traceability is lost or unnecessary user data is retained &
+6 &
+Logging disabled, storage failure, or excessive capture
+configuration &
+4 &
+5 &
+Keep audit logs reliable, bounded, and privacy-aware &
+AUD.R.1, PRIV.R.2 &
+H9-1 \\
 
-\end{tiny}
-\end{table}
+Cross-platform Compatibility &
+Behaviour differs across operating systems &
+Features fail on some supported platforms &
+7 &
+API differences, permission models, or UI variation across OSes &
+4 &
+5 &
+Test on supported Windows and macOS targets and isolate
+platform-specific adapters &
+EPE.R.1, ADP.R.1 &
+H10-1 \\
 
-\section{Safety and Security Requirements}
+External AI Service Use &
+More information than necessary is sent to an external LLM or speech
+service &
+Privacy loss, policy non-compliance, or user distrust &
+9 &
+Poor prompt construction, over-broad context capture, or missing
+consent &
+3 &
+7 &
+Minimize outbound data, require user consent, and send only the
+minimum task-relevant text, file excerpt, or structured fields
+needed for the request &
+PRIV.R.2, IAS.R.2 &
+H11-1 \\
+
+External AI Service Use &
+Sensitive content is sent from the wrong source, such as an unintended
+window or document &
+Disclosure of confidential data unrelated to the task &
+9 &
+Incorrect context selection, stale window focus, or unsafe
+automation binding &
+2 &
+8 &
+Require explicit target selection for sensitive operations and avoid
+whole-screen capture by default &
+PRIV.R.2, SAF.R.2 &
+H11-2 \\
+
+\end{longtable}
+
+\vspace{0.3cm}
+\noindent\textbf{Legend:} S = Severity (1--10), O = Occurrence (1--10),
+D = Detection (1--10).
+
+\end{landscape}
+\clearpage
+
+The highest-risk items in Table~\ref{tab:fmea} are the failure to confirm
+high-risk actions and the privacy hazards introduced by external AI service
+use. These hazards received the highest severity because they can cause data
+loss or disclosure even when the rest of the system appears to be operating
+normally.
+
+The new privacy rows clarify the TA's concern directly. In the intended
+Proxi design, the system should not send the user's whole screen by default.
+Instead, it should send only the minimum information needed for the specific
+task, such as the current command text, a selected file excerpt, or a small,
+explicitly chosen content segment.
+
+\section{Derived Safety and Security Requirements}
+
+The hazards in Table~\ref{tab:fmea} lead to the following requirements.
+These are phrased to remain consistent with the terminology and intent of the
+SRS, MG, MIS, and V\&V plan.
 
 \subsection{Safety Requirements}
-Although Proxi doesn't interact with any hardware, a user's files or settings 
-could still be impacted by a poorly written or confusing command. We'll keep 
-things straightforward and cautious to keep people safe:
 
-\begin{description}
-  \item[SAS.R.1 — Confirm before risky changes.]  
-  For anything that can alter files or sensitive settings we should 
-  show a short message asking the user to press the approve button 
-  before proceeding.
+\begin{description}[style=nextline]
+  \item[SAF.R.1 - Explicit confirmation for risky actions]
+  Any privileged, destructive, or externally impactful action shall require
+  explicit user confirmation before execution.
 
-  \emph{Why:} This prevents any accidental damage from such requests.  
+  \textit{Why:} This mitigates H5-1 and reduces the chance of silent harmful
+  execution.
 
-  \emph{How we’ll check:} In testing, every destructive or high level action 
-  should have an approval.
+  \textit{Verification idea:} Test cases for deletes, overwrites, sends, and
+  removals should show a confirmation step every time.
 
-  \item[SAS.R.2 — Easy undo for common file actions.]  
-  When possible, there should be a simple undo option that uses the OS recycle 
-  bin or copy-back.
+  \item[SAF.R.2 - Scoped and validated execution]
+  Proxi shall validate targets, tool choice, and execution scope before
+  running automation or external integrations.
 
-  \emph{Why:} This way there is recovery if Proxi makes a mistake. 
+  \textit{Why:} This mitigates H3-1, H4-1, and H11-2.
 
-  \emph{How we’ll check:} Run tests that can restore the original file in
-  at at least 7/10 of cases.
+  \textit{Verification idea:} Out-of-scope targets, risky destinations, and
+  ambiguous application targets should trigger blocking or clarification.
 
-  \item[SAS.R.3 — Least privilege tool scopes.]  
-  MCP tools run inside only folders and apps the user has chosen to allow.
+  \item[ROFT.R.2 - Graceful failure handling]
+  Supported workflows shall fail safely when tools, applications, or network
+  dependencies are unavailable.
 
-  \emph{Why:} This limits from any bad commands affecting unrelated areas.
+  \textit{Why:} This mitigates H4-1 and H8-1.
 
-  \emph{How we’ll check:} Make sure that any attempt to access something out of 
-  scope is first requested from the user.
+  \textit{Verification idea:} Simulated timeouts and unavailable adapters
+  should end in a clear failure state rather than partial unsafe execution.
 
-  \item[SAS.R.4 — Pause on low confidence.]  
-  If the confidence is low or there is any confusion from Proxi, it can ask a 
-  short question to the user before continuing forward.
+  \item[ACC.R.2 - Accessible recovery and feedback]
+  Safety prompts, status messages, and recovery paths shall remain accessible
+  to users who rely on voice, captions, scaling, or assistive technologies.
 
-  \emph{Why:} Don’t guess when unsure it is better to ask if it is safe to 
-  proceed.  
+  \textit{Why:} A safety control that cannot be perceived or understood does
+  not adequately control risk for the target users.
 
-  \emph{How we’ll check:} Can test and experiment with low-confidence inputs 
-  that never run without clarification/approval.
+  \textit{Verification idea:} Confirmation and error flows should be checked
+  with screen readers, captions, and enlarged text.
 \end{description}
 
-\subsection{Security Requirements}
-We also want to avoid common security issues:
+\subsection{Security and Privacy Requirements}
 
-\begin{description}
-  \item[SC.R.1 — Validate inputs and use allow lists.]  
-  Have clean paths, URLs, and arguments and only allow safe protocols. 
-  Random directory traversal should be blocked.
+\begin{description}[style=nextline]
+  \item[PRIV.R.2 - Data minimization for external services]
+  When Proxi uses an external LLM, STT, or TTS service, it shall send only
+  the minimum task-relevant data needed to complete the request.
 
-  \emph{Why:} This stops not needed injections and any path traversal bugs.  
+  \textit{Why:} This directly mitigates H11-1 and aligns with the SRS rule
+  that only strictly needed data should leave the user's computer.
 
-  \emph{How we’ll check:} Can run tests that will check to see if there are any 
-  injection or traversing issues.
+  \textit{Verification idea:} Inspect representative outbound requests and
+  confirm that they contain only the selected text, command, or excerpt
+  rather than broad desktop context.
 
-  \item[SC.R.2 — Ask before sending data out.]  
-  Sending personal data needs consent from the user, and we should only send the
-  least amount of data as possible. Only data needed to complete the task should
-  be sent.
+  \item[PRIV.R.3 - Explicit consent for external sharing]
+  Proxi shall clearly inform the user when a workflow requires data to be
+  processed by an external AI service and shall obtain consent before sending
+  personal or sensitive content.
 
-  \emph{Why:} This way the user controls what leaves their computer.
+  \textit{Why:} This mitigates H11-1 and supports informed user control.
 
-  \emph{How we’ll check:} Test flows can show an approval step before any data 
-  is sent.
+  \textit{Verification idea:} Privacy-sensitive workflows should present a
+  consent step before transmission.
 
-  \item[SC.R.3 — Encrypt everything in transit.]  
-  Use TLS/HTTPS for all network traffic to maximize security.
+  \item[ACS.R.2 - Permission-bounded access]
+  The system shall operate only within the permission scope explicitly
+  granted by the user for folders, applications, and external actions.
 
-  \emph{Why:} Protects against eavesdropping and man in the middle attacks.
+  \textit{Why:} This mitigates H3-1, H4-1, and H11-2.
 
-  \emph{How we’ll check:} The packet captures will show HTTPS only traffic. Any 
-  bad certifications will get simply rejected.
+  \textit{Verification idea:} Requests outside allowed scope should be
+  blocked or require a new permission grant.
 
-  \item[SC.R.4 — Keep dependencies clean.]  
-  Keep libraries up to date and scan libraries before releasing for any 
-  vulnerabilities
+  \item[AUD.R.1 - Traceable and privacy-aware audit logging]
+  The system shall keep audit logs for actions, confirmations, and outcomes
+  without silently storing unnecessary personal content.
 
-  \emph{Why:} This minimizes the risk from any known dependency vulnerabilities.
+  \textit{Why:} This mitigates H9-1 while preserving debugging and
+  accountability.
 
-  \emph{How we’ll check:} Release checklist should have 0 major vulnerabilities.
+  \textit{Verification idea:} Logs should record action metadata and outcome
+  state, but should avoid excessive raw content retention.
+
+  \item[IAS.R.2 - Protected communication with adjacent systems]
+  External integrations shall use supported protected communication
+  mechanisms, such as HTTPS, when network transport is required.
+
+  \textit{Why:} This reduces exposure to interception and tampering during
+  external service use.
+
+  \textit{Verification idea:} Network inspection should confirm encrypted
+  transport for supported cloud-backed workflows.
 \end{description}
 
 \section{Roadmap}
 
-\subsection*{What we’ll ship during the capstone}
-These are the highest-impact items for safety and trust.
+Table~\ref{tab:ship} prioritizes the mitigation work that most directly
+reduces risk in the capstone scope. Table~\ref{tab:later} lists useful
+follow-on work that is valuable but less critical for the final milestone.
 
-\begin{table}[!h]
+\begin{table}[h!]
 \centering
-\renewcommand{\arraystretch}{1.15}
-\begin{tabularx}{\textwidth}{l X l}
+\caption{Highest-Priority Mitigations for the Capstone Scope}
+\label{tab:ship}
+\begin{tabularx}{\textwidth}{l Y l}
 \toprule
-\textbf{ID} & \textbf{What we’ll build} & \textbf{When} \\
+\textbf{ID} & \textbf{Mitigation to Implement} & \textbf{Target Window} \\
 \midrule
-SAS.R.1 & Confirmation step for destructive/system actions & Sprint 1 \\
-SAS.R.4 & Clarify when intent confidence is low & Sprint 1 \\
-SC.R.1 & Input validation + allow-lists in all adapters & Sprint 1–2 \\
-SC.R.2 & Consent flow for any external/network calls & Sprint 2 \\
-SAS.R.2 & One-step undo for file moves/renames/deletes & Sprint 2 \\
-SC.R.3 & HTTPS-only networking with certificate checks & Sprint 2 \\
+SAF.R.1 & Confirmation step for destructive, privileged, or externally
+impactful actions & Sprint 1 \\
+SAF.R.2 & Stronger target validation and scoped execution checks & Sprint 1 \\
+PRIV.R.2 & Data minimization for outbound LLM and speech-service requests &
+Sprint 1--2 \\
+PRIV.R.3 & Consent flow for privacy-sensitive external processing &
+Sprint 2 \\
+AUD.R.1 & Reliable and bounded audit logging for actions and outcomes &
+Sprint 2 \\
+ROFT.R.2 & Safe timeout, retry, and failure handling in adapters & Sprint 2 \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\subsection*{Deferred / later work}
-Still useful, but can land after the demo if time is tight.
-
-\begin{table}[!h]
+\begin{table}[h!]
 \centering
-\renewcommand{\arraystretch}{1.15}
-\begin{tabularx}{\textwidth}{l X X}
+\caption{Deferred or Longer-Term Mitigations}
+\label{tab:later}
+\begin{tabularx}{\textwidth}{l Y Y}
 \toprule
-\textbf{ID} & \textbf{What} & \textbf{Why later} \\
+\textbf{ID} & \textbf{Mitigation} & \textbf{Reason for Deferral} \\
 \midrule
-SAS.R.3 & Deeper OS sandboxing beyond path scoping & More engineering effort; 
-too complicated for current scope \\
-SC.R.4 & Automated vulnerabilities scanning in CI and signed releases & Better 
-for long-term upkeep; not needed right now \\
+ACS.R.2 & Deeper sandboxing and finer-grained permission profiles & Requires
+more platform-specific engineering than fits the capstone timeline \\
+IAS.R.2 & Broader automated inspection of all external service traffic & Best
+added after the baseline supported workflows are stabilized \\
+REL.R.1 & More comprehensive release hardening and signing workflow & Useful
+for long-term deployment, but not strictly required for the course release \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\newpage{}
+\clearpage
 
-\section*{Appendix --- Reflection}
+\section*{Appendix - Reflection Questions}
+\addcontentsline{toc}{section}{Appendix - Reflection Questions}
 
-\input{../Reflection.tex}
+The purpose of these reflection questions is to help the team assess what it
+learned while creating the hazard analysis and how the process could improve
+in future projects.
 
 \begin{enumerate}
-    \item What went well while writing this deliverable? 
-    \item What pain points did you experience during this deliverable, and how
-    did you resolve them?
-    \item Which of your listed risks had your team thought of before this
-    deliverable, and which did you think of while doing this deliverable? For
-    the latter ones (ones you thought of while doing the Hazard Analysis), how
-    did they come about?
-    \item Other than the risk of physical harm (some projects may not have any
-    appreciable risks of this form), list at least 2 other types of risk in
-    software products. Why are they important to consider?
+  \item What went well while writing this deliverable?
+  \item What pain points did you experience during this deliverable, and how
+  did you resolve them?
+  \item Which risks had your team already considered before this deliverable,
+  and which ones emerged during the hazard analysis itself?
+  \item Other than physical harm, what other categories of software risk are
+  important to consider, and why?
 \end{enumerate}
 
 \section{Reflections}
@@ -422,142 +594,139 @@ for long-term upkeep; not needed right now \\
 \subsection{Amanbeer Minhas Reflection}
 
 \begin{enumerate}
-\item What went well while writing this deliverable?\\
-Writing this deliverable went well because we already had a clear idea of
-our system from the SRS and FMEA work. Breaking the project into components
-helped me think about hazards more systematically and kept the analysis
-organized. I also felt more confident in identifying potential risks and
-writing about them in a structured way.
+  \item What went well while writing this deliverable?\\
+  Writing this deliverable went well because we already had a clear idea of
+  our system from the SRS and FMEA work. Breaking the project into
+  components helped me think about hazards more systematically and kept the
+  analysis organized. I also felt more confident in identifying potential
+  risks and writing about them in a structured way.
 
-\item What pain points did you experience during this deliverable, and how
-did you resolve them?\\
-One challenge was figuring out how detailed to make each section without
-overcomplicating the document. I also found it tricky to write about hazards
-without repeating the same points as the SRS. I resolved this by focusing on
-specific examples from our project, like MCP integration and OS automation,
-and connecting them directly to potential risks.
+  \item What pain points did you experience during this deliverable, and how
+  did you resolve them?\\
+  One challenge was figuring out how detailed to make each section without
+  overcomplicating the document. I also found it tricky to write about
+  hazards without repeating the same points as the SRS. I resolved this by
+  focusing on specific examples from our project, like MCP integration and
+  OS automation, and connecting them directly to potential risks.
 
-\item Which of your listed risks had your team thought of before this
-deliverable, and which did you think of while doing this deliverable? For
-the latter ones (ones you thought of while doing the Hazard Analysis), how
-did they come about?\\
-We had already thought about risks like incorrect command execution and
-permission issues earlier in the project. However, risks such as operating
-system compatibility problems and deployment-related failures came up while
-writing this hazard analysis. They became more obvious once we broke the
-system into components and looked deeper into how each part could fail.
+  \item Which of your listed risks had your team thought of before this
+  deliverable, and which did you think of while doing this deliverable?\\
+  We had already thought about risks like incorrect command execution and
+  permission issues earlier in the project. However, risks such as operating
+  system compatibility problems and deployment-related failures came up
+  while writing this hazard analysis. They became more obvious once we broke
+  the system into components and looked deeper into how each part could
+  fail.
 
-\item Other than the risk of physical harm (some projects may not have any
-appreciable risks of this form), list at least 2 other types of risk in
-software products. Why are they important to consider?\\
-One major risk is data loss or corruption, which can harm user trust and
-make the system unreliable. Another risk is accessibility failure, where
-users with limitations might not be able to use the software as intended.
-Both are important to consider because they affect user confidence,
-usability, and the overall success of the product.
+  \item Other than the risk of physical harm, list at least two other types
+  of risk in software products. Why are they important to consider?\\
+  One major risk is data loss or corruption, which can harm user trust and
+  make the system unreliable. Another risk is accessibility failure, where
+  users with limitations might not be able to use the software as intended.
+  Both are important because they affect user confidence, usability, and the
+  overall success of the product.
 \end{enumerate}
 
 \subsection{Gourob Podder Reflection}
 
 \begin{enumerate}
-    \item What went well while writing this deliverable?\\
-    Identifying system boundaries and major components went smoothly because the 
-    project architecture was already clear from prior SRS work. Defining modules 
-    like the User Interface, Natural Language Understanding, and Agent Manager 
-    helped organize potential hazards systematically. Team collaboration also 
-    allowed us to quickly align on how risks could manifest in both software and 
-    user interactions.
+  \item What went well while writing this deliverable?\\
+  Identifying system boundaries and major components went smoothly because
+  the project architecture was already clear from prior SRS work. Defining
+  modules like the User Interface, Natural Language Understanding, and Agent
+  Manager helped organize potential hazards systematically. Team
+  collaboration also allowed us to quickly align on how risks could manifest
+  in both software and user interactions.
 
-    \item What pain points did you experience during this deliverable, 
-    and how did you resolve them?\\
-    Determining the appropriate level of detail for the hazard analysis without 
-    drifting into system design was challenging. It was sometimes difficult to 
-    distinguish between a hazard and a general usability concern. We resolved 
-    this by using safety engineering definitions and focusing on sources of harm 
-    or adverse outcomes rather than design flaws. Abstract risks such as privacy 
-    or misinterpretation of user intent were addressed using scenario-based 
-    brainstorming.
+  \item What pain points did you experience during this deliverable, and how
+  did you resolve them?\\
+  Determining the appropriate level of detail for the hazard analysis
+  without drifting into system design was challenging. It was sometimes
+  difficult to distinguish between a hazard and a general usability concern.
+  We resolved this by using safety engineering definitions and focusing on
+  sources of harm or adverse outcomes rather than design flaws. Abstract
+  risks such as privacy or misinterpretation of user intent were addressed
+  using scenario-based brainstorming.
 
-    \item Which of your listed risks had your team thought of before this 
-    deliverable, and which did you think of while doing this deliverable? For 
-    the latter ones, how did they come about?\\
-    We had already recognized usability and privacy risks, like misinterpreted 
-    commands or unauthorized data access. New risks emerged during the hazard 
-    analysis, especially related to component interactions, such as potential 
-    failures in the Task Planning module or dependency on unreliable external 
-    APIs. These became apparent as we examined each subsystem and its interface 
-    boundaries.
+  \item Which of your listed risks had your team thought of before this
+  deliverable, and which did you think of while doing this deliverable?\\
+  We had already recognized usability and privacy risks, like
+  misinterpreted commands or unauthorized data access. New risks emerged
+  during the hazard analysis, especially related to component interactions,
+  such as potential failures in the Task Planning module or dependency on
+  unreliable external APIs. These became apparent as we examined each
+  subsystem and its interface boundaries.
 
-    \item Other than the risk of physical harm, list at least 2 other types of 
-    risk in software products. Why are they important to consider?\\
-    Privacy and data security risks, such as improper handling of sensitive user 
-    data, can harm user trust and violate legal requirements. Reliability and 
-    availability risks, like system downtime or malfunctions, can prevent users 
-    from completing essential tasks, especially for assistive technologies. Both 
-    are critical for maintaining usability, accessibility, and overall user 
-    confidence.
+  \item Other than the risk of physical harm, list at least two other types
+  of risk in software products. Why are they important to consider?\\
+  Privacy and data security risks, such as improper handling of sensitive
+  user data, can harm user trust and violate legal requirements.
+  Reliability and availability risks, like system downtime or malfunctions,
+  can prevent users from completing essential tasks, especially for
+  assistive technologies. Both are critical for maintaining usability,
+  accessibility, and overall user confidence.
 \end{enumerate}
 
 \subsection{Savinay Chhabra Reflection}
 
 \begin{enumerate}
-    \item What went well while writing this deliverable?\\
-    The provided template helped structure our hazards. Collaboration and work 
-    distribution went more smoothly, and we could relate hazards directly to the 
-    well-structured SRS document.
+  \item What went well while writing this deliverable?\\
+  The provided template helped structure our hazards. Collaboration and
+  work distribution went more smoothly, and we could relate hazards
+  directly to the well-structured SRS document.
 
-    \item What pain points did you experience during this deliverable, and 
-    how did you resolve them?\\
-    Staying solution-neutral while analyzing hazards was difficult. The 
-    line between requirements and design is blurred, and we sometimes discussed 
-    solutions prematurely. We resolved this by refocusing on hazards rather than 
-    proposed solutions.
+  \item What pain points did you experience during this deliverable, and how
+  did you resolve them?\\
+  Staying solution-neutral while analyzing hazards was difficult. The line
+  between requirements and design is blurred, and we sometimes discussed
+  solutions prematurely. We resolved this by refocusing on hazards rather
+  than proposed solutions.
 
-    \item Which of your listed risks had your team thought of before this 
-    deliverable, and which did you think of while doing this deliverable? For 
-    the latter ones, how did they come about?\\
-    Initially, we focused on privacy and legal risks associated with data 
-    breaches. While performing hazard analysis, we discovered additional 
-    potential risks and mitigation strategies that were not previously 
-    considered.
+  \item Which of your listed risks had your team thought of before this
+  deliverable, and which did you think of while doing this deliverable?\\
+  Initially, we focused on privacy and legal risks associated with data
+  breaches. While performing hazard analysis, we discovered additional
+  potential risks and mitigation strategies that were not previously
+  considered.
 
-    \item Other than the risk of physical harm, list at least 2 other types of 
-    risk in software products. Why are they important to consider?\\
-    Legal risks due to data breaches or violations of user privacy, and compliance risks from accessibility failures in design. Both are important because they affect user trust, legal standing, and the usability of the product.
+  \item Other than the risk of physical harm, list at least two other types
+  of risk in software products. Why are they important to consider?\\
+  Legal risks due to data breaches or violations of user privacy, and
+  compliance risks from accessibility failures in design, are both
+  important because they affect user trust, legal standing, and the
+  usability of the product.
 \end{enumerate}
 
 \subsection{Ajay Singh Grewal Reflection}
+
 \begin{enumerate}
-    \item What went well while writing this deliverable?\\
-    Turning the hazards into a bunch of short, testable requirements worked 
-    well. By adding criteria under each requirement, it made it easier to
-    understand how to verify them later. The FMEA table also helped organize
-    the hazards clearly, and breaking the system into components made it
-    easier to think about specific risks.
+  \item What went well while writing this deliverable?\\
+  Turning the hazards into short, testable requirements worked well. By
+  adding criteria under each requirement, it became easier to understand how
+  to verify them later. The FMEA table also helped organize the hazards
+  clearly, and breaking the system into components made it easier to think
+  about specific risks.
 
-    \item What pain points did you experience during this deliverable, and how 
-    did you resolve them?\\
-    Choosing the criteria that was realistically achievable within our time
-    frame was tricky. We had to balance between being thorough and being
-    practical. We resolved this by focusing on the highest-impact hazards
-    that were most relevant to our project scope and user needs.
+  \item What pain points did you experience during this deliverable, and how
+  did you resolve them?\\
+  Choosing criteria that were realistically achievable within our time frame
+  was tricky. We had to balance being thorough with being practical. We
+  resolved this by focusing on the highest-impact hazards that were most
+  relevant to our project scope and user needs.
 
-    \item Which of your listed risks had your team thought of before this 
-    deliverable, and which did you think of while doing this deliverable? For 
-    the latter ones, how did they come about?\\
-    Had already discussed risks like confirmation for destructive actions and
-    permission issues. While writing the hazard analysis, we identified
-    additional risks like OS compatibility and deployment-related failures.
-    
-    \item Other than the risk of physical harm, list at least 2 other types of 
-    risk in software products. Why are they important to consider?\\
-    Firstly, privacy risk associated with sending more data than needed, or 
-    sending it without user consent. This breaks user trust and can lead to
-    future disuse. Another less discussed risk is a reliability risk, where if a
-    bad update happens, a specific tools breaks, or if a bug gets introduced,
-    it can lead to the tool being unusable. This can lead to user dissatisfaction
-    and a loss of trust.
+  \item Which of your listed risks had your team thought of before this
+  deliverable, and which did you think of while doing this deliverable?\\
+  We had already discussed risks like confirmation for destructive actions
+  and permission issues. While writing the hazard analysis, we identified
+  additional risks like OS compatibility and deployment-related failures.
+
+  \item Other than the risk of physical harm, list at least two other types
+  of risk in software products. Why are they important to consider?\\
+  One important risk is sending more data than needed, or sending it without
+  user consent, because that breaks user trust and may discourage continued
+  use. Another important risk is reliability failure, where a bad update or
+  broken tool makes the system unusable. Both matter because they affect
+  user trust, usability, and long-term adoption.
 \end{enumerate}
-
 
 \end{document}
