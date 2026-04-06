@@ -386,37 +386,37 @@ playAudio & sound: AudioStream & N/A & PlaybackFailed \\
 \noindent
 \textbf{initAudio}():
 \begin{itemize}
-  \item transition: $\text{micOpen} := \text{false}$ if audio devices exist.
-  \item exception: AudioInitFailed if audio devices cannot be initialized.
+  \item transition: $\text{micOpen} := \text{false}$.
+  \item $exc := \text{AudioInitFailed}$ if audio devices cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{openMic}():
 \begin{itemize}
-  \item transition: $\text{micOpen} := \text{true}$ if micDevice is available.
-  \item exception: MicNotFound if micDevice is missing or busy.
+  \item transition: $\text{micOpen} := \text{true}$.
+  \item $exc := \text{MicNotFound}$ if micDevice is missing or busy.
 \end{itemize}
 
 \noindent
 \textbf{closeMic}():
 \begin{itemize}
-  \item transition: $\text{micOpen} := \text{false}$ if open.
-  \item exception: CloseFailed if device cannot close.
+  \item transition: $\text{micOpen} := \text{false}$.
+  \item $exc := \text{CloseFailed}$ if the device cannot close.
 \end{itemize}
 
 \noindent
 \textbf{recordAudio}(seconds):
 \begin{itemize}
-  \item output: returns an AudioStream captured from micDevice for
+  \item $out := sound$, where sound is an AudioStream captured from micDevice for
   \textit{seconds}.
-  \item exception: RecordFailed if capture fails or $\text{micOpen} = false$.
+  \item $exc := \text{RecordFailed}$ if capture fails or $\text{micOpen} = \text{false}$.
 \end{itemize}
 
 \noindent
 \textbf{playAudio}(sound):
 \begin{itemize}
   \item transition: speakerDevice plays \textit{sound}.
-  \item exception: PlaybackFailed if playback fails.
+  \item $exc := \text{PlaybackFailed}$ if playback fails.
 \end{itemize}
 
 \subsubsection{Local Functions}
@@ -490,14 +490,14 @@ None.
 \begin{itemize}
   \item transition: automation channels to desktopEnv, keyboardDevice, and
   pointingDevice are established.
-  \item exception: AutoInitFailed if automation cannot be initialized.
+  \item $exc := \text{AutoInitFailed}$ if automation cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{moveCursor}(p):
 \begin{itemize}
   \item transition: $\text{pointerPos} := p$.
-  \item exception: ActionError if cursor move fails.
+  \item $exc := \text{ActionError}$ if cursor movement fails.
 \end{itemize}
 
 \noindent
@@ -505,21 +505,21 @@ None.
 \begin{itemize}
   \item transition: a left-click event is emitted on pointingDevice at
   pointerPos.
-  \item exception: ActionError if click event fails.
+  \item $exc := \text{ActionError}$ if the click event fails.
 \end{itemize}
 
 \noindent
 \textbf{typeText}(t):
 \begin{itemize}
   \item transition: keystroke events for t are emitted on keyboardDevice.
-  \item exception: ActionError if key input fails.
+  \item $exc := \text{ActionError}$ if key input fails.
 \end{itemize}
 
 \noindent
 \textbf{openApp}(id):
 \begin{itemize}
   \item transition: desktopEnv launches the application identified by id.
-  \item exception: ActionError if app launch fails.
+  \item $exc := \text{ActionError}$ if app launch fails.
 \end{itemize}
 
 \subsubsection{Local Functions}
@@ -545,6 +545,22 @@ HH-IO, SD-AIClient, SD-Types, SD-Log
 \subsubsection{Exported Constants}
 
 None.
+
+\subsubsection{Exported Types}
+
+\noindent
+InputState = \{\text{Idle}, \text{Listening}, \text{Processing}\}
+
+\noindent
+InputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Mixed}\}
+
+\noindent
+InputStatus is a record:
+\begin{itemize}
+  \item state : InputState
+  \item hasText : boolean
+  \item hasError : boolean
+\end{itemize}
 
 \subsubsection{Exported Access Programs}
 
@@ -575,17 +591,6 @@ getStatus & N/A & s: InputStatus & N/A \\
   \item lastError : InputError or null
 \end{itemize}
 
-InputState = \{\text{Idle}, \text{Listening}, \text{Processing}\}
-
-InputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Mixed}\}
-
-InputStatus is a record:
-\begin{itemize}
-  \item state : InputState
-  \item hasText : boolean
-  \item hasError : boolean
-\end{itemize}
-
 \subsubsection{Environment Variables}
 
 \begin{itemize}
@@ -613,40 +618,39 @@ InputStatus is a record:
     \text{inputState}, \text{currentMode}, \text{lastText}, \text{partialText}
     := \text{Idle}, \text{TextOnly}, "", ""
   \]
-  \item exception: InputInitFailed if dependencies cannot be initialized.
+  \item $exc := \text{InputInitFailed}$ if dependencies cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{startCapture}(mode):
 \begin{itemize}
-  \item transition: if $\text{inputState} = \text{Idle}$ and micStream ready then
+  \item transition:
   \[
     \text{inputState}, \text{currentMode}, \text{partialText}
     := \text{Listening}, \text{mode}, ""
   \]
-  \item exception: MicUnavailable if device fails, AlreadyCapturing if
-  $\text{inputState} \neq \text{Idle}$.
+  \item $exc := \text{MicUnavailable}$ if the device fails.
+  \item $exc := \text{AlreadyCapturing}$ if $\text{inputState} \neq \text{Idle}$.
 \end{itemize}
 
 \noindent
 \textbf{stopCapture}():
 \begin{itemize}
-  \item transition: if $\text{inputState} \neq \text{Idle}$ then
-  $\text{inputState} := \text{Idle}$.
-  \item exception: NotCapturing if $\text{inputState} = \text{Idle}$.
+  \item transition: $\text{inputState} := \text{Idle}$.
+  \item $exc := \text{NotCapturing}$ if $\text{inputState} = \text{Idle}$.
 \end{itemize}
 
 \noindent
 \textbf{getLastText}():
 \begin{itemize}
-  \item output: returns lastText if not empty.
-  \item exception: NoInputAvailable if lastText is empty.
+  \item $out := \text{lastText}$.
+  \item $exc := \text{NoInputAvailable}$ if lastText is empty.
 \end{itemize}
 
 \noindent
 \textbf{getStatus}():
 \begin{itemize}
-  \item output: returns a record s with
+  \item $out := s$, where
   $s.\text{state} = \text{inputState}$,
   $s.\text{hasText} = (\text{lastText} \neq "")$,
   $s.\text{hasError} = (\text{lastError} \neq null)$.
@@ -729,12 +733,12 @@ None.
 \noindent
 \textbf{parseText}(text):
 \begin{itemize}
-  \item output: produces an Intent record with fields
+  \item $out := i$, where
   \[
     i.\text{type} = \text{detectCommand}(\text{text}), \quad
     i.\text{params} = \text{extractParams}(\text{text})
   \]
-  \item exception: ParseError if text cannot be matched to any pattern.
+  \item $exc := \text{ParseError}$ if text cannot be matched to any pattern.
 \end{itemize}
 
 \subsubsection{Local Functions}
@@ -772,6 +776,11 @@ BH-NLU, SD-ToolRegistry, SD-Types, SD-Log, HH-Auto
 
 \subsubsection{Exported Constants}
 
+None.
+
+\subsubsection{Exported Types}
+
+\noindent
 ExecStatus = \{\text{Pending}, \text{Success}, \text{Failed}\}
 
 \subsubsection{Exported Access Programs}
@@ -824,20 +833,20 @@ getLastStatus & N/A & s: ExecStatus & N/A \\
   \[
     \text{currentPlan}, \text{lastStatus} := null, \text{Pending}
   \]
-  \item exception: PlanInitFailed if tool registry cannot be accessed.
+  \item $exc := \text{PlanInitFailed}$ if the tool registry cannot be accessed.
 \end{itemize}
 
 \noindent
 \textbf{planAction}(i):
 \begin{itemize}
-  \item output: generates a Plan record p with:
+  \item $out := p$, where
   \[
     p.\text{tool} = \text{matchTool}(i.\text{type}), \quad
     p.\text{parameters} = i.\text{params}, \quad
     p.\text{time} = \text{now}
   \]
   \item transition: $\text{currentPlan} := p$.
-  \item exception: NoToolFound if matchTool fails.
+  \item $exc := \text{NoToolFound}$ if matchTool fails.
 \end{itemize}
 
 \noindent
@@ -848,21 +857,21 @@ getLastStatus & N/A & s: ExecStatus & N/A \\
     \text{currentPlan}, \text{lastStatus}
     := p, \text{runTool}(p.\text{tool}, p.\text{parameters})
   \]
-  \item output: returns lastStatus.
-  \item exception: ExecError if runTool fails unexpectedly.
+  \item $out := \text{lastStatus}$.
+  \item $exc := \text{ExecError}$ if runTool fails unexpectedly.
 \end{itemize}
 
 \noindent
 \textbf{cancelPlan}():
 \begin{itemize}
   \item transition: $\text{currentPlan}, \text{lastStatus} := null, \text{Failed}$.
-  \item exception: NoPendingPlan if currentPlan = null.
+  \item $exc := \text{NoPendingPlan}$ if currentPlan = null.
 \end{itemize}
 
 \noindent
 \textbf{getLastStatus}():
 \begin{itemize}
-  \item output: returns lastStatus.
+  \item $out := \text{lastStatus}$.
 \end{itemize}
 
 \subsubsection{Planning Logic}
@@ -922,7 +931,11 @@ BH-UI, SD-Types, SD-Log
 
 \subsubsection{Exported Constants}
 
-RiskLevel = \{\text{Low}, \text{Medium}, \text{High}\}
+None.
+
+\subsubsection{Exported Types}
+
+\noindent RiskLevel = \{\text{Low}, \text{Medium}, \text{High}\}
 
 \noindent SafetyDecision = \{\text{AutoAllow}, \text{AskUser}, \text{Block}\}
 
@@ -970,19 +983,18 @@ confirmAction & a: Action & res: ApprovalResult & UserTimeout \\
 
 \noindent
 \textbf{classifyAction}(a):
-
-\noindent Output:
-\[
-  r := a.\text{riskLevel}
-\]
-\noindent Transition: none.
-
-\vspace{0.2cm}
+\begin{itemize}
+  \item $out := r$, where
+  \[
+    r := a.\text{riskLevel}
+  \]
+  \item transition: none.
+\end{itemize}
 
 \noindent
 \textbf{decidePolicy}(a):
 \begin{itemize}
-  \item output: returns d of type SafetyDecision, where
+  \item $out := d$, where
   \[
     d =
     \begin{cases}
@@ -992,20 +1004,20 @@ confirmAction & a: Action & res: ApprovalResult & UserTimeout \\
       AskUser & \text{if } a.riskLevel = High \land \neg a.isIrreversible
     \end{cases}
   \]
-  \item transition: lastDecision := d.
+  \item transition: $\text{lastDecision} := d$.
 \end{itemize}
 
 \noindent
 \textbf{confirmAction}(a):
 \begin{itemize}
   \item transition: $\text{pendingAction} := a$.
-  \item output:
+  \item $out := res$, where:
   \begin{itemize}
-    \item If decidePolicy(a) = AutoAllow then res = Approved.
-    \item If decidePolicy(a) = Block then res = Denied.
-    \item If decidePolicy(a) = AskUser then BH-UI prompts user.
+    \item if $\text{decidePolicy}(a) = \text{AutoAllow}$, then $res := \text{Approved}$;
+    \item if $\text{decidePolicy}(a) = \text{Block}$, then $res := \text{Denied}$;
+    \item if $\text{decidePolicy}(a) = \text{AskUser}$, then BH-UI prompts the user and returns the resulting approval status.
   \end{itemize}
-  \item exception: UserTimeout if no answer before time limit.
+  \item $exc := \text{UserTimeout}$ if no answer is received before the time limit.
 \end{itemize}
 
 \subsubsection{Risk Policy Table}
@@ -1062,7 +1074,11 @@ HH-IO, SD-AIClient, SD-Types, SD-Log
 
 \subsubsection{Exported Constants}
 
-OutputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Both}\}
+None.
+
+\subsubsection{Exported Types}
+
+\noindent OutputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Both}\}
 
 \noindent FeedbackStatus = \{\text{Idle}, \text{Speaking}, \text{Completed},
 \text{Failed}\}
@@ -1121,14 +1137,14 @@ cancelAll & N/A & N/A & N/A \\
     \text{outputQueue}, \text{lastStatus}, \text{isSpeaking}
     := [], \text{Idle}, \text{false}
   \]
-  \item exception: FeedbackInitFailed if dependencies cannot be initialized.
+  \item $exc := \text{FeedbackInitFailed}$ if dependencies cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{queueMessage}(msg, m):
 \begin{itemize}
-  \item transition: if the queue is not full then append (msg, m) to outputQueue.
-  \item exception: QueueFull if appending would exceed the limit.
+  \item transition: append $(msg, m)$ to outputQueue.
+  \item $exc := \text{QueueFull}$ if appending would exceed the limit.
 \end{itemize}
 
 \noindent
@@ -1136,24 +1152,20 @@ cancelAll & N/A & N/A & N/A \\
 \begin{itemize}
   \item transition: $\text{isSpeaking}, \text{lastStatus} := \text{true},
   \text{Speaking}$.
-  \item transition: if $m = \text{VoiceOnly}$ or $m = \text{Both}$ then
+  \item transition: if $m = \text{VoiceOnly}$ or $m = \text{Both}$, then
   ttsService produces speech for msg and HH-IO plays it on audioOut.
-  \item transition: if $m = \text{TextOnly}$ or $m = \text{Both}$ then
+  \item transition: if $m = \text{TextOnly}$ or $m = \text{Both}$, then
   uiChannel displays msg.
-  \item output:
-  \begin{itemize}
-    \item If both requested outputs succeed, then
-    $\text{isSpeaking}, \text{lastStatus} := \text{false}, \text{Completed}$.
-    \item Otherwise
-    $\text{isSpeaking}, \text{lastStatus} := \text{false}, \text{Failed}$.
-  \end{itemize}
-  \item exception: TtsError if ttsService cannot produce speech.
+  \item $out := \text{lastStatus}$, where successful completion sets
+  $\text{lastStatus} := \text{Completed}$ and failure sets
+  $\text{lastStatus} := \text{Failed}$.
+  \item $exc := \text{TtsError}$ if ttsService cannot produce speech.
 \end{itemize}
 
 \noindent
 \textbf{getLastStatus}():
 \begin{itemize}
-  \item output: returns lastStatus.
+  \item $out := \text{lastStatus}$.
 \end{itemize}
 
 \noindent
@@ -1213,7 +1225,11 @@ BH-Feedback, BH-Safety, BH-Input, SD-Log, SD-Types
 
 \subsubsection{Exported Constants}
 
-UIState = \{\text{Idle}, \text{Listening}, \text{Waiting},
+None.
+
+\subsubsection{Exported Types}
+
+\noindent UIState = \{\text{Idle}, \text{Listening}, \text{Waiting},
 \text{Displaying}, \text{Error}\}
 
 \subsubsection{Exported Access Programs}
@@ -1270,44 +1286,44 @@ clearScreen & N/A & N/A & N/A \\
     \text{uiState}, \text{lastMsg}, \text{lastError}
     := \text{Idle}, "", null
   \]
-  \item exception: UiInitFailed if display cannot be initialized.
+  \item $exc := \text{UiInitFailed}$ if the display cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{updateView}(s):
 \begin{itemize}
-  \item transition: $\text{uiState} := s$ and display updates status text and
-  micLED according to s.
-  \item exception: RenderError if update fails.
+  \item transition: $\text{uiState} := s$ and the display updates the status text
+  and micLED according to s.
+  \item $exc := \text{RenderError}$ if the update fails.
 \end{itemize}
 
 \noindent
 \textbf{showMessage}(msg):
 \begin{itemize}
   \item transition: $\text{lastMsg}, \text{uiState} := msg, \text{Displaying}$.
-  \item transition: display renders msg (and BH-Feedback may speak it, depending
-  on OutputMode chosen by the caller).
-  \item exception: RenderError if display fails.
+  \item transition: the display renders msg (and BH-Feedback may speak it,
+  depending on the OutputMode chosen by the caller).
+  \item $exc := \text{RenderError}$ if the display fails.
 \end{itemize}
 
 \noindent
 \textbf{promptUser}(q):
 \begin{itemize}
-  \item transition: $\text{uiState} := \text{Waiting}$ and display renders q.
-  \item output: returns ans as a yes/no value from inputChannel.
-  \item exception: Timeout if no input received in time limit.
+  \item transition: $\text{uiState} := \text{Waiting}$ and the display renders q.
+  \item $out := ans$, where ans is the yes/no value returned from inputChannel.
+  \item $exc := \text{Timeout}$ if no input is received in the time limit.
 \end{itemize}
 
 \noindent
 \textbf{showStatus}(st):
 \begin{itemize}
-  \item transition: display shows latest FeedbackStatus st.
+  \item transition: the display shows the latest FeedbackStatus st.
 \end{itemize}
 
 \noindent
 \textbf{clearScreen}():
 \begin{itemize}
-  \item transition: $\text{uiState}, \text{lastMsg} := \text{Idle}, ""$ and
+  \item transition: $\text{uiState}, \text{lastMsg} := \text{Idle}, ""$ and the
   display clears the visual area.
 \end{itemize}
 
