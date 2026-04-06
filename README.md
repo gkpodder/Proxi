@@ -43,7 +43,7 @@ Prerequisites:
 
 - Python 3.12+
 - [`uv`](https://docs.astral.sh/uv/)
-- [`bun`](https://bun.sh) (for TUI dependencies)
+- [`bun`](https://bun.sh) (for TUI, frontend, and Discord relay dependencies)
 
 From the repository root:
 
@@ -51,12 +51,16 @@ From the repository root:
 uv sync
 ```
 
-Install TUI dependencies once:
+Run one-time project setup:
 
 ```bash
-cd cli_ink
-bun install
+uv run proxi setup
 ```
+
+`uv run proxi setup` will:
+
+- Install Node dependencies with Bun for `cli_ink`, `react_frontend`, and `discord_relay`
+- Initialize (or verify) `config/api_keys.db`
 
 ## Configuration
 
