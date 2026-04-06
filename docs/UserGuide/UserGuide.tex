@@ -2,6 +2,7 @@
 
 \usepackage{booktabs}
 \usepackage{tabularx}
+\usepackage{float}
 
 \input{../Comments}
 \input{../Common}
@@ -14,15 +15,15 @@
 
 \begin{document}
 
+\setlength{\parindent}{0pt}
+
 \begin{table}[hp]
 \caption{Revision History} \label{TblRevisionHistory}
 \begin{tabularx}{\textwidth}{llX}
 \toprule
 \textbf{Date} & \textbf{Developer(s)} & \textbf{Change}\\
 \midrule
-Date1 & Name(s) & Description of changes\\
-Date2 & Name(s) & Description of changes\\
-... & ... & ...\\
+April 5, 2026 & Savinay & Initial User Guide release with interface startup, TUI/GUI settings, MCP setup, and Discord integration guidance\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -30,6 +31,591 @@ Date2 & Name(s) & Description of changes\\
 \newpage
 
 \maketitle
+
+\newpage
+
+\section{Overview}
+
+This guide describes the recommended workflow for Proxi:
+\begin{enumerate}
+	\item Start exactly one gateway process
+	\item Choose either the TUI or the GUI as your interface
+	\item If you use the GUI, configure settings (API keys, Integrations, and cron jobs)
+\end{enumerate}
+
+\section{Starting the Interface}
+
+This section describes the required startup order and your three interface options.
+
+\subsection{Step 1 (Always): Start the Gateway}
+Run:
+
+\begin{verbatim}
+uv run proxi gateway start
+\end{verbatim}
+
+\subsection{Step 2: Choose an Interface}
+
+\subsubsection{Option A: TUI}
+\begin{quote}
+Run:
+
+\begin{verbatim}
+uv run proxi
+\end{verbatim}
+\end{quote}
+
+\subsubsection{Option B: GUI (React Frontend)}
+\begin{quote}
+Run:
+
+\begin{verbatim}
+uv run proxi frontend
+\end{verbatim}
+\end{quote}
+
+\subsubsection{Option C: Discord}
+\begin{quote}
+Run:
+
+\begin{verbatim}
+uv run proxi discord
+\end{verbatim}
+
+Then send commands via connected Discord bot.
+\end{quote}
+
+\section{TUI Interface and Settings}
+
+This section explains only TUI usage and TUI-specific settings/actions.
+
+\subsection{Launch and Connect}
+
+Start the TUI:
+\begin{verbatim}
+uv run proxi
+\end{verbatim}
+
+If not already running, start gateway first:
+\begin{verbatim}
+uv run proxi gateway start
+\end{verbatim}
+
+\subsection{Opening the Command Palette}
+
+In the TUI input box, type:
+\begin{verbatim}
+/
+\end{verbatim}
+
+You can then:
+\begin{itemize}
+	\item Type to filter commands
+	\item Use up/down arrows to select
+	\item Press Enter to execute
+	\item Press Esc to close the palette
+\end{itemize}
+
+\subsection{Complete Slash Command Reference}
+
+\begin{table}[H]
+\centering
+\caption{TUI Slash Commands} \label{TblTUISlashCommands}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{Command} & \textbf{What it does} \\
+\midrule
+\texttt{/agent} & Switch active agent or create a new one \\
+\texttt{/switch-agent} & Alias for \texttt{/agent} \\
+\texttt{/delete} & Delete current agent (gateway configuration and agent workspace) \\
+\texttt{/mcps} & Open MCP management to enable/disable integrations \\
+\texttt{/work-dir} & View or change the working directory used by coding/file tools \\
+\texttt{/clear} & Clear chat UI and current session history for a fresh session \\
+\texttt{/plan} & Open/view current session plan \\
+\texttt{/todos} & Open/view current session todos \\
+\texttt{/usage} & Show context-window and turn usage statistics \\
+\texttt{/help} & Print command reference in chat \\
+\texttt{/exit} & Exit the TUI \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{When to Use Which Command}
+
+\begin{itemize}
+	\item Use \texttt{/agent} when switching between workflows (for example, planning vs coding)
+	\item Use \texttt{/mcps} after adding keys to turn integrations on/off
+	\item Use \texttt{/work-dir} before coding tasks to constrain file/tool scope
+	\item Use \texttt{/clear} when you want a clean context for a new task
+	\item Use \texttt{/plan} and \texttt{/todos} to inspect execution state
+	\item Use \texttt{/usage} to monitor context usage and avoid overflow
+\end{itemize}
+
+\subsection{TUI Settings Summary}
+
+In TUI mode, operational settings are primarily controlled by slash commands:
+\begin{itemize}
+    \item Agent setting: \texttt{/agent}
+    \item MCP enable/disable: \texttt{/mcps}
+    \item Working directory scope: \texttt{/work-dir}
+    \item Session reset: \texttt{/clear}
+\end{itemize}
+
+\section{GUI Interface and Settings}
+
+Open \textbf{Settings} from the GUI top bar. The settings modal is organized into these sections:
+
+\begin{enumerate}
+	\item General
+	\item Agent
+	\item Profile
+	\item API Keys
+	\item Integrations
+	\item Cron Jobs
+	\item Webhooks
+\end{enumerate}
+
+\subsection{General}
+
+Use this section for quick session and model controls.
+
+\subsubsection{What You Can Configure}
+\begin{itemize}
+	\item \textbf{Clear History}: clears current session history
+	\item \textbf{Reasoning Effort}: set reasoning depth (minimal, low, medium, high)
+	\item \textbf{Compact Focus Hint}: optional hint used when compacting context
+	\item \textbf{Provider and Model}: select active LLM provider/model for new turns
+\end{itemize}
+
+\subsubsection{Suggested Usage}
+\begin{itemize}
+	\item Use \textbf{Clear History} before a new task domain
+	\item Use \textbf{Reasoning Effort} to balance speed vs depth
+	\item Use \textbf{Compact} when context gets large
+	\item Use \textbf{Switch LLM Provider} after selecting provider/model
+\end{itemize}
+
+\subsection{Agent}
+
+Use this section to control which agent receives your prompts.
+
+\subsubsection{Fields and Actions}
+\begin{itemize}
+	\item \textbf{Current Agent}: read-only indicator of active agent ID
+	\item \textbf{Agent Selector}: choose another configured agent
+	\item \textbf{Switch Agent}: apply selected agent
+\end{itemize}
+
+\subsubsection{Recommended Workflow}
+\begin{enumerate}
+	\item Select the agent that matches your use case (for example planning vs coding)
+	\item Switch agent before starting a new workflow
+	\item Verify in chat that responses come from the expected persona/behavior
+\end{enumerate}
+
+\subsection{Profile}
+
+Use this section to personalize assistant behavior.
+
+\subsubsection{Important Fields}
+\begin{itemize}
+	\item Name and Occupation: style/context personalization
+	\item Location and Timezone: local-time suggestions and schedule accuracy
+	\item Email and Email Signature: outbound drafting quality
+	\item Demographics: optional context used by selected prompts
+\end{itemize}
+
+\subsubsection{Best Practices}
+\begin{itemize}
+	\item Keep timezone accurate if you use calendar/cron automations
+	\item Keep email signature short and reusable
+	\item Update profile when switching environments (school/work/personal)
+\end{itemize}
+
+\subsection{API Keys}
+
+Use this section to add integration credentials and model-provider keys.
+
+\subsubsection{MCP Key Mapping Table}
+Use the following key names exactly as written (do not include \texttt{=} when entering key names in the GUI).
+
+\begin{table}[H]
+\centering
+\caption{MCP and Provider Key Mapping} \label{TblMCPKeyMapping}
+\begin{tabularx}{\textwidth}{lX}
+\toprule
+\textbf{MCP / Provider} & \textbf{Key Name(s)} \\
+\midrule
+LLM Provider (OpenAI) & \texttt{OPENAI\_API\_KEY} \\
+Google Calendar & \texttt{GMAIL\_CLIENT\_ID}, \texttt{GMAIL\_CLIENT\_SECRET} \\
+Gmail & \texttt{GMAIL\_CLIENT\_ID}, \texttt{GMAIL\_CLIENT\_SECRET} \\
+Notion & \texttt{NOTION\_API\_KEY}, \texttt{NOTION\_PARENT\_PAGE\_ID} \\
+Spotify & \texttt{SPOTIFY\_CLIENT\_ID}, \texttt{SPOTIFY\_CLIENT\_SECRET} \\
+Discord relay/config (if used) & \texttt{DISCORD\_BOT\_TOKEN}, \texttt{PROXI\_DISCORD\_COMMAND\_PREFIX} \\
+Obsidian & No API key required (vault/path configuration) \\
+Weather & Usually no API key required in this setup \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Notes}
+\begin{itemize}
+	\item \texttt{OPENAI\_API\_KEY} is the primary LLM key in this setup
+	\item Keep secrets private and do not commit real values to version control
+	\item After adding keys, refresh and verify they are listed
+\end{itemize}
+
+\subsection{Integrations}
+
+Use this section to enable or disable integrations after key setup.
+
+\subsubsection{General Enablement Steps}
+\begin{enumerate}
+	\item Open \textbf{Settings \textgreater\ Integrations}
+	\item Toggle required integrations to enabled
+	\item Save/refresh
+	\item Run one test prompt per integration
+\end{enumerate}
+
+\subsection{Cron Jobs}
+
+Use this section to schedule recurring prompts.
+
+\subsubsection{Core Fields}
+\begin{itemize}
+	\item Source ID
+	\item Target Agent
+	\item Target Session (optional)
+	\item Priority
+	\item Prompt
+	\item Schedule
+\end{itemize}
+
+\subsubsection{Easy Schedule (Recommended)}
+If you do not want to write cron patterns manually:
+\begin{itemize}
+	\item Set \textbf{Every} (number)
+	\item Set \textbf{Unit} (Minute, Day, Week, Monthly)
+	\item Let the UI generate cron expression automatically
+\end{itemize}
+
+Examples:
+\begin{itemize}
+	\item Every 30 Minute
+	\item Every 1 Day
+	\item Every 1 Week
+\end{itemize}
+
+\subsubsection{Manual Cron (Advanced)}
+Example expression:
+\begin{verbatim}
+*/30 * * * *
+\end{verbatim}
+
+Syntax meaning (5-field cron format):
+\begin{itemize}
+	\item Field 1 = minute
+	\item Field 2 = hour
+	\item Field 3 = day of month
+	\item Field 4 = month
+	\item Field 5 = day of week
+\end{itemize}
+
+For \texttt{*/30 * * * *} specifically:
+\begin{itemize}
+	\item \texttt{*/30} in the minute field means ``every 30 minutes'' (minute 0 and 30)
+	\item Each \texttt{*} means ``any value'' for that field
+	\item So the schedule runs every hour, every day, every month
+\end{itemize}
+
+Additional examples:
+\begin{itemize}
+	\item \texttt{0 9 * * *}: run every day at 9:00
+	\item \texttt{0 */4 * * *}: run every 4 hours on the hour
+	\item \texttt{30 17 * * 1-5}: run at 17:30 on weekdays
+\end{itemize}
+
+\subsection{Webhooks}
+
+Use webhooks for external event-driven automation.
+
+For detailed relay and webhook configuration, see the README webhook section:
+\url{../README.md#discord-integration-relay---gateway}
+
+\subsubsection{Key Fields}
+\begin{itemize}
+	\item Source ID
+	\item Prompt Template
+	\item Target Agent and Target Session
+	\item Priority and Paused state
+	\item Optional secret reference
+\end{itemize}
+
+\subsubsection{Suggested Rollout}
+\begin{enumerate}
+	\item Start with a simple template
+	\item Send one synthetic test event
+	\item Confirm output in chat/activity panel
+	\item Expand template complexity gradually
+\end{enumerate}
+
+\subsection{LLM Dependency Note}
+
+Provider/model switching lives in \textbf{General}. Ensure the corresponding provider key exists in API Keys (for example \texttt{OPENAI\_API\_KEY}).
+
+\subsection{MCP Setup by Integration}
+
+This section explains setup for each requested MCP.
+
+\subsubsection{Google Calendar MCP}
+\begin{quote}
+\noindent\textbf{Required Keys}
+\begin{verbatim}
+GMAIL_CLIENT_ID
+GMAIL_CLIENT_SECRET
+\end{verbatim}
+
+\noindent\textbf{Important Note}\\
+Google Calendar uses the same Google OAuth credentials as Gmail in this project.
+
+\noindent\textbf{Setup from Google Cloud Platform (GCP)}
+\begin{enumerate}
+	\item Open Google Cloud Console and create/select a project
+	\item Enable \textbf{Google Calendar API} and \textbf{Gmail API}
+	\item Configure OAuth consent screen (External/Internal as needed)
+	\item Create OAuth credentials as \textbf{Desktop App}
+	\item Copy the generated Client ID and Client Secret into:
+	\begin{itemize}
+		\item \texttt{GMAIL\_CLIENT\_ID}
+		\item \texttt{GMAIL\_CLIENT\_SECRET}
+	\end{itemize}
+\end{enumerate}
+
+\medskip
+\noindent\textbf{First-Time Authorization Behavior}\\
+On first use of Google Calendar or Gmail tools, your browser opens Google sign-in and consent pages. After you approve access, Proxi stores a token file for future requests so you are not prompted every time.
+
+\medskip
+\noindent\textbf{Validation Prompt}\\
+``List my upcoming calendar events for tomorrow.''
+\end{quote}
+
+\subsubsection{Gmail MCP}
+\begin{quote}
+\noindent\textbf{Required Keys}
+\begin{verbatim}
+GMAIL_CLIENT_ID
+GMAIL_CLIENT_SECRET
+\end{verbatim}
+
+\noindent\textbf{Setup Note}\\
+Gmail uses the same GCP OAuth setup described in \textbf{Google Calendar MCP} above. You only need one Google OAuth client for both integrations.
+
+\medskip
+\noindent\textbf{First-Time Authorization Behavior}\\
+On first Gmail action, browser-based Google consent is required once to generate/store token credentials.
+
+\medskip
+\noindent\textbf{Validation Prompt}\\
+``Show my latest unread emails.''
+\end{quote}
+
+\subsubsection{Notion MCP}
+\begin{quote}
+\noindent\textbf{Required Keys}
+\begin{verbatim}
+NOTION_API_KEY
+NOTION_PARENT_PAGE_ID
+\end{verbatim}
+
+\noindent\textbf{Where to Get the Notion Values}
+\begin{enumerate}
+	\item Go to Notion integrations (My Integrations) and create an internal integration
+	\item Copy the integration secret into \texttt{NOTION\_API\_KEY}
+	\item Open the target parent page in Notion and copy its page ID from the URL
+	\item Save that ID as \texttt{NOTION\_PARENT\_PAGE\_ID}
+\end{enumerate}
+
+Also share the target page with your integration, otherwise API calls can fail with permissions errors.
+
+\medskip
+\noindent\textbf{Validation Prompt}\\
+``Create a new Notion note called Weekly Plan.''
+\end{quote}
+
+\subsubsection{Obsidian MCP}
+\begin{quote}
+\noindent\textbf{Required Inputs}\\
+This MCP typically uses vault path/configuration rather than cloud API secrets.
+
+\noindent\textbf{Vault Path Setup}\\
+Set your Obsidian vault path in configuration/environment used by your Proxi runtime.
+
+Example vault path values:
+\begin{itemize}
+	\item Windows: \texttt{C:/Users/YOUR\_USERNAME/Documents/ObsidianVault}
+	\item macOS: \texttt{/Users/YOUR\_USERNAME/Documents/ObsidianVault}
+	\item Linux: \texttt{/home/YOUR\_USERNAME/Documents/ObsidianVault}
+\end{itemize}
+
+Ensure the path exists and Proxi has permission to read/write notes there.
+
+\medskip
+\noindent\textbf{Validation Prompt}\\
+``Create an Obsidian note named Meeting Notes in my vault.''
+\end{quote}
+
+\subsubsection{Spotify MCP}
+\begin{quote}
+\noindent\textbf{Required Keys}
+\begin{verbatim}
+SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET
+\end{verbatim}
+
+\noindent\textbf{Setup from Spotify Developer Dashboard}
+\begin{enumerate}
+	\item Open Spotify Developer Dashboard and create an app
+	\item Copy app Client ID into \texttt{SPOTIFY\_CLIENT\_ID}
+	\item Copy app Client Secret into \texttt{SPOTIFY\_CLIENT\_SECRET}
+	\item Add the redirect URI used by your project (for example \texttt{http://127.0.0.1:8888/callback})
+\end{enumerate}
+
+\medskip
+\noindent\textbf{First-Time Authorization Behavior}\\
+On first Spotify action, a browser window opens for Spotify login/consent. After approval, a token file is generated and reused for subsequent requests.
+
+\medskip
+\noindent\textbf{Validation Prompt}\\
+``Play my focus playlist on Spotify.''
+\end{quote}
+
+\subsubsection{Weather MCP}
+\begin{quote}
+\noindent\textbf{Required Inputs}\\
+In many setups, no extra API key is required beyond MCP configuration.
+
+\medskip
+\noindent\textbf{Validation Prompt}\\
+``What is the weather in Hamilton, ON today?''
+\end{quote}
+
+\subsection{Example Setup: Complete Key and MCP Flow}
+
+\subsubsection{Step 1: Add Keys}
+Add all required key names in \textbf{Settings \textgreater\ API Keys}:
+\begin{verbatim}
+OPENAI_API_KEY
+GMAIL_CLIENT_ID
+GMAIL_CLIENT_SECRET
+NOTION_API_KEY
+NOTION_PARENT_PAGE_ID
+DISCORD_BOT_TOKEN
+PROXI_DISCORD_COMMAND_PREFIX
+SPOTIFY_CLIENT_ID
+SPOTIFY_CLIENT_SECRET
+\end{verbatim}
+
+Use \texttt{!proxi} as the value for \texttt{PROXI\_DISCORD\_COMMAND\_PREFIX}.
+
+\subsubsection{Step 2: Enable Integrations}
+Enable these integrations in \textbf{Settings \textgreater\ Integrations}:
+\begin{itemize}
+	\item Google Calendar
+	\item Gmail
+	\item Notion
+	\item Obsidian
+	\item Spotify
+	\item Weather
+\end{itemize}
+
+\subsubsection{Step 3: Validate One-by-One}
+Run one prompt per MCP to verify setup before moving to automation.
+
+\section{Discord Setup}
+
+This section contains the full Discord relay configuration and usage flow.
+
+\subsection{Configure Discord Source in Gateway}
+
+Add or update a source in your gateway configuration:
+
+\begin{verbatim}
+sources:
+  discord:
+	type: discord
+	target_agent: work
+	target_session: discord
+	priority: 0
+	paused: false
+	# Optional:
+	# discord_command_prefix: /proxi
+	# discord_allow_plain: false
+	# discord_session_mode: fixed   # fixed | channel | user
+	# discord_agent_overrides: {}
+\end{verbatim}
+
+Session mode behavior:
+\begin{itemize}
+	\item \texttt{fixed}: all Discord messages for this source use one session
+	\item \texttt{channel}: each Discord channel uses its own session
+	\item \texttt{user}: each user in each channel uses its own session
+\end{itemize}
+
+\subsection{Security Environment Variable (Recommended)}
+
+In the gateway process environment:
+
+\begin{verbatim}
+$env:DISCORD_WEBHOOK_SECRET = "your-shared-secret"
+\end{verbatim}
+
+When set, \texttt{/channels/discord/webhook} requires \texttt{X-Signature-256} HMAC signatures.
+
+\subsection{Start Discord Relay}
+
+From project root (manual):
+
+\begin{verbatim}
+cd discord_relay
+npm install
+npm run start
+\end{verbatim}
+
+Or via unified CLI:
+
+\begin{verbatim}
+uv run proxi discord
+\end{verbatim}
+
+\texttt{proxi discord} requires a running gateway and exits if gateway is unreachable.
+
+Relay environment template: \texttt{discord\_relay/.env.example}
+
+\subsection{Discord Command Usage}
+
+Default prefix is \texttt{/proxi}.
+
+\begin{itemize}
+	\item \texttt{/proxi <task>}: enqueue a Proxi task
+	\item \texttt{/proxi status}: show lane status for this channel/user session
+	\item \texttt{/proxi abort}: abort active run in this session
+	\item \texttt{/proxi switch <agent\_id>}: route channel to a different agent
+	\item \texttt{/proxi help}: show command help
+\end{itemize}
+
+To allow plain (non-prefixed) messages, set \texttt{discord\_allow\_plain: true} in gateway source config and \texttt{PROXI\_DISCORD\_ALLOW\_PLAIN=1} in relay environment.
+
+\section{Quick End-to-End Flow}
+
+\begin{enumerate}
+	\item Start gateway once: \texttt{uv run proxi gateway start}
+	\item Launch TUI (\texttt{uv run proxi}) or GUI (\texttt{uv run proxi frontend})
+	\item In GUI settings, configure General and Agent/Profile first
+	\item Add API keys and then enable required integrations
+	\item Add a cron job using Easy Schedule (Every + Unit), or use manual cron if needed
+	\item Send test prompts to confirm integrations and automation are working
+\end{enumerate}
 
 
 \end{document}
