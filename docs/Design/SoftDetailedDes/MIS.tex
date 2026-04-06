@@ -236,45 +236,45 @@ software decision modules.
 \midrule
 
 \multirow{2}{*}{\textbf{Hardware-Hiding}} &
-\textbf{HH-IO (Audio I/O Adapter)} manages microphone input and audio
+\textbf{M1 -- HH-IO (Audio I/O Adapter)} manages microphone input and audio
 output across different platforms.\\
-& \textbf{HH-Auto (Desktop Automation)} performs basic desktop actions
+& \textbf{M2 -- HH-Auto (Desktop Automation)} performs basic desktop actions
 such as typing, clicking, or launching applications.\\
 \midrule
 
 \multirow{7}{*}{\textbf{Behaviour-Hiding}} &
-\textbf{BH-Input (Voice \& Text Manager)} captures user input,
+\textbf{M3 -- BH-Input (Voice \& Text Manager)} captures user input,
 converts speech to text, and normalizes text commands. Implements
 \textit{FUNC.R.1–R.2}.\\
-& \textbf{BH-NLU (Intent Parser)} interprets text into structured
+& \textbf{M4 -- BH-NLU (Intent Parser)} interprets text into structured
 intents and parameters based on defined command patterns. Implements
 \textit{FUNC.R.3}.\\
-& \textbf{BH-Plan (Task Executor)} determines which agent or tool
+& \textbf{M5 -- BH-Plan (Task Executor)} determines which agent or tool
 should handle a command and coordinates its execution. Implements
 \textit{FUNC.R.4}.\\
-& \textbf{BH-Safety (Confirmation Gate)} validates actions that may
+& \textbf{M6 -- BH-Safety (Confirmation Gate)} validates actions that may
 affect files or system settings and requests confirmation. Implements
 \textit{FUNC.R.9}.\\
-& \textbf{BH-Session (Context Manager)} maintains user session data,
+& \textbf{M7 -- BH-Session (Context Manager)} maintains user session data,
 history, and undo information for continuity. Supports \textit{FUNC.R.4}.\\
-& \textbf{BH-Feedback (Response Manager)} converts textual responses
+& \textbf{M8 -- BH-Feedback (Response Manager)} converts textual responses
 into spoken or visual feedback for the user. Implements
 \textit{FUNC.R.5–R.6}.\\
-& \textbf{BH-UI (Proxi Interface)} presents status updates,
+& \textbf{M9 -- BH-UI (Proxi Interface)} presents status updates,
 confirmations, and results; supports full voice-only interaction.
 Implements \textit{FUNC.R.8}.\\
 \midrule
 
 \multirow{5}{*}{\textbf{Shared Types / Software-Decision}} &
-\textbf{SD-Types (Core Structures)} defines shared type and record definitions for
+\textbf{M10 -- SD-Types (Core Structures)} defines shared type and record definitions for
 Command, Intent, and Plan.\\
-& \textbf{SD-ToolRegistry (Action Map)} maintains the mapping between
+& \textbf{M11 -- SD-ToolRegistry (Action Map)} maintains the mapping between
 recognized intents and available system actions.\\
-& \textbf{SD-Store (Local Storage)} handles persistent storage for user
+& \textbf{M12 -- SD-Store (Local Storage)} handles persistent storage for user
 preferences, session history, and logs.\\
-& \textbf{SD-AIClient (AI Service Client)} provides configuration and
+& \textbf{M13 -- SD-AIClient (AI Service Client)} provides configuration and
 communication for STT and text synthesis services.\\
-& \textbf{SD-Log (Event Logger)} records system actions and feedback
+& \textbf{M14 -- SD-Log (Event Logger)} records system actions and feedback
 events for debugging and validation.\\
 \bottomrule
 \end{tabular}

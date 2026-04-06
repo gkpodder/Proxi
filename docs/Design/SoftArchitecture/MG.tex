@@ -249,30 +249,29 @@ hierarchy are the modules that will actually be implemented.
   \textbf{BH-NLU (Intent Parser)} interprets text into structured intents based
   on command patterns.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHPlan}:]
-  \textbf{BH-Plan (Task Planner and Executor)} selects MCP tools and executes
-  user intents.
+  \textbf{BH-Plan (Task Executor)} selects MCP tools and executes user
+  intents.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHSafety}:]
-  \textbf{BH-Safety (Safety Confirmation Gate)} validates risky actions and
-  requests confirmation as needed.
+  \textbf{BH-Safety (Confirmation Gate)} validates risky actions and requests
+  confirmation as needed.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHSession}:]
-  \textbf{BH-Session (Session Context Manager)} stores history, session
-  context, and undo information.
+  \textbf{BH-Session (Context Manager)} stores history, session context, and
+  undo information.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHFeedback}:]
-  \textbf{BH-Feedback (Feedback Output Manager)} outputs responses using TTS or
-  visual text.
+  \textbf{BH-Feedback (Response Manager)} outputs responses using TTS or visual
+  text.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHUI}:]
-  \textbf{BH-UI (User Interface Panel)} displays status, confirmation prompts,
-  and results.
+  \textbf{BH-UI (Proxi Interface)} displays status, confirmation prompts, and
+  results.
 
   % SD
   \item [\refstepcounter{mnum} \mthemnum \label{mSDTypes}:]
-  \textbf{SD-Types (Core Data Types)} defines shared type and record definitions
+  \textbf{SD-Types (Core Structures)} defines shared type and record definitions
   for Command, Intent, Plan, and related structures.
   \item [\refstepcounter{mnum} \mthemnum \label{mSDRegistry}:]
-  \textbf{SD-ToolRegistry (Tool Registry)} maps intents to MCP tools and
-  actions.
+  \textbf{SD-ToolRegistry (Action Map)} maps intents to MCP tools and actions.
   \item [\refstepcounter{mnum} \mthemnum \label{mSDStore}:]
-  \textbf{SD-Store (Persistent Store)} manages persistent data such as
+  \textbf{SD-Store (Local Storage)} manages persistent data such as
   preferences, session history, and logs.
   \item [\refstepcounter{mnum} \mthemnum \label{mSDConfig}:]
   \textbf{SD-AIClient (AI Service Client)} provides configuration and API
@@ -406,7 +405,7 @@ The behaviour-hiding modules implement the end-to-end interaction pipeline:
 capture input, interpret intent, plan actions, enforce safety, manage session
 context, and present feedback to the user.
 
-\subsubsection{BH-Input: Voice and Text Manager (\mref{mBHInput})}
+\subsubsection{BH-Input: Voice \& Text Manager (\mref{mBHInput})}
 \begin{description}
 \item[Secrets:] Speech-to-text configuration, text normalization rules, and
 buffering strategies.
@@ -425,7 +424,7 @@ imperfect text into structured intent objects.
 \item[Type Of Module:] Library
 \end{description}
 
-\subsubsection{BH-Plan: Task Planner and Executor (\mref{mBHPlan})}
+\subsubsection{BH-Plan: Task Executor (\mref{mBHPlan})}
 \begin{description}
 \item[Secrets:] Decision-making logic for selecting the correct MCP agent based
 on intent, execution planning, and error handling.
@@ -435,7 +434,7 @@ using MCP tools, and tracks tasks to completion.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{BH-Safety: Safety Confirmation Gate (\mref{mBHSafety})}
+\subsubsection{BH-Safety: Confirmation Gate (\mref{mBHSafety})}
 \begin{description}
 \item[Secrets:] Risk analysis policy table, irreversible detection rules, and
 timeout behaviour.
@@ -445,7 +444,7 @@ prompts the user for confirmation when an action is deemed high risk.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{BH-Session: Session Context Manager (\mref{mBHSession})}
+\subsubsection{BH-Session: Context Manager (\mref{mBHSession})}
 \begin{description}
 \item[Secrets:] Session history table, short-term conversational context for the
 AI model, and previous action history for undo.
@@ -455,7 +454,7 @@ requests and stores short-term model context in memory.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{BH-Feedback: Feedback Output Manager (\mref{mBHFeedback})}
+\subsubsection{BH-Feedback: Response Manager (\mref{mBHFeedback})}
 \begin{description}
 \item[Secrets:] Output action logic, text-to-speech configuration, and message
 delivery monitoring.
@@ -465,7 +464,7 @@ required, and mirrors speech as text feedback.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{BH-UI: User Interface Panel (\mref{mBHUI})}
+\subsubsection{BH-UI: Proxi Interface (\mref{mBHUI})}
 \begin{description}
 \item[Secrets:] View groups, information presentation rules, and prompt timing
 rules.
@@ -479,7 +478,7 @@ rules.
 These modules define shared domain representations and system-wide services such
 as tool mapping, persistence, AI service integration, and logging.
 
-\subsubsection{SD-Types: Core Data Definitions (\mref{mSDTypes})}
+\subsubsection{SD-Types: Core Structures (\mref{mSDTypes})}
 \begin{description}
 \item[Secrets:] Internal representation of commands, actions, risks, policies,
 and tool metadata.
@@ -488,7 +487,7 @@ and tool metadata.
 \item[Type Of Module:] Library
 \end{description}
 
-\subsubsection{SD-ToolRegistry: Tool Registry (\mref{mSDRegistry})}
+\subsubsection{SD-ToolRegistry: Action Map (\mref{mSDRegistry})}
 \begin{description}
 \item[Secrets:] Mapping from intent types to MCP tools, agents, and automation
 routines.
@@ -497,7 +496,7 @@ routines.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{SD-Store: Persistent Store (\mref{mSDStore})}
+\subsubsection{SD-Store: Local Storage (\mref{mSDStore})}
 \begin{description}
 \item[Secrets:] Persistent storage format and schema for user settings, session
 history, and logs.
@@ -803,7 +802,9 @@ internal modules.
 
 This schedule decomposes the development of Rev 0 into four distinct phases, 
 mapping internal procedures to the module hierarchy and assigning team members 
-based on the Module Guide.
+based on the Module Guide. The identifiers `M1`--`M14` refer to the leaf-module
+ordering established in Section~\ref{SecMH} and are used consistently with the
+MIS hierarchy.
 
 \subsection{Phase 1: Foundations \& Core Data Structures (Weeks 0-3)}
 \textit{Goal: Establish the shared symbolic language, hardware I/O links, and 
@@ -813,16 +814,16 @@ logging infrastructure.}
 \hline
 \textbf{Date} & \textbf{Module(s)} & \textbf{Lead(s)} & \textbf{Details} 
 \\ \hline
-Nov 15 - Nov 29  & M13, M14 & Ajay & \textbf{Setup:} Environment configuration and 
+Nov 15 - Nov 29  & M13 (SD-AIClient), M14 (SD-Log) & Ajay & \textbf{Setup:} Environment configuration and 
 implementation of \texttt{log\_event()} for system-wide traceability 
 (FUNC.R.7). \\ \hline
-Nov 30 - Dec 9 & M10 & Gourob & \textbf{Type-Definition:} Coding of global 
-ADTs (\texttt{Command}, \texttt{Intent}, \texttt{Plan}) to ensure type-safety 
+Nov 30 - Dec 9 & M10 (SD-Types) & Gourob & \textbf{Type-Definition:} Coding of shared 
+type and record definitions (\texttt{Command}, \texttt{Intent}, \texttt{Plan}) to ensure type-safety 
 across the pipeline. \\ \hline
-Dec 10 - Dec 19 & M1 & Amanbeer & \textbf{Signal-Capture:} Low-level implementation 
+Dec 10 - Dec 19 & M1 (HH-IO) & Amanbeer & \textbf{Signal-Capture:} Low-level implementation 
 of \texttt{init\_audio()} and \texttt{start\_capture()} using hardware-hiding 
 drivers. \\ \hline
-Dec 20 - Dec 31 & M1 & Amanbeer & \textbf{Feedback-Link:} Implementation 
+Dec 20 - Dec 31 & M1 (HH-IO) & Amanbeer & \textbf{Feedback-Link:} Implementation 
 of \texttt{play\_feedback()} to route synthetic audio to system output devices. 
 \\ \hline
 \end{tabularx}
@@ -835,15 +836,15 @@ persistent storage.}
 \hline
 \textbf{Week} & \textbf{Module(s)} & \textbf{Lead(s)} & \textbf{Details} 
 \\ \hline
-Jan 1 - Jan 9 & M3 & Savinay & \textbf{Stream-to-Text:} Integration of Whisper STT; 
+Jan 1 - Jan 9 & M3 (BH-Input) & Savinay & \textbf{Stream-to-Text:} Integration of Whisper STT; 
 implementation of VAD (Voice Activity Detection) logic. \\ \hline
-Jan 10 - Jan 19 & M3, M4 & Savinay, Gourob & \textbf{Normalization:} Unifying Voice and Text 
+Jan 10 - Jan 19 & M3 (BH-Input), M4 (BH-NLU) & Savinay, Gourob & \textbf{Normalization:} Unifying voice and text 
 inputs into a common \texttt{Command} object via \texttt{get\_input()}. \\ 
 \hline
-Jan 20 - Jan 31 & M4 & Gourob & \textbf{Semantic-Parser:} Development of rules to map natural 
+Jan 20 - Jan 31 & M4 (BH-NLU) & Gourob & \textbf{Semantic-Parser:} Development of rules to map natural 
 language strings to structured \texttt{Intent} objects. \\ \hline
-Feb 1 - Feb 9 & M11, M12 & Ajay & \textbf{Action-Map:} Building the \texttt{SD-ToolRegistry} 
-to link parsed intents to specific system automation tools. \\ \hline
+Feb 1 - Feb 9 & M11 (SD-ToolRegistry), M12 (SD-Store) & Ajay & \textbf{Action-Map:} Building the \texttt{SD-ToolRegistry} 
+and initial \texttt{SD-Store} persistence hooks for mapped intents and saved state. \\ \hline
 \end{tabularx}
 
 
@@ -853,15 +854,15 @@ to link parsed intents to specific system automation tools. \\ \hline
 \begin{tabularx}{\textwidth}{|l|l|l|X|}
 \hline
 \textbf{Week} & \textbf{Module(s)} & \textbf{Lead(s)} & \textbf{Details} \\ \hline
-Feb 10 - Feb 19 & M5 & Gourob & \textbf{Logic-Sequence:} Implementation of recursive planning 
+Feb 10 - Feb 19 & M5 (BH-Plan) & Gourob & \textbf{Logic-Sequence:} Implementation of recursive planning 
 to decompose intents into atomic \texttt{Action} sequences. \\ \hline
-Feb 20 - Feb 28 & M2 & Amanbeer & \textbf{OS-Abstraction:} Development of keyboard and 
+Feb 20 - Feb 28 & M2 (HH-Auto) & Amanbeer & \textbf{OS-Abstraction:} Development of keyboard and 
 mouse automation wrappers (click, type, launch) for Windows/macOS. \\ \hline
-Mar 1 - Mar 9 & M6 & Savinay & \textbf{Gate-Keeper:} Mandatory implementation of 
+Mar 1 - Mar 9 & M6 (BH-Safety) & Savinay & \textbf{Gate-Keeper:} Mandatory implementation of 
 \texttt{validate\_plan()} to intercept high-risk/irreversible actions 
 (FUNC.R.9). \\ \hline
-Mar 10 - Mar 19 & M7 & Ajay & \textbf{Context-Sync:} Implementing conversational memory to 
-track history and support "undo" operations. \\ \hline
+Mar 10 - Mar 19 & M7 (BH-Session) & Ajay & \textbf{Context-Sync:} Implementing conversational memory to 
+track history and support ``undo'' operations. \\ \hline
 \end{tabularx}
 
 \subsection{Phase 4: Feedback Loop \& Integration (Weeks 12-14)}
@@ -870,11 +871,11 @@ track history and support "undo" operations. \\ \hline
 \begin{tabularx}{\textwidth}{|l|l|l|X|}
 \hline
 \textbf{Week} & \textbf{Module(s)} & \textbf{Lead(s)} & \textbf{Details} \\ \hline
-Mar 20 - Mar 30 & M9 & Savinay & \textbf{View-Render:} Finalizing the Desktop Panel; rendering 
+Mar 20 - Mar 30 & M9 (BH-UI) & Savinay & \textbf{View-Render:} Finalizing the Desktop Panel; rendering 
 transcript overlays and real-time status indicators. \\ \hline
-Mar 31 - Apr 9 & M8 & Amanbeer & \textbf{Voice-Synth:} Integration of TTS to convert system 
+Mar 31 - Apr 9 & M8 (BH-Feedback) & Amanbeer & \textbf{Voice-Synth:} Integration of TTS to convert system 
 responses into spoken audio via the M1 interface. \\ \hline
-Apr 10 - Apr 19 & All & Full Team & \textbf{V\&V:} Execution of the Confidence Protocol; 
+Apr 10 - Apr 19 & All modules & Full Team & \textbf{V\&V:} Execution of the Confidence Protocol; 
 testing latency (SAL.R.1) and safety-interception reliability. \\ \hline
 \end{tabularx}
 
