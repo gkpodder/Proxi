@@ -38,6 +38,7 @@ class GatewayEvent(BaseModel):
     source_type: SourceType
     payload: dict[str, Any] = Field(default_factory=dict)
     reply_channel: Optional[ReplyChannel] = None
+    broadcast_reply_channels: list[ReplyChannel] = Field(default_factory=list)
     session_id: str = ""
     priority: int = 0
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -9,6 +9,8 @@ import { z } from "zod";
 export const TextStreamSchema = z.object({
   type: z.literal("text_stream"),
   content: z.string(),
+  source_id: z.string().optional(),
+  source_type: z.string().optional(),
 });
 export type TextStream = z.infer<typeof TextStreamSchema>;
 
@@ -18,6 +20,8 @@ export const StatusUpdateSchema = z.object({
   status: z.enum(["running", "done"]),
   /** Present for gateway SSE: true when this event comes from a TUI ``sources.tui`` dispatch. */
   tui_abortable: z.boolean().optional(),
+  source_id: z.string().optional(),
+  source_type: z.string().optional(),
 });
 export type StatusUpdate = z.infer<typeof StatusUpdateSchema>;
 
@@ -25,6 +29,8 @@ export const ToolStartSchema = z.object({
   type: z.literal("tool_start"),
   tool: z.string(),
   arguments: z.record(z.unknown()).optional(),
+  source_id: z.string().optional(),
+  source_type: z.string().optional(),
 });
 export type ToolStart = z.infer<typeof ToolStartSchema>;
 
@@ -34,12 +40,16 @@ export const ToolDoneSchema = z.object({
   success: z.boolean(),
   output: z.string().optional(),
   error: z.string().optional(),
+  source_id: z.string().optional(),
+  source_type: z.string().optional(),
 });
 export type ToolDone = z.infer<typeof ToolDoneSchema>;
 
 export const ToolLogSchema = z.object({
   type: z.literal("tool_log"),
   content: z.string(),
+  source_id: z.string().optional(),
+  source_type: z.string().optional(),
 });
 export type ToolLog = z.infer<typeof ToolLogSchema>;
 
@@ -47,6 +57,8 @@ export const SubagentStartSchema = z.object({
   type: z.literal("subagent_start"),
   agent: z.string(),
   task: z.string(),
+  source_id: z.string().optional(),
+  source_type: z.string().optional(),
 });
 export type SubagentStart = z.infer<typeof SubagentStartSchema>;
 
@@ -54,6 +66,8 @@ export const SubagentDoneSchema = z.object({
   type: z.literal("subagent_done"),
   agent: z.string(),
   success: z.boolean(),
+  source_id: z.string().optional(),
+  source_type: z.string().optional(),
 });
 export type SubagentDone = z.infer<typeof SubagentDoneSchema>;
 
@@ -63,6 +77,10 @@ export const UserInputRequiredBootstrapSchema = z.object({
   method: z.enum(["select", "confirm", "text"]),
   options: z.array(z.string()).optional(),
   prompt: z.string().optional(),
+  /** Local TUI layout hint (not used by gateway payloads). */
+  ui: z.enum(["compact", "plan", "reasoning-effort", "provider"]).optional(),
+  /** Initial ↑/↓ selection for `method: "select"` (TUI-only). */
+  preferredOption: z.string().optional(),
 });
 export type UserInputRequiredBootstrap = z.infer<typeof UserInputRequiredBootstrapSchema>;
 
@@ -107,6 +125,18 @@ export function isAskUserQuestionRequired(
   return "payload" in msg && Array.isArray((msg as UserInputRequiredForm).payload?.questions);
 }
 
+export const PlanReadySchema = z.object({
+  type: z.literal("plan_ready"),
+  content: z.string(),
+  // Session workspace path for the plan.md file users may edit manually.
+  // This is typically `sessions/<agent_id>/<session_name>/plan.md`.
+  plan_path: z.string().optional(),
+  // If plan mode is active, the agent may be writing to an in-progress file
+  // instead of the session-level `plan.md`.
+  active_plan_path: z.string().optional(),
+});
+export type PlanReady = z.infer<typeof PlanReadySchema>;
+
 export const ReadySchema = z.object({
   type: z.literal("ready"),
 });
@@ -138,6 +168,7 @@ export const BridgeMessageSchema = z.union([
   SubagentDoneSchema,
   UserInputRequiredBootstrapSchema,
   UserInputRequiredFormSchema,
+  PlanReadySchema,
   ReadySchema,
   BootCompleteSchema,
   InboundTurnSchema,
@@ -190,10 +221,10 @@ export const AbortSchema = z.object({
 });
 export type Abort = z.infer<typeof AbortSchema>;
 
-export const ManageMcpsSchema = z.object({
-  type: z.literal("manage_mcps"),
+export const ManageIntegrationsSchema = z.object({
+  type: z.literal("manage_integrations"),
 });
-export type ManageMcps = z.infer<typeof ManageMcpsSchema>;
+export type ManageIntegrations = z.infer<typeof ManageIntegrationsSchema>;
 
 export const TuiToBridgeSchema = z.union([
   StartTaskSchema,
@@ -201,7 +232,7 @@ export const TuiToBridgeSchema = z.union([
   UserInputResponseFormSchema,
   SwitchAgentSchema,
   AbortSchema,
-  ManageMcpsSchema,
+  ManageIntegrationsSchema,
 ]);
 export type TuiToBridge = z.infer<typeof TuiToBridgeSchema>;
 

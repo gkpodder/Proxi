@@ -149,4 +149,38 @@ client.on("messageCreate", async (message) => {
   }
 });
 
+// Derive gateway base URL from WEBHOOK_URL (strip path after host)
+const GATEWAY_BASE_URL = (() => {
+  try {
+    const u = new URL(WEBHOOK_URL);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return "http://127.0.0.1:8765";
+  }
+})();
+
+async function deregisterFromGateway() {
+  try {
+    const body = "";
+    await fetch(`${GATEWAY_BASE_URL}/channels/discord/deregister`, {
+      method: "POST",
+      headers: signedHeaders(body),
+      body,
+    });
+    // eslint-disable-next-line no-console
+    console.log("Discord relay deregistered from gateway.");
+  } catch {
+    // Gateway may already be down — deregister is best-effort, ignore errors.
+  }
+}
+
+async function shutdown() {
+  await deregisterFromGateway();
+  await client.destroy();
+  process.exit(0);
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
 client.login(BOT_TOKEN);

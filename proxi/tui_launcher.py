@@ -53,7 +53,6 @@ def main() -> None:
     env["PROXI_GATEWAY_URL"] = _gateway_url()
     _apply_tui_session_from_gateway_yml(env)
 
-    # Keep PYTHONPATH so the bridge can still be imported if needed
     env["PYTHONPATH"] = str(project_root) + os.pathsep + env.get("PYTHONPATH", "")
 
     os.chdir(cli_ink)

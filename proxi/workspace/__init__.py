@@ -87,9 +87,11 @@ class WorkspaceManager:
     # --- Global workspace -------------------------------------------------
 
     def ensure_base_dirs(self) -> None:
-        """Ensure the global/agents directories exist."""
+        """Ensure the global/agents/memory directories exist."""
         self.global_dir.mkdir(parents=True, exist_ok=True)
         self.agents_dir.mkdir(parents=True, exist_ok=True)
+        (self.root / "memory").mkdir(parents=True, exist_ok=True)
+        (self.root / "memory" / "skills").mkdir(parents=True, exist_ok=True)
 
     def ensure_global_system_prompt(self) -> Path:
         """Ensure global/system_prompt.md exists with workspace instructions."""
@@ -262,6 +264,63 @@ class WorkspaceManager:
         if agent_dir.exists():
             shutil.rmtree(agent_dir)
 
+    def branch_agent(
+        self,
+        parent_agent_id: str,
+        source_history_path: str | Path,
+        *,
+        default_session: str = "main",
+        working_dir: str | None = None,
+    ) -> AgentInfo:
+        """Create a new agent that is a clone of parent_agent_id.
+
+        Copies Soul.md and config.yaml from the parent. Copies source_history_path
+        into the new agent's first session so the LLM prompt cache is warm.
+
+        The new agent_id is {base}-2 (or -3, etc.), stripping any existing -N suffix
+        so repeated branching stays flat: proxi → proxi-2 → proxi-3.
+        """
+        import re
+        import shutil
+
+        self._validate_agent_id(parent_agent_id)
+        self.ensure_base_dirs()
+        parent_dir = self.agents_dir / parent_agent_id
+        if not parent_dir.exists():
+            raise WorkspaceError(f"Parent agent {parent_agent_id!r} not found")
+
+        base = re.sub(r"-\d+$", "", parent_agent_id)
+        new_agent_id: str | None = None
+        for n in range(2, 1000):
+            candidate = f"{base}-{n}"
+            if not (self.agents_dir / candidate).exists():
+                new_agent_id = candidate
+                break
+        if new_agent_id is None:
+            raise WorkspaceError("No available branch name (tried up to -999)")
+
+        new_dir = self.agents_dir / new_agent_id
+        new_dir.mkdir(parents=True, exist_ok=False)
+
+        for fname in ("Soul.md", "config.yaml"):
+            src = parent_dir / fname
+            if src.exists():
+                (new_dir / fname).write_bytes(src.read_bytes())
+
+        session_dir = new_dir / "sessions" / default_session
+        session_dir.mkdir(parents=True, exist_ok=True)
+        src_hist = Path(source_history_path)
+        dst_hist = session_dir / "history.jsonl"
+        if src_hist.exists() and src_hist.stat().st_size > 0:
+            shutil.copy2(src_hist, dst_hist)
+        else:
+            dst_hist.write_text("", encoding="utf-8")
+
+        self.register_agent_in_gateway(
+            new_agent_id, default_session=default_session, working_dir=working_dir
+        )
+        return AgentInfo(agent_id=new_agent_id, path=new_dir)
+
     # --- Sessions ---------------------------------------------------------
 
     def create_single_session(self, agent: AgentInfo) -> SessionInfo:
@@ -298,6 +357,50 @@ class WorkspaceManager:
             plan_path=plan_path,
             todos_path=todos_path,
         )
+
+    def create_named_session(
+        self,
+        agent: AgentInfo,
+        session_name: str,
+        *,
+        source_history_path: str | Path | None = None,
+    ) -> SessionInfo:
+        """Create a new session with a specific name without disturbing other sessions.
+
+        Unlike create_single_session, this does NOT remove existing sessions.
+        If source_history_path is provided, its content is copied into the new
+        session's history.jsonl (for prompt-cache-friendly inheritance).
+        """
+        import shutil
+
+        self.ensure_base_dirs()
+        session_dir = agent.path / "sessions" / session_name
+        session_dir.mkdir(parents=True, exist_ok=True)
+        history_path = session_dir / "history.jsonl"
+        if source_history_path is not None:
+            src = Path(source_history_path)
+            if src.exists() and src.stat().st_size > 0:
+                shutil.copy2(src, history_path)
+            else:
+                history_path.write_text("", encoding="utf-8")
+        elif not history_path.exists():
+            history_path.write_text("", encoding="utf-8")
+        return SessionInfo(
+            agent=agent,
+            session_id=session_name,
+            session_dir=session_dir,
+            history_path=history_path,
+            plan_path=session_dir / "plan.md",
+            todos_path=session_dir / "todos.md",
+        )
+
+    def delete_session(self, agent_id: str, session_name: str) -> None:
+        """Delete a session directory from disk. No-op if it does not exist."""
+        import shutil
+
+        session_dir = self.agents_dir / agent_id / "sessions" / session_name
+        if session_dir.exists():
+            shutil.rmtree(session_dir)
 
     def read_agent_config(self, agent_id: str) -> dict[str, Any]:
         """Read and return the parsed config.yaml for an agent.

@@ -7,6 +7,7 @@ import time
 from typing import Any, Protocol
 
 from proxi.agents.registry import SubAgentManager
+from proxi.core.compactor import ContextCompactor
 from proxi.core.planner import Planner
 from proxi.core.reflection import Reflector
 from proxi.core.state import AgentState, AgentStatus, Message, TurnState, TurnStatus, WorkspaceConfig
@@ -18,6 +19,41 @@ from proxi.observability.tracing import TraceContext
 from proxi.tools.registry import ToolRegistry
 
 logger = get_logger(__name__)
+
+_MEMORY_NUDGE = (
+    "[MEMORY NUDGE] Briefly reflect on recent activity: "
+    "are there reusable workflows worth saving as a skill? "
+    "Any user preferences worth updating? "
+    "Use save_skill or update_user_model if yes — otherwise continue without comment."
+)
+
+_SKILL_HINT = (
+    "[SKILL HINT] This turn involved many tool calls — if the workflow is reusable, "
+    "consider calling save_skill before responding."
+)
+
+# Tools that are blocked while plan_mode is active.
+# manage_plan is intentionally omitted — that's how the agent writes the plan.
+_PLAN_MODE_WRITE_BLOCKED_TOOLS: frozenset[str] = frozenset({
+    "write_file",
+    "edit_file",
+    "apply_patch",
+    "execute_code",
+    "shell",
+    "manage_todos",
+})
+
+
+def _is_context_length_error(exc: Exception) -> bool:
+    """Return True if the exception looks like a context-window overflow."""
+    msg = str(exc).lower()
+    return any(x in msg for x in [
+        "context_length_exceeded",
+        "context window",
+        "maximum context length",
+        "too many tokens",
+        "413",
+    ])
 
 
 class BridgeEmitter(Protocol):
@@ -53,6 +89,7 @@ class AgentLoop:
         emitter: BridgeEmitter | None = None,
         form_bridge: FormBridge | None = None,
         workspace: WorkspaceConfig | None = None,
+        compactor: ContextCompactor | None = None,
     ):
         """Initialize the agent loop."""
         self.llm_client = llm_client
@@ -65,13 +102,15 @@ class AgentLoop:
         self.form_bridge = form_bridge
         self.logger = logger
         self.workspace = workspace
+        self.compactor = compactor
 
-    async def run(self, initial_message: str) -> AgentState:
+    async def run(self, initial_message: str, reasoning_effort: str = "minimal") -> AgentState:
         """
         Run the agent loop with an initial message.
 
         Args:
             initial_message: Initial user message
+            reasoning_effort: LLM reasoning effort for this run ("minimal", "low", "medium", "high")
 
         Returns:
             Final agent state
@@ -81,6 +120,7 @@ class AgentLoop:
             max_turns=self.max_turns,
             start_time=time.time(),
             workspace=self.workspace,
+            reasoning_effort=reasoning_effort,
         )
         state.add_message(Message(role="user", content=initial_message))
         self.logger.info("agent_loop_start", message=initial_message[:100])
@@ -133,6 +173,65 @@ class AgentLoop:
                     self.logger.debug("turn_start", turn=state.current_turn)
 
                     try:
+                        # --- Pre-flight compaction check ---
+                        if self.compactor is not None and self.planner.prompt_builder._cached_system_prefix:
+                            self.compactor.system_prompt = self.planner.prompt_builder._cached_system_prefix
+                        if self.compactor is not None:
+                            current_tokens = (
+                                state.turns[-2].tokens_used
+                                if len(state.turns) >= 2
+                                else state.total_tokens
+                            )
+                            compaction_threshold_tokens = int(
+                                self.compactor.context_window
+                                * self.compactor.compaction_threshold
+                            )
+                            should_show_compaction_status = (
+                                current_tokens >= compaction_threshold_tokens
+                            )
+                            if should_show_compaction_status and self.emitter:
+                                self.emitter.emit(
+                                    {
+                                        "type": "status_update",
+                                        "label": "Compacting",
+                                        "status": "running",
+                                        "tui_abortable": False,
+                                    }
+                                )
+                            compact_result = await self.compactor.maybe_compact(
+                                state, current_tokens=current_tokens
+                            )
+                            if compact_result.compaction_triggered:
+                                self.logger.info(
+                                    "context_compacted",
+                                    turn=state.current_turn,
+                                    from_tokens=compact_result.original_tokens,
+                                    to_tokens=compact_result.compacted_token_estimate,
+                                )
+                                if should_show_compaction_status and self.emitter:
+                                    self.emitter.emit(
+                                        {
+                                            "type": "status_update",
+                                            "label": "Compacted",
+                                            "status": "done",
+                                            "tui_abortable": False,
+                                        }
+                                    )
+
+                        # Inject memory nudge (transient — not persisted to history)
+                        _nudge_interval = int(os.getenv("PROXI_MEMORY_NUDGE_INTERVAL", "10"))
+                        _mem_nudge_injected = False
+                        if (
+                            _nudge_interval > 0
+                            and state.current_turn > 0
+                            and state.current_turn % _nudge_interval == 0
+                            and self.tool_registry.has_tool("save_skill")
+                        ):
+                            state.history.append(
+                                Message(role="user", content=_MEMORY_NUDGE)
+                            )
+                            _mem_nudge_injected = True
+
                         # REASON → DECIDE
                         turn.status = TurnStatus.DECIDING
                         decide_start_ns = now_ns()
@@ -145,7 +244,8 @@ class AgentLoop:
                                 }
                             )
                         decision, usage = await self._decide(
-                            state, emit_stream=self.emitter is not None
+                            state, emit_stream=self.emitter is not None,
+                            reasoning_effort=state.reasoning_effort,
                         )
                         if self.emitter:
                             self.emitter.emit(
@@ -157,9 +257,18 @@ class AgentLoop:
                             )
                         decide_ms = elapsed_ms(decide_start_ns)
 
-                        # Accumulate token usage
+                        # Remove transient nudge so it is not in history going forward
+                        if _mem_nudge_injected and state.history and state.history[-1].content == _MEMORY_NUDGE:
+                            state.history.pop()
+
+                        # Token accounting:
+                        # - total_tokens tracks spend (input + output)
+                        # - turn.tokens_used tracks current context size (input/prompt only)
                         state.total_tokens += usage.get("total_tokens", 0)
-                        turn.tokens_used = usage.get("total_tokens", 0)
+                        turn.tokens_used = usage.get(
+                            "prompt_tokens",
+                            usage.get("input_tokens", usage.get("total_tokens", 0)),
+                        )
 
                         # ACT
                         turn.status = TurnStatus.ACTING
@@ -209,12 +318,10 @@ class AgentLoop:
                                     parsed_calls.append(
                                         (tool_call_id, tool_name, tool_args))
 
+                                # Default 16: read/grep/glob batches often exceed 4 paths; higher
+                                # concurrency cuts wall-clock time. Tune down via PROXI_TOOL_PARALLELISM.
                                 parallel_limit = max(
-                                    1, int(os.getenv("PROXI_TOOL_PARALLELISM", "1")))
-                                can_parallelize = (
-                                    parallel_limit > 1
-                                    and all(self.tool_registry.is_parallel_safe(name) for _, name, _ in parsed_calls)
-                                )
+                                    1, int(os.getenv("PROXI_TOOL_PARALLELISM", "16")))
 
                                 async def exec_one(
                                     tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
@@ -229,33 +336,75 @@ class AgentLoop:
                                     )
                                     tool_start_ns = now_ns()
                                     result = await self._act(state, temp_decision, turn)
+                                    # Merge outer elapsed_ms into the result dict so
+                                    # _observe() can report timing even for parallel runs.
+                                    outer_ms = elapsed_ms(tool_start_ns)
+                                    result["metadata"] = {
+                                        **(result.get("metadata") or {}),
+                                        "elapsed_ms": outer_ms,
+                                    }
                                     return {
                                         "tool_call_id": tool_call_id,
                                         "name": tool_name,
                                         "result": result,
-                                        "elapsed_ms": elapsed_ms(tool_start_ns),
+                                        "elapsed_ms": outer_ms,
                                     }
 
-                                action_results = []
-                                if can_parallelize:
-                                    semaphore = asyncio.Semaphore(
-                                        parallel_limit)
+                                # Partition into safe (parallelisable) and unsafe (sequential).
+                                # Pass args so call_tool delegation can check the inner tool.
+                                safe_indices = [
+                                    i for i, (_, name, args) in enumerate(parsed_calls)
+                                    if self.tool_registry.is_parallel_safe(name, args)
+                                ]
+                                unsafe_indices = [
+                                    i for i, (_, name, args) in enumerate(parsed_calls)
+                                    if not self.tool_registry.is_parallel_safe(name, args)
+                                ]
+
+                                results_by_index: dict[int, dict[str, Any]] = {}
+
+                                if parallel_limit > 1 and safe_indices:
+                                    semaphore = asyncio.Semaphore(parallel_limit)
 
                                     async def run_with_limit(
-                                        tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
-                                    ) -> dict[str, Any]:
+                                        idx: int, tool_call_id: str, tool_name: str, tool_args: dict[str, Any]
+                                    ) -> tuple[int, dict[str, Any]]:
                                         async with semaphore:
-                                            return await exec_one(tool_call_id, tool_name, tool_args)
+                                            return idx, await exec_one(tool_call_id, tool_name, tool_args)
 
-                                    tasks = [
+                                    safe_tasks = [
                                         asyncio.create_task(run_with_limit(
-                                            tool_call_id, tool_name, tool_args))
-                                        for tool_call_id, tool_name, tool_args in parsed_calls
+                                            i, *parsed_calls[i]))
+                                        for i in safe_indices
                                     ]
-                                    action_results = await asyncio.gather(*tasks)
+                                    # Timeout: max individual tool timeout + 5 s buffer.
+                                    gather_timeout = max(
+                                        (getattr(self.tool_registry.get(parsed_calls[i][1]), "_timeout", 30)
+                                         for i in safe_indices),
+                                        default=30,
+                                    ) + 5.0
+                                    try:
+                                        gathered = await asyncio.wait_for(
+                                            asyncio.gather(*safe_tasks, return_exceptions=True),
+                                            timeout=gather_timeout,
+                                        )
+                                    except asyncio.TimeoutError:
+                                        gathered = []
+                                        for t in safe_tasks:
+                                            t.cancel()
+                                    for item in gathered:
+                                        if isinstance(item, Exception):
+                                            continue
+                                        idx, r = item
+                                        results_by_index[idx] = r
                                 else:
-                                    for tool_call_id, tool_name, tool_args in parsed_calls:
-                                        action_results.append(await exec_one(tool_call_id, tool_name, tool_args))
+                                    for i in safe_indices:
+                                        results_by_index[i] = await exec_one(*parsed_calls[i])
+
+                                for i in unsafe_indices:
+                                    results_by_index[i] = await exec_one(*parsed_calls[i])
+
+                                action_results = [results_by_index[i] for i in range(len(parsed_calls))]
 
                                 act_ms += sum(float(r.get("elapsed_ms", 0.0))
                                               for r in action_results)
@@ -336,6 +485,26 @@ class AgentLoop:
                                     )
                                 )
 
+                        # Inject skill hint if many tool calls were made this turn (transient)
+                        _skill_hint_threshold = int(
+                            os.getenv("PROXI_MEMORY_SKILL_HINT_THRESHOLD", "6")
+                        )
+                        _skill_hint_injected = False
+                        if (
+                            decision.type == DecisionType.TOOL_CALL
+                            and self.tool_registry.has_tool("save_skill")
+                        ):
+                            _turn_tool_calls = sum(
+                                len(m.tool_calls or [])
+                                for m in state.history
+                                if m.role == "assistant" and m.tool_calls
+                            )
+                            if _turn_tool_calls >= _skill_hint_threshold:
+                                state.history.append(
+                                    Message(role="user", content=_SKILL_HINT)
+                                )
+                                _skill_hint_injected = True
+
                         # REFLECT
                         turn.status = TurnStatus.REFLECTING
                         reflect_start_ns = now_ns()
@@ -345,6 +514,10 @@ class AgentLoop:
                             turn.reflection = reflection
                             self.logger.debug(
                                 "reflection", turn=state.current_turn, reflection=reflection)
+
+                        # Remove transient skill hint
+                        if _skill_hint_injected and state.history and state.history[-1].content == _SKILL_HINT:
+                            state.history.pop()
 
                         turn.status = TurnStatus.COMPLETED
 
@@ -402,6 +575,28 @@ class AgentLoop:
                                         break
                         except Exception:
                             pass  # never let recovery logic crash the loop
+
+                        # Reactive compaction: if the error is a context-length
+                        # overflow, compact and retry the turn instead of failing.
+                        if self.compactor is not None and _is_context_length_error(e):
+                            try:
+                                compact_result = await self.compactor.force_compact(
+                                    state,
+                                    current_tokens=self.compactor.context_window,
+                                )
+                                if compact_result.compaction_triggered:
+                                    self.logger.info(
+                                        "reactive_compaction",
+                                        turn=state.current_turn,
+                                        from_tokens=compact_result.original_tokens,
+                                    )
+                                    turn.status = TurnStatus.PENDING
+                                    turn.error = None
+                                    continue  # retry this turn
+                            except Exception as compact_err:
+                                self.logger.error(
+                                    "reactive_compaction_failed", error=str(compact_err)
+                                )
 
                         if not self.reflector.should_retry(state, turn):
                             state.status = AgentStatus.FAILED
@@ -473,7 +668,7 @@ class AgentLoop:
         return state
 
     async def _decide(
-        self, state: AgentState, *, emit_stream: bool = False
+        self, state: AgentState, *, emit_stream: bool = False, reasoning_effort: str = "minimal",
     ) -> tuple[ModelDecision, dict[str, int]]:
         """Make a decision based on current state."""
         tools = self.tool_registry.to_specs()
@@ -491,6 +686,7 @@ class AgentLoop:
         decision, usage = await self.planner.decide(
             state, tools, agents, stream_callback=stream_cb,
             deferred_tool_count=deferred_count, deferred_specs=deferred_specs,
+            reasoning_effort=reasoning_effort,
         )
         return decision, usage
 
@@ -509,6 +705,44 @@ class AgentLoop:
                 return await self._handle_ask_user_question(
                     state, tool_call_id, arguments, turn
                 )
+
+            # Block write tools in plan mode (cache-safe: schemas unchanged, blocked at runtime).
+            # Two conditions: hardcoded frozenset (backward compat) OR read_only=False on the
+            # tool object (auto-blocks new write tools without frozenset edits).
+            # manage_plan is explicitly allowed even though it has read_only=False.
+            if state.plan_mode:
+                tool_obj = self.tool_registry.get(tool_name)
+                blocked_by_flag = (
+                    getattr(tool_obj, "read_only", True) is False
+                    and tool_name != "manage_plan"
+                )
+                blocked_by_name = tool_name in _PLAN_MODE_WRITE_BLOCKED_TOOLS
+                plan_mode_blocked = blocked_by_flag or blocked_by_name
+            else:
+                plan_mode_blocked = False
+            if plan_mode_blocked:
+                if self.emitter:
+                    self.emitter.emit({
+                        "type": "tool_start",
+                        "tool": tool_name,
+                        "arguments": arguments,
+                    })
+                    self.emitter.emit({
+                        "type": "tool_done",
+                        "tool": tool_name,
+                        "success": False,
+                        "error": "Plan mode: write operations are not allowed during planning. "
+                                 "Use manage_plan to write the plan, then the user can accept it.",
+                    })
+                return {
+                    "type": "tool_call",
+                    "tool": tool_name,
+                    "success": False,
+                    "output": "",
+                    "error": "Plan mode: write operations are not allowed during planning. "
+                             "Use manage_plan to write the plan, then the user can accept it.",
+                    "metadata": {},
+                }
 
             self.logger.info("tool_call", tool=tool_name,
                              turn=turn.turn_number)
@@ -758,11 +992,13 @@ class AgentLoop:
         result_type = action_result.get("type")
 
         if result_type == "tool_call":
+            elapsed_ms = (action_result.get("metadata") or {}).get("elapsed_ms", 0)
+            timing = f" (took {elapsed_ms / 1000:.1f}s)" if elapsed_ms > 3000 else ""
             if action_result.get("success"):
-                return f"Tool '{action_result.get('tool')}' executed successfully:\n{action_result.get('output', '')}"
+                return f"Tool '{action_result.get('tool')}' executed successfully{timing}:\n{action_result.get('output', '')}"
             else:
                 err = action_result.get('error') or action_result.get('output') or 'Unknown error'
-                return f"Tool '{action_result.get('tool')}' failed: {err}"
+                return f"Tool '{action_result.get('tool')}' failed{timing}: {err}"
 
         elif result_type == "respond":
             return action_result.get("content", "")

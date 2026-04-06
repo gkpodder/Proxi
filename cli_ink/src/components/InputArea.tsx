@@ -4,7 +4,9 @@ import TextInput from "ink-text-input";
 import { theme } from "../theme.js";
 
 type Props = {
-  onSubmit: (task: string, provider: "openai" | "anthropic", maxTurns: number) => void;
+  onSubmit: (task: string, provider: string, maxTurns: number) => void;
+  /** Active gateway LLM provider label (e.g. openai, anthropic). */
+  activeProvider?: string;
   onCommitStreaming: () => void;
   disabled: boolean;
   bridgeReady: boolean;
@@ -12,6 +14,7 @@ type Props = {
   onSwitchAgent?: () => void;
   onOpenCommandPalette?: () => void;
   inputHistory?: string[];
+  onEscapeEmpty?: () => void;
 };
 
 export function InputArea({
@@ -23,6 +26,8 @@ export function InputArea({
   onSwitchAgent,
   onOpenCommandPalette,
   inputHistory = [],
+  onEscapeEmpty,
+  activeProvider = "openai",
 }: Props) {
   const [value, setValue] = useState("");
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -38,15 +43,18 @@ export function InputArea({
       return;
     }
     onCommitStreaming();
-    onSubmit(task, "openai", 50);
+    onSubmit(task, activeProvider, 50);
     setValue("");
     setHistoryIndex(-1);
-  }, [value, onSubmit, onCommitStreaming, onSwitchAgent]);
+  }, [value, onSubmit, onCommitStreaming, onSwitchAgent, activeProvider]);
 
   const canInput = (bridgeReady || inputAllowedOverride) && !disabled;
 
   useInput((input, key) => {
-    if (key.escape) return;
+    if (key.escape) {
+      if (value === "" && onEscapeEmpty) onEscapeEmpty();
+      return;
+    }
     if (!canInput) return;
     if (value === "" && input === "/" && onOpenCommandPalette) {
       onOpenCommandPalette();

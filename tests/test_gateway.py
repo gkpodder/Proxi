@@ -932,18 +932,18 @@ class TestLaneSseAttachment:
             ),
             budget=LaneBudget(),
         )
-        sse = HttpSseReplyChannel(destination="sse:work/main")
+        sse = HttpSseReplyChannel(destination="sse:work/main:tui")
         bridge = HttpFormBridge(sse)
-        lane.attach_sse(sse, bridge)
-        assert lane._sse_channel is sse
+        lane.attach_sse(sse, "tui", bridge)
+        assert lane._sse_channels.get("tui") is sse
         assert lane._form_bridge is bridge
 
-        lane.detach_sse()
-        assert lane._sse_channel is None
+        lane.detach_sse(sse, "tui")
+        assert "tui" not in lane._sse_channels
         assert lane._form_bridge is None
 
     def test_stale_detach_does_not_clear_new_attachment(self, tmp_path: Path) -> None:
-        """Older SSE stream teardown must not detach the latest stream."""
+        """Older SSE stream teardown must not detach the latest stream for the same subscriber."""
         config = _make_config(tmp_path)
         from proxi.gateway.lanes.lane import AgentLane
 
@@ -964,21 +964,21 @@ class TestLaneSseAttachment:
             budget=LaneBudget(),
         )
 
-        sse_old = HttpSseReplyChannel(destination="sse:work/main:old")
+        sse_old = HttpSseReplyChannel(destination="sse:work/main:tui:old")
         bridge_old = HttpFormBridge(sse_old)
-        lane.attach_sse(sse_old, bridge_old)
+        lane.attach_sse(sse_old, "tui", bridge_old)
 
-        sse_new = HttpSseReplyChannel(destination="sse:work/main:new")
+        sse_new = HttpSseReplyChannel(destination="sse:work/main:tui:new")
         bridge_new = HttpFormBridge(sse_new)
-        lane.attach_sse(sse_new, bridge_new)
+        lane.attach_sse(sse_new, "tui", bridge_new)
 
         # Simulate old stream's finally block running late.
-        lane.detach_sse(sse_old)
-        assert lane._sse_channel is sse_new
+        lane.detach_sse(sse_old, "tui")
+        assert lane._sse_channels.get("tui") is sse_new
         assert lane._form_bridge is bridge_new
 
-        lane.detach_sse(sse_new)
-        assert lane._sse_channel is None
+        lane.detach_sse(sse_new, "tui")
+        assert "tui" not in lane._sse_channels
         assert lane._form_bridge is None
 
 

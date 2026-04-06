@@ -13,7 +13,7 @@ from typing import Any
 import uvicorn
 import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -23,6 +23,7 @@ from proxi.cli.main import (
     setup_sub_agents,
     setup_tools,
 )
+from proxi.core.compactor import ContextCompactor
 from proxi.core.loop import AgentLoop
 from proxi.core.state import WorkspaceConfig
 from proxi.gateway.channels.cron import CronRegistry, _parse_cron
@@ -51,6 +52,7 @@ from proxi.gateway.router import EventRouter
 from proxi.interaction.tool import get_ask_user_question_spec
 from proxi.llm.model_registry import (
     DEFAULT_MODELS,
+    get_context_window,
     get_model_limits_by_provider,
     get_supported_models_by_provider,
 )
@@ -58,7 +60,7 @@ from proxi.observability.logging import get_logger, init_log_manager
 from proxi.security.key_store import get_user_profile
 from proxi.tools.coding import register_coding_tools
 from proxi.tools.workspace_tools import ManagePlanTool, ManageTodosTool, ReadSoulTool
-from proxi.workspace import WorkspaceError, WorkspaceManager
+from proxi.workspace import AgentInfo, WorkspaceError, WorkspaceManager
 
 logger = get_logger(__name__)
 
@@ -70,19 +72,26 @@ router: EventRouter
 lane_manager: LaneManager | None = None
 heartbeat_mgr: HeartbeatManager
 scheduler = AsyncIOScheduler()
+memory_manager: Any | None = None  # MemoryManager, initialised in lifespan
 
 SUPPORTED_LLM_MODELS: dict[str, list[str]] = get_supported_models_by_provider()
-LLM_MODEL_LIMITS: dict[str, list[dict[str, int | str]]] = get_model_limits_by_provider()
+LLM_MODEL_LIMITS: dict[str, list[dict[str, int | str]]
+                       ] = get_model_limits_by_provider()
 DEFAULT_LLM_MODELS: dict[str, str] = dict(DEFAULT_MODELS)
 llm_provider: str = "openai"
 llm_model: str = DEFAULT_LLM_MODELS["openai"]
 
-# MCP adapters loaded once at startup; their tools are injected into each lane.
+# MCP-type integration adapters loaded once at startup; injected into each lane.
 _mcp_adapters: list[Any] = []
-_mcp_tools: list[Any] = []           # live (always-loaded) MCP tools
-_mcp_deferred_tools: list[Any] = []  # deferred MCP tools (loaded via search_tools)
-_last_mcp_signature: str | None = None
-_mcp_refresh_lock = asyncio.Lock()
+_integration_tools: list[Any] = []           # live (always-loaded) integration tools
+# deferred integration tools (loaded via search_tools)
+_integration_deferred_tools: list[Any] = []
+_last_integration_signature: str | None = None
+_integration_refresh_lock = asyncio.Lock()
+
+# CLI tools loaded once at startup; share the same lane injection as integration tools.
+_cli_tools: list[Any] = []           # live CLI tools
+_cli_deferred_tools: list[Any] = []  # deferred CLI tools (found via call_tool)
 
 # Global working directory fallback (env var / POST /v1/working-dir with no agent).
 _working_dir: Path = Path(os.environ.get("PROXI_WORKING_DIR", ".")).resolve()
@@ -98,6 +107,19 @@ def _workspace_root() -> Path:
     if env:
         return Path(env).expanduser().resolve()
     return Path.home() / ".proxi"
+
+
+def _purge_all_plans(workspace_root: Path) -> None:
+    """Delete all files inside every agents/{agent_id}/plans/ directory.
+
+    Plans are ephemeral: they should not survive a gateway restart or crash.
+    """
+    import glob as _glob
+    for plan_file in _glob.glob(str(workspace_root / "agents" / "*" / "plans" / "*")):
+        try:
+            Path(plan_file).unlink(missing_ok=True)
+        except Exception:
+            pass
 
 
 def _reload_gateway_config() -> None:
@@ -121,13 +143,15 @@ def _gateway_config_path() -> Path:
 def _load_gateway_raw_config() -> dict[str, Any]:
     path = _gateway_config_path()
     if not path.exists():
-        raise HTTPException(status_code=404, detail=f"gateway.yml not found at {path}")
+        raise HTTPException(
+            status_code=404, detail=f"gateway.yml not found at {path}")
 
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if raw is None:
         raw = {}
     if not isinstance(raw, dict):
-        raise HTTPException(status_code=500, detail="gateway.yml must be a YAML mapping")
+        raise HTTPException(
+            status_code=500, detail="gateway.yml must be a YAML mapping")
 
     if not isinstance(raw.get("agents"), dict):
         raw["agents"] = {}
@@ -173,69 +197,102 @@ def _resolve_model(provider: str, model: str | None) -> str:
         return DEFAULT_LLM_MODELS[provider]
 
     allowed = SUPPORTED_LLM_MODELS.get(provider, [])
-    if requested not in allowed:
+    # Empty allowed list means models are user-defined (e.g. vllm) — skip validation.
+    if allowed and requested not in allowed:
         raise ValueError(f"Unsupported model for {provider}: {requested}")
     return requested
 
 
-async def _refresh_mcp_tools() -> None:
-    """Reload MCP tools when the enabled-MCP set has changed."""
-    global _mcp_adapters, _mcp_tools, _mcp_deferred_tools, _last_mcp_signature
+async def _refresh_integration_tools() -> None:
+    """Reload MCP and CLI integration tools when config or enable flags change."""
+    global _mcp_adapters, _integration_tools, _integration_deferred_tools, _last_integration_signature
 
-    no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
-    if no_mcp:
-        return
-
-    async with _mcp_refresh_lock:
-        from proxi.cli.main import load_mcp_config
-        from proxi.security.key_store import get_enabled_mcps
+    async with _integration_refresh_lock:
+        from proxi.cli.main import load_integrations_config
+        from proxi.security.key_store import get_enabled_integrations
 
         sig_payload = {
-            "enabled": sorted(get_enabled_mcps()),
-            "config": load_mcp_config(),
+            "enabled": sorted(get_enabled_integrations()),
+            "config": load_integrations_config(),
         }
         sig = hashlib.sha256(
             json.dumps(sig_payload, sort_keys=True,
                        separators=(",", ":")).encode()
         ).hexdigest()
-        if sig == _last_mcp_signature:
+        if sig == _last_integration_signature:
             return
-        _last_mcp_signature = sig
+        _last_integration_signature = sig
 
-        for adapter in _mcp_adapters:
+        no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
+        if not no_mcp:
+            for adapter in _mcp_adapters:
+                try:
+                    await asyncio.wait_for(adapter.close(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("mcp_close_timeout")
+                except Exception as exc:
+                    logger.warning("mcp_close_error", error=str(exc))
+            _mcp_adapters.clear()
+            _integration_tools.clear()
+            _integration_deferred_tools.clear()
+
             try:
-                await asyncio.wait_for(adapter.close(), timeout=5.0)
-            except asyncio.TimeoutError:
-                logger.warning("mcp_close_timeout")
+                from proxi.tools.registry import ToolRegistry as _TR
+
+                tmp_registry = _TR()
+                _mcp_adapters[:] = await asyncio.wait_for(
+                    auto_load_mcp_servers(tmp_registry), timeout=30.0
+                )
+                _integration_tools[:] = list(tmp_registry._tools.values())
+                _integration_deferred_tools[:] = list(
+                    tmp_registry._deferred_tools.values())
+                logger.info(
+                    "integrations_refreshed",
+                    adapters=len(_mcp_adapters),
+                    tools=len(_integration_tools),
+                    deferred=len(_integration_deferred_tools),
+                )
             except Exception as exc:
-                logger.warning("mcp_close_error", error=str(exc))
-        _mcp_adapters.clear()
-        _mcp_tools.clear()
-        _mcp_deferred_tools.clear()
+                logger.warning("integration_refresh_error", error=str(exc))
+        else:
+            for adapter in _mcp_adapters:
+                try:
+                    await asyncio.wait_for(adapter.close(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("mcp_close_timeout")
+                except Exception as exc:
+                    logger.warning("mcp_close_error", error=str(exc))
+            _mcp_adapters.clear()
+            _integration_tools.clear()
+            _integration_deferred_tools.clear()
 
-        try:
-            from proxi.tools.registry import ToolRegistry as _TR
-
-            tmp_registry = _TR()
-            _mcp_adapters[:] = await asyncio.wait_for(
-                auto_load_mcp_servers(tmp_registry), timeout=30.0
-            )
-            _mcp_tools[:] = list(tmp_registry._tools.values())
-            _mcp_deferred_tools[:] = list(tmp_registry._deferred_tools.values())
-            logger.info(
-                "mcp_refreshed",
-                adapters=len(_mcp_adapters),
-                tools=len(_mcp_tools),
-                deferred=len(_mcp_deferred_tools),
-            )
-        except Exception as exc:
-            logger.warning("mcp_refresh_error", error=str(exc))
+        _refresh_cli_tools()
 
         # Existing lanes keep the same AgentLoop + ToolRegistry; refresh replaces
-        # global tool objects and closes old MCP stdio clients — push the new tools
-        # into every active loop so toggles take effect without restarting the gateway.
+        # global tool objects — push the new tools into every active loop so
+        # toggles take effect without restarting the gateway.
         if lane_manager is not None:
-            lane_manager.sync_mcp_tools_to_loops(_mcp_tools, _mcp_deferred_tools)
+            lane_manager.sync_mcp_tools_to_loops(
+                _integration_tools, _integration_deferred_tools)
+            lane_manager.sync_cli_tools_to_loops(
+                _cli_tools, _cli_deferred_tools)
+
+
+def _refresh_cli_tools() -> None:
+    """Load CLI tools from config + key store into global lists."""
+    global _cli_tools, _cli_deferred_tools
+    from proxi.cli.main import build_cli_tool_lists
+
+    live, deferred = build_cli_tool_lists()
+    _cli_tools.clear()
+    _cli_deferred_tools.clear()
+    _cli_tools.extend(live)
+    _cli_deferred_tools.extend(deferred)
+    logger.info(
+        "cli_tools_loaded",
+        live=len(_cli_tools),
+        deferred=len(_cli_deferred_tools),
+    )
 
 
 def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
@@ -247,7 +304,8 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     """
     llm_client = create_llm_client(provider=llm_provider, model=llm_model)
 
-    working_dir = _agent_working_dirs.get(workspace_config.agent_id, _working_dir)
+    working_dir = _agent_working_dirs.get(
+        workspace_config.agent_id, _working_dir)
 
     tool_registry = setup_tools(working_directory=working_dir)
     tool_registry.register_raw_spec(get_ask_user_question_spec())
@@ -257,26 +315,45 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 
     # Register coding tools based on per-agent config
     workspace_manager = WorkspaceManager(root=_workspace_root())
-    agent_config = workspace_manager.read_agent_config(workspace_config.agent_id)
+    agent_config = workspace_manager.read_agent_config(
+        workspace_config.agent_id)
     coding_tier = agent_config.get("tool_sets", {}).get("coding", "live")
-    register_coding_tools(tool_registry, working_dir=working_dir, tier=str(coding_tier))
+    register_coding_tools(
+        tool_registry, working_dir=working_dir, tier=str(coding_tier))
 
     workspace_config.curr_working_dir = str(working_dir)
 
-    for mcp_tool in _mcp_tools:
+    for mcp_tool in _integration_tools:
         tool_registry.register(mcp_tool)
-    for mcp_tool in _mcp_deferred_tools:
+    for mcp_tool in _integration_deferred_tools:
         tool_registry.register_deferred(mcp_tool)
+    for cli_tool in _cli_tools:
+        tool_registry.register(cli_tool)
+    for cli_tool in _cli_deferred_tools:
+        tool_registry.register_deferred(cli_tool)
     if tool_registry.has_deferred_tools():
         from proxi.tools.call_tool_tool import CallToolTool
         tool_registry.register(CallToolTool(tool_registry))
+
+    # Register memory tools if memory is enabled for this agent
+    if memory_manager is not None:
+        _agent_mem_enabled = config.agents.get(workspace_config.agent_id)
+        if _agent_mem_enabled is None or _agent_mem_enabled.memory_enabled:
+            from proxi.tools.memory_tools import SearchMemoryTool, SaveSkillTool, UpdateUserModelTool
+            tool_registry.register(SearchMemoryTool(memory_manager))
+            tool_registry.register(SaveSkillTool(memory_manager))
+            tool_registry.register(UpdateUserModelTool(memory_manager))
 
     no_sub_agents = os.environ.get("PROXI_NO_SUB_AGENTS", "").lower() in (
         "1", "true", "yes",
     )
     sub_agent_manager = None if no_sub_agents else setup_sub_agents(llm_client)
 
-    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "100"))
+    max_turns = int(os.environ.get("PROXI_MAX_TURNS", "500"))
+    compactor = ContextCompactor(
+        llm_client=llm_client,
+        context_window=get_context_window(llm_model),
+    )
     return AgentLoop(
         llm_client=llm_client,
         tool_registry=tool_registry,
@@ -284,6 +361,7 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
         max_turns=max_turns,
         enable_reflection=True,
         workspace=workspace_config,
+        compactor=compactor,
     )
 
 
@@ -293,11 +371,20 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     global config, router, lane_manager, heartbeat_mgr
-    global _mcp_adapters, _mcp_tools
+    global _mcp_adapters, _integration_tools
     global llm_provider, llm_model
+    global memory_manager
 
     workspace_root = _workspace_root()
     WorkspaceManager(root=workspace_root).ensure_global_system_prompt()
+
+    # Initialize memory system
+    from proxi.memory.manager import MemoryManager as _MemoryManager
+    memory_manager = _MemoryManager(
+        memory_dir=workspace_root / "memory",
+        gateway_config_path=workspace_root / "gateway.yml",
+    )
+    memory_manager.init()
 
     config = GatewayConfig.load(workspace_root)
     router = EventRouter(config)
@@ -321,10 +408,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 
-    # Load MCP adapters once so their tools are available to all lanes.
-    await _refresh_mcp_tools()
+    # Load MCP + CLI integration tools once (shared across all lanes).
+    await _refresh_integration_tools()
 
     lane_manager = LaneManager(config, create_loop=_create_agent_loop)
+    lane_manager.discord_broadcast_factory = _discord_channels_for_agent
 
     cron_registry = CronRegistry(config, lane_manager, router)
     cron_registry.load_all(scheduler)
@@ -352,8 +440,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         "gateway_started",
         agents=list(config.agents.keys()),
         sources=list(config.sources.keys()),
-        mcp_tools=len(_mcp_tools),
+        integration_tools=len(_integration_tools),
     )
+
+    # Clean up any plans left over from a previous crash.
+    _purge_all_plans(workspace_root)
 
     yield
 
@@ -366,7 +457,9 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         except Exception as exc:
             logger.warning("mcp_close_error", error=str(exc))
     _mcp_adapters.clear()
-    _mcp_tools.clear()
+    _integration_tools.clear()
+    # Plans are ephemeral — delete them on every shutdown.
+    _purge_all_plans(workspace_root)
     logger.info("gateway_stopped")
 
 
@@ -387,7 +480,8 @@ async def intake(adapter: TelegramAdapter | WhatsAppAdapter | DiscordAdapter, ra
 def _discord_source() -> Any:
     source = config.sources.get("discord")
     if source is None or source.source_type not in ("discord", "channel"):
-        raise HTTPException(status_code=404, detail="Discord source is not configured")
+        raise HTTPException(
+            status_code=404, detail="Discord source is not configured")
     return source
 
 
@@ -406,7 +500,8 @@ def _discord_user_id(raw: dict[str, Any]) -> str:
 
 
 def _sanitize_session_token(value: str, fallback: str) -> str:
-    cleaned = "".join(ch for ch in str(value or "") if ch.isalnum() or ch in ("-", "_"))
+    cleaned = "".join(ch for ch in str(value or "")
+                      if ch.isalnum() or ch in ("-", "_"))
     return cleaned or fallback
 
 
@@ -419,15 +514,37 @@ def _discord_agent_for_channel(source: Any, channel_id: str) -> str:
     return source.target_agent
 
 
+# Tracks channel_id → agent_id for every Discord channel that has sent a message.
+# Populated at runtime so cron/heartbeat/webhook can broadcast back to active channels.
+_discord_active_channels: dict[str, str] = {}
+
+
+def _record_discord_channel(channel_id: str, agent_id: str) -> None:
+    if channel_id:
+        _discord_active_channels[channel_id] = agent_id
+
+
+def _discord_channels_for_agent(agent_id: str) -> list[Any]:
+    """Return DiscordReplyChannel instances for all channels currently mapped to *agent_id*."""
+    from proxi.gateway.channels.discord import DiscordReplyChannel
+    return [
+        DiscordReplyChannel(destination=ch)
+        for ch, ag in _discord_active_channels.items()
+        if ag == agent_id
+    ]
+
+
 def _resolve_discord_session(source: Any, raw: dict[str, Any]) -> str:
     channel_id = _discord_channel_id(raw)
     user_id = _discord_user_id(raw)
 
     agent_id = _discord_agent_for_channel(source, channel_id)
     if agent_id not in config.agents:
-        raise HTTPException(status_code=400, detail=f"Unknown Discord target agent: {agent_id}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown Discord target agent: {agent_id}")
 
-    mode = str(source.extras.get("discord_session_mode", "channel")).strip().lower()
+    mode = str(source.extras.get(
+        "discord_session_mode", "fixed")).strip().lower()
     base_session = str(source.target_session or "").strip()
     agent_default = config.agents[agent_id].default_session
 
@@ -448,9 +565,11 @@ def _set_discord_channel_agent(channel_id: str, agent_id: str) -> None:
     sources = raw["sources"]
     existing = sources.get("discord")
     if existing is None:
-        raise HTTPException(status_code=404, detail="Discord source is not configured")
+        raise HTTPException(
+            status_code=404, detail="Discord source is not configured")
     if not isinstance(existing, dict):
-        raise HTTPException(status_code=500, detail="Discord source config is invalid")
+        raise HTTPException(
+            status_code=500, detail="Discord source config is invalid")
 
     overrides = existing.get("discord_agent_overrides")
     if not isinstance(overrides, dict):
@@ -512,10 +631,12 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
     await verify_discord_signature(request)
     raw_payload = await request.json()
     if not isinstance(raw_payload, dict):
-        raise HTTPException(status_code=400, detail="Discord payload must be an object")
+        raise HTTPException(
+            status_code=400, detail="Discord payload must be an object")
 
     source = _discord_source()
-    command_prefix = str(source.extras.get("discord_command_prefix", "/proxi") or "/proxi")
+    command_prefix = str(source.extras.get(
+        "discord_command_prefix", "/proxi") or "/proxi")
     allow_plain = bool(source.extras.get("discord_allow_plain", False))
 
     event = await DiscordAdapter(
@@ -564,15 +685,19 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
     if action == "switch":
         next_agent_id = str(command.get("agent_id", "")).strip()
         if not next_agent_id:
-            raise HTTPException(status_code=400, detail="switch command requires agent id")
+            raise HTTPException(
+                status_code=400, detail="switch command requires agent id")
         if next_agent_id not in config.agents:
-            raise HTTPException(status_code=404, detail=f"Unknown agent: {next_agent_id}")
+            raise HTTPException(
+                status_code=404, detail=f"Unknown agent: {next_agent_id}")
 
         channel_id = _discord_channel_id(raw_payload)
         if not channel_id:
-            raise HTTPException(status_code=400, detail="Discord channel_id is required for switch")
+            raise HTTPException(
+                status_code=400, detail="Discord channel_id is required for switch")
 
         _set_discord_channel_agent(channel_id, next_agent_id)
+        _record_discord_channel(channel_id, next_agent_id)
         source = _discord_source()
         switched_session_id = _resolve_discord_session(source, raw_payload)
         lane_manager._get_or_create(switched_session_id)
@@ -588,7 +713,8 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
         }
 
     if action != "start":
-        raise HTTPException(status_code=400, detail=f"Unsupported Discord command action: {action}")
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported Discord command action: {action}")
 
     task = str(event.payload.get("text", "")).strip()
     if not task:
@@ -596,8 +722,22 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
         return {"ok": True, "ignored": True, "reason": "empty_task"}
 
     event.session_id = session_id
+    channel_id = _discord_channel_id(raw_payload)
+    agent_id = session_id.split("/", 1)[0]
+    _record_discord_channel(channel_id, agent_id)
     await lane_manager.route(event)
     return {"ok": True, "action": "start", "queued": True, "session_id": session_id}
+
+
+@app.post("/channels/discord/deregister")
+async def discord_deregister(request: Request) -> dict[str, bool]:
+    """Called by the Discord relay on shutdown to stop cron/webhook broadcasts to Discord."""
+    source = config.sources.get("discord")
+    if source is not None:
+        await verify_discord_signature(request)
+    _discord_active_channels.clear()
+    logger.info("discord_active_channels_cleared")
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -613,9 +753,11 @@ async def generic_webhook(source_id: str, request: Request) -> dict[str, bool]:
     try:
         raw_payload = await request.json()
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="Webhook payload must be valid JSON") from exc
+        raise HTTPException(
+            status_code=400, detail="Webhook payload must be valid JSON") from exc
 
-    raw = raw_payload if isinstance(raw_payload, dict) else {"_raw": raw_payload}
+    raw = raw_payload if isinstance(raw_payload, dict) else {
+        "_raw": raw_payload}
 
     event = build_webhook_event(source, raw)
     event.session_id = router.resolve(event)
@@ -658,7 +800,7 @@ class SendRequest(BaseModel):
 
 
 @app.post("/v1/sessions/{session_id:path}/send")
-async def send_to_session(session_id: str, body: SendRequest) -> dict[str, str]:
+async def send_to_session(session_id: str, body: SendRequest, request: Request) -> dict[str, str]:
     """Non-blocking: enqueue a message or form answer, return event_id immediately."""
     if body.form_answer is not None:
         await lane_manager.resume(session_id, form_answer=body.form_answer)
@@ -672,20 +814,24 @@ async def send_to_session(session_id: str, body: SendRequest) -> dict[str, str]:
     if lane is not None and lane.try_resolve_pending_form_with_text(msg):
         return {"event_id": "", "status": "form_answer_injected"}
 
-    # Re-evaluate MCP toggles before each task (mirrors bridge behaviour).
-    await _refresh_mcp_tools()
+    # Re-evaluate integration toggles before each task (mirrors bridge behaviour).
+    await _refresh_integration_tools()
 
-    # Build a lightweight event using the tui source (if configured) or http fallback
-    source_id = "tui"
-    source = config.sources.get(source_id)
-    if source is None:
-        source_id = "http"
+    # Identify the caller: React frontend sends X-Proxi-Source: react.
+    # Otherwise fall back to tui (if configured) or http.
+    proxi_source_header = request.headers.get("X-Proxi-Source", "").strip().lower()
+    if proxi_source_header == "react":
+        source_id = "react"
+    else:
+        source_id = "tui"
+        if config.sources.get(source_id) is None:
+            source_id = "http"
 
     event = GatewayEvent(
         source_id=source_id,
         source_type="http",
         payload={"text": msg},
-        reply_channel=HttpNoopReplyChannel(destination=f"tui:{session_id}"),
+        reply_channel=HttpNoopReplyChannel(destination=f"{source_id}:{session_id}"),
         session_id=session_id,
         priority=0,
     )
@@ -697,8 +843,12 @@ _SSE_KEEPALIVE_INTERVAL = 15  # seconds
 
 
 @app.get("/v1/sessions/{session_id:path}/stream")
-async def stream_session(session_id: str) -> StreamingResponse:
-    """SSE stream of agent output for a session."""
+async def stream_session(session_id: str, subscriber: str = Query(default="sse")) -> StreamingResponse:
+    """SSE stream of agent output for a session.
+
+    ``subscriber`` identifies the client type (e.g. 'tui', 'react') so multiple
+    clients can connect to the same session simultaneously without stomping each other.
+    """
     lane = lane_manager.get_lane(session_id)
     if lane is None:
         try:
@@ -710,9 +860,9 @@ async def stream_session(session_id: str) -> StreamingResponse:
             except Exception:
                 raise HTTPException(status_code=404, detail="Unknown session")
 
-    sse = HttpSseReplyChannel(destination=f"sse:{session_id}")
+    sse = HttpSseReplyChannel(destination=f"sse:{session_id}:{subscriber}")
     form_bridge = HttpFormBridge(sse)
-    lane.attach_sse(sse, form_bridge)
+    lane.attach_sse(sse, subscriber, form_bridge)
 
     await sse.send_event({"type": "ready"})
 
@@ -722,7 +872,7 @@ async def stream_session(session_id: str) -> StreamingResponse:
     await sse.send_event({
         "type": "boot_complete",
         "agentId": agent_id,
-        "sessionId": session_name,
+        "sessionId": session_id,
     })
 
     async def event_generator():
@@ -732,7 +882,7 @@ async def stream_session(session_id: str) -> StreamingResponse:
         except Exception:
             pass
         finally:
-            lane.detach_sse(sse)
+            lane.detach_sse(sse, subscriber)
 
     async def keepalive_generator():
         """Merge data events with periodic SSE comments to keep the connection alive."""
@@ -790,35 +940,38 @@ async def get_lane(session_id: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# MCP management
+# Integration management
 # ---------------------------------------------------------------------------
-@app.get("/v1/mcps")
-async def list_mcps_endpoint() -> dict[str, Any]:
-    """List all MCPs with their enabled/disabled status."""
-    from proxi.security.key_store import list_mcps as _list_mcps
+@app.get("/v1/integrations")
+async def list_integrations_endpoint() -> dict[str, Any]:
+    """List all integrations with their enabled/disabled status."""
+    from proxi.security.key_store import list_integrations as _list_integrations
 
-    records = _list_mcps()
+    records = _list_integrations()
     return {
-        "mcps": [
-            {"name": r.mcp_name, "enabled": r.enabled}
-            for r in sorted(records, key=lambda r: r.mcp_name)
+        "integrations": [
+            {"name": r.integration_name, "enabled": r.enabled}
+            for r in sorted(records, key=lambda r: r.integration_name)
         ]
     }
 
 
-@app.post("/v1/mcps/{mcp_name}/toggle")
-async def toggle_mcp_endpoint(mcp_name: str) -> dict[str, Any]:
-    """Toggle an MCP between enabled and disabled."""
-    from proxi.security.key_store import enable_mcp as _enable_mcp, is_mcp_enabled
+@app.post("/v1/integrations/{integration_name}/toggle")
+async def toggle_integration_endpoint(integration_name: str) -> dict[str, Any]:
+    """Toggle an integration between enabled and disabled."""
+    from proxi.security.key_store import (
+        enable_integration as _enable_integration,
+        is_integration_enabled,
+    )
 
-    currently_enabled = is_mcp_enabled(mcp_name)
+    currently_enabled = is_integration_enabled(integration_name)
     new_state = not currently_enabled
-    _enable_mcp(mcp_name, enabled=new_state)
+    _enable_integration(integration_name, enabled=new_state)
 
-    # Immediately refresh loaded MCP tools so the change takes effect.
-    await _refresh_mcp_tools()
+    # Immediately refresh MCP-type integration tools so the change takes effect.
+    await _refresh_integration_tools()
 
-    return {"name": mcp_name, "enabled": new_state}
+    return {"name": integration_name, "enabled": new_state}
 
 
 # ---------------------------------------------------------------------------
@@ -850,20 +1003,24 @@ async def set_working_dir_endpoint(body: SetWorkingDirRequest) -> dict[str, str]
         raise HTTPException(status_code=400, detail="path is required")
     new_dir = Path(raw).expanduser().resolve()
     if not new_dir.exists():
-        raise HTTPException(status_code=400, detail=f"Path does not exist: {new_dir}")
+        raise HTTPException(
+            status_code=400, detail=f"Path does not exist: {new_dir}")
     if not new_dir.is_dir():
-        raise HTTPException(status_code=400, detail=f"Path is not a directory: {new_dir}")
+        raise HTTPException(
+            status_code=400, detail=f"Path is not a directory: {new_dir}")
 
     if body.agent_id:
         _agent_working_dirs[body.agent_id] = new_dir
         if lane_manager is not None:
-            lane_manager.sync_coding_tools_to_agent_loops(body.agent_id, new_dir)
+            lane_manager.sync_coding_tools_to_agent_loops(
+                body.agent_id, new_dir)
     else:
         _working_dir = new_dir
         if lane_manager is not None:
             lane_manager.sync_coding_tools_to_loops(new_dir)
 
-    logger.info("working_dir_changed", path=str(new_dir), agent_id=body.agent_id)
+    logger.info("working_dir_changed", path=str(
+        new_dir), agent_id=body.agent_id)
     return {"path": str(new_dir)}
 
 
@@ -940,6 +1097,99 @@ async def delete_agent_endpoint(agent_id: str) -> dict[str, Any]:
     _reload_gateway_config()
     logger.info("agent_deleted_via_api", agent_id=aid)
     return {"status": "deleted", "agent_id": aid}
+
+
+@app.post("/v1/sessions/{session_id:path}/branch")
+async def branch_session_endpoint(session_id: str) -> dict[str, Any]:
+    """Clone the agent owning session_id into a new agent, seeding it with the current history.
+
+    The new agent copies Soul.md and config.yaml from the parent and inherits
+    the session's history.jsonl so the LLM prompt cache hits immediately.
+
+    Returns: { agent_id, session_id }
+    """
+    if lane_manager is None:
+        raise HTTPException(status_code=503, detail="Gateway not ready")
+    parts = session_id.split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(
+            status_code=400, detail="Invalid session_id format")
+    agent_id, session_name = parts
+    agent_cfg = config.agents.get(agent_id)
+    if agent_cfg is None:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown agent: {agent_id}")
+    source_history_path = config.session_history_path(agent_id, session_name)
+    working_dir_str = str(
+        _agent_working_dirs[agent_id]) if agent_id in _agent_working_dirs else None
+    wm = WorkspaceManager(root=_workspace_root())
+    try:
+        new_agent = wm.branch_agent(
+            parent_agent_id=agent_id,
+            source_history_path=source_history_path,
+            default_session=agent_cfg.default_session,
+            working_dir=working_dir_str,
+        )
+    except WorkspaceError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _reload_gateway_config()
+    new_session_id = f"{new_agent.agent_id}/{agent_cfg.default_session}"
+    lane_manager._get_or_create(new_session_id)
+    logger.info("agent_branched", parent=agent_id,
+                new_agent=new_agent.agent_id)
+    return {"agent_id": new_agent.agent_id, "session_id": new_session_id}
+
+
+@app.post("/v1/sessions/{session_id:path}/btw")
+async def create_btw_session_endpoint(session_id: str) -> dict[str, Any]:
+    """Create a side-session on the same agent that inherits the current history.
+
+    The new session copies the parent's history.jsonl so the LLM prompt cache
+    is warm. The original session is untouched.
+
+    Returns: { btw_session_id, return_session_id }
+    """
+    if lane_manager is None:
+        raise HTTPException(status_code=503, detail="Gateway not ready")
+    parts = session_id.split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(
+            status_code=400, detail="Invalid session_id format")
+    agent_id, session_name = parts
+    if agent_id not in config.agents:
+        raise HTTPException(
+            status_code=404, detail=f"Unknown agent: {agent_id}")
+    from datetime import datetime, timezone
+    btw_name = "btw-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    btw_session_id = f"{agent_id}/{btw_name}"
+    source_history_path = config.session_history_path(agent_id, session_name)
+    wm = WorkspaceManager(root=_workspace_root())
+    wm.create_named_session(
+        AgentInfo(agent_id=agent_id, path=wm.agents_dir / agent_id),
+        btw_name,
+        source_history_path=source_history_path,
+    )
+    lane_manager._get_or_create(btw_session_id)
+    logger.info("btw_session_created", agent=agent_id,
+                btw_session=btw_session_id, return_session=session_id)
+    return {"btw_session_id": btw_session_id, "return_session_id": session_id}
+
+
+@app.delete("/v1/sessions/{session_id:path}")
+async def delete_session_endpoint(session_id: str) -> dict[str, Any]:
+    """Stop the lane for session_id and delete its directory from disk."""
+    if lane_manager is None:
+        raise HTTPException(status_code=503, detail="Gateway not ready")
+    parts = session_id.split("/", 1)
+    if len(parts) != 2:
+        raise HTTPException(
+            status_code=400, detail="Invalid session_id format")
+    agent_id, session_name = parts
+    await lane_manager.remove_lane(session_id)
+    wm = WorkspaceManager(root=_workspace_root())
+    wm.delete_session(agent_id, session_name)
+    logger.info("session_deleted", session_id=session_id)
+    return {"status": "deleted", "session_id": session_id}
 
 
 class SwitchAgentRequest(BaseModel):
@@ -1093,9 +1343,11 @@ async def upsert_cron_job_endpoint(source_id: str, body: CronJobUpsertRequest) -
     if not target_agent:
         raise HTTPException(status_code=400, detail="target_agent is required")
     if target_agent not in config.agents:
-        raise HTTPException(status_code=400, detail=f"Unknown agent: {target_agent}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown agent: {target_agent}")
     if body.priority < 0 or body.priority > 5:
-        raise HTTPException(status_code=400, detail="priority must be between 0 and 5")
+        raise HTTPException(
+            status_code=400, detail="priority must be between 0 and 5")
 
     try:
         _parse_cron(schedule)
@@ -1148,9 +1400,11 @@ async def pause_cron_job_endpoint(source_id: str, body: CronPauseRequest) -> dic
     sources = raw["sources"]
     existing = sources.get(sid)
     if existing is None:
-        raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
+        raise HTTPException(
+            status_code=404, detail=f"Cron source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "cron":
-        raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+        raise HTTPException(
+            status_code=400, detail=f"Source is not a cron job: {sid}")
 
     existing["paused"] = bool(body.paused)
     sources[sid] = existing
@@ -1170,14 +1424,15 @@ async def delete_cron_job_endpoint(source_id: str) -> dict[str, Any]:
     sources = raw["sources"]
     existing = sources.get(sid)
     if existing is None:
-        raise HTTPException(status_code=404, detail=f"Cron source not found: {sid}")
+        raise HTTPException(
+            status_code=404, detail=f"Cron source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "cron":
-        raise HTTPException(status_code=400, detail=f"Source is not a cron job: {sid}")
+        raise HTTPException(
+            status_code=400, detail=f"Source is not a cron job: {sid}")
 
     del sources[sid]
     _persist_and_reload_gateway_config(raw)
     return {"status": "deleted", "source_id": sid}
-
 
 
 # Webhook Sources
@@ -1220,11 +1475,14 @@ async def upsert_webhook_endpoint(source_id: str, body: WebhookUpsertRequest) ->
     if not target_agent:
         raise HTTPException(status_code=400, detail="target_agent is required")
     if not secret_env:
-        raise HTTPException(status_code=400, detail="secret_env is required for webhook security")
+        raise HTTPException(
+            status_code=400, detail="secret_env is required for webhook security")
     if target_agent not in config.agents:
-        raise HTTPException(status_code=400, detail=f"Unknown agent: {target_agent}")
+        raise HTTPException(
+            status_code=400, detail=f"Unknown agent: {target_agent}")
     if body.priority < 0 or body.priority > 5:
-        raise HTTPException(status_code=400, detail="priority must be between 0 and 5")
+        raise HTTPException(
+            status_code=400, detail="priority must be between 0 and 5")
 
     raw = _load_gateway_raw_config()
     sources = raw["sources"]
@@ -1239,7 +1497,7 @@ async def upsert_webhook_endpoint(source_id: str, body: WebhookUpsertRequest) ->
     existing["target_agent"] = target_agent
     existing["priority"] = int(body.priority)
     existing["paused"] = bool(body.paused)
-    
+
     if body.prompt_template:
         existing["prompt_template"] = body.prompt_template
     elif "prompt_template" in existing:
@@ -1279,9 +1537,11 @@ async def pause_webhook_endpoint(source_id: str, body: WebhookPauseRequest) -> d
     sources = raw["sources"]
     existing = sources.get(sid)
     if existing is None:
-        raise HTTPException(status_code=404, detail=f"Webhook source not found: {sid}")
+        raise HTTPException(
+            status_code=404, detail=f"Webhook source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "webhook":
-        raise HTTPException(status_code=400, detail=f"Source is not a webhook: {sid}")
+        raise HTTPException(
+            status_code=400, detail=f"Source is not a webhook: {sid}")
 
     existing["paused"] = bool(body.paused)
     sources[sid] = existing
@@ -1301,9 +1561,11 @@ async def delete_webhook_endpoint(source_id: str) -> dict[str, Any]:
     sources = raw["sources"]
     existing = sources.get(sid)
     if existing is None:
-        raise HTTPException(status_code=404, detail=f"Webhook source not found: {sid}")
+        raise HTTPException(
+            status_code=404, detail=f"Webhook source not found: {sid}")
     if not isinstance(existing, dict) or existing.get("type") != "webhook":
-        raise HTTPException(status_code=400, detail=f"Source is not a webhook: {sid}")
+        raise HTTPException(
+            status_code=400, detail=f"Source is not a webhook: {sid}")
 
     del sources[sid]
     _persist_and_reload_gateway_config(raw)
@@ -1323,6 +1585,114 @@ async def abort_session(session_id: str) -> dict[str, str]:
     return {"status": "aborted"}
 
 
+@app.post("/v1/sessions/{session_id:path}/plan/accept")
+async def accept_plan(session_id: str) -> dict[str, str]:
+    """Accept the current plan: save to plans/ dir, exit plan mode, and auto-execute."""
+    import re
+    from datetime import datetime
+
+    lane = lane_manager.get_lane(session_id) if lane_manager else None
+    if lane is None:
+        raise HTTPException(status_code=404, detail="Lane not found")
+    if lane._state is None or lane._state.workspace is None:
+        raise HTTPException(status_code=400, detail="No active session workspace")
+
+    # Read from active_plan_path (plans/in-progress.md) if set, else session plan.md
+    _pfile = lane._state.workspace.active_plan_path or lane._state.workspace.plan_path
+    plan_path = Path(_pfile)
+    if not plan_path.exists() or plan_path.stat().st_size == 0:
+        raise HTTPException(status_code=400, detail="No plan to accept")
+
+    plan_content = plan_path.read_text(encoding="utf-8")
+
+    # Derive a slug from the first # heading, fallback to "plan"
+    slug = "plan"
+    for line in plan_content.splitlines():
+        heading = line.lstrip("#").strip()
+        if heading:
+            slug = re.sub(r"[^a-z0-9]+", "-", heading.lower())[:40].strip("-")
+            break
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    workspace_root = Path(lane._state.workspace.workspace_root)
+    agent_id = lane._state.workspace.agent_id
+    plans_dir = workspace_root / "agents" / agent_id / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    saved_path = plans_dir / f"{timestamp}_{slug}.md"
+
+    # Rename in-progress.md → timestamped file (atomic on same filesystem)
+    try:
+        plan_path.rename(saved_path)
+    except OSError:
+        saved_path.write_text(plan_content, encoding="utf-8")
+        plan_path.unlink(missing_ok=True)
+
+    # Exit plan mode and clear the active plan path; keep reasoning_effort at "medium"
+    # for the execution run (complex plan → deserves better reasoning throughout).
+    lane._state.plan_mode = False
+    lane._state.reasoning_effort = "medium"
+    lane._state.workspace.active_plan_path = None
+    lane.workspace_config.active_plan_path = None
+
+    # Inject plan content as the next user turn so the agent auto-executes
+    execute_message = f"Execute the following plan:\n\n{plan_content}"
+
+    if lane._sse_channels:
+        await lane._broadcast_sse({
+            "type": "status_update",
+            "label": "Executing plan",
+            "status": "running",
+            "tui_abortable": True,
+        })
+
+    # Route the execution message through the lane (async background task)
+    event = GatewayEvent(
+        source_id="tui",
+        source_type="http",
+        payload={"text": execute_message},
+    )
+    asyncio.create_task(lane._dispatch(event))
+
+    return {"status": "accepted", "saved_to": str(saved_path)}
+
+
+@app.post("/v1/sessions/{session_id:path}/plan/reject")
+async def reject_plan(session_id: str) -> dict[str, str]:
+    """Reject the current plan: clear plan.md and exit plan mode."""
+    lane = lane_manager.get_lane(session_id) if lane_manager else None
+    if lane is None:
+        raise HTTPException(status_code=404, detail="Lane not found")
+    if lane._state is None or lane._state.workspace is None:
+        raise HTTPException(status_code=400, detail="No active session workspace")
+
+    # Delete in-progress.md (plans/ dir) if it exists, otherwise clear session plan.md
+    _pfile = lane._state.workspace.active_plan_path or lane._state.workspace.plan_path
+    plan_path = Path(_pfile)
+    try:
+        plan_path.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    lane._state.plan_mode = False
+    lane._state.reasoning_effort = "minimal"
+    lane._state.workspace.active_plan_path = None
+    lane.workspace_config.active_plan_path = None
+
+    if lane._sse_channels:
+        await lane._broadcast_sse({
+            "type": "text_stream",
+            "content": "Plan rejected.",
+        })
+        await lane._broadcast_sse({
+            "type": "status_update",
+            "label": "Plan rejected",
+            "status": "done",
+            "tui_abortable": False,
+        })
+
+    return {"status": "rejected"}
+
+
 @app.post("/v1/sessions/{session_id:path}/clear-history")
 async def clear_session_history_endpoint(session_id: str) -> dict[str, str]:
     """Truncate session ``history.jsonl`` and reset the lane (system prompt unchanged)."""
@@ -1338,12 +1708,14 @@ async def get_session_stats(session_id: str) -> dict[str, Any]:
     """Return token and turn usage stats for an active session lane."""
     lane = lane_manager.get_lane(session_id)
     if lane is None:
-        raise HTTPException(status_code=404, detail="No active lane for this session")
+        raise HTTPException(
+            status_code=404, detail="No active lane for this session")
     b = lane.budget
     return {
         "tokens_used": b.tokens_used,
         "token_budget": b.token_budget,
         "context_window": b.context_window,
+        "compaction_threshold": b.compaction_threshold,
         "turns_used": b.turns_used,
         "max_turns": b.max_turns,
     }

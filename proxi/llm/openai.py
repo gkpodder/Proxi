@@ -317,6 +317,15 @@ class OpenAIClient:
         )
         return normalized_model.startswith(reasoning_model_prefixes)
 
+    def _responses_api_reasoning_effort(self, effort: str) -> str:
+        """Map user-facing effort labels to values accepted by the Responses API per model."""
+        e = (effort or "minimal").strip().lower()
+        normalized = self.model.strip().lower()
+        # o1/o3/o4 expose low/medium/high; TUI defaults to "minimal" (GPT-5-style ladder).
+        if normalized.startswith(("o1", "o3", "o4")) and e == "minimal":
+            return "low"
+        return e
+
     def _build_response_create_kwargs(
         self,
         input_items: list[dict[str, Any]],
@@ -325,6 +334,7 @@ class OpenAIClient:
         *,
         stream: bool,
         session_id: str | None,
+        reasoning_effort: str = "minimal",
     ) -> tuple[dict[str, Any], str]:
         """Build shared kwargs for Responses API create calls."""
         kwargs: dict[str, Any] = {
@@ -334,13 +344,15 @@ class OpenAIClient:
         if stream:
             kwargs["stream"] = True
         if self._supports_reasoning_controls():
-            # Keep effort low for reasoning-capable models unless overridden.
-            kwargs["reasoning"] = {"effort": "minimal"}
+            kwargs["reasoning"] = {
+                "effort": self._responses_api_reasoning_effort(reasoning_effort),
+            }
         if system:
             kwargs["instructions"] = system
         if response_tools:
             kwargs["tools"] = response_tools
             kwargs["tool_choice"] = "auto"
+            kwargs["parallel_tool_calls"] = True
         prompt_cache_key = self._build_prompt_cache_key(
             input_items, response_tools, system, session_id=session_id)
         kwargs["prompt_cache_key"] = prompt_cache_key
@@ -353,9 +365,10 @@ class OpenAIClient:
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
         session_id: str | None = None,
+        reasoning_effort: str = "minimal",
     ) -> ModelResponse:
         """Generate a response from OpenAI Responses API."""
-        self.logger.info("llm_call", model=self.model, provider="openai")
+        self.logger.info("llm_call", model=self.model, provider="openai", reasoning_effort=reasoning_effort)
         input_items = self._convert_messages(messages)
         response_tools = (self._convert_tools(tools) if tools else [
         ]) + self._convert_agents_to_tools(agents)
@@ -366,6 +379,7 @@ class OpenAIClient:
             system=system,
             stream=False,
             session_id=session_id,
+            reasoning_effort=reasoning_effort,
         )
 
         response = await self.client.responses.create(**kwargs)
@@ -403,13 +417,13 @@ class OpenAIClient:
         agents: Sequence[SubAgentSpec] | None = None,
         system: str | None = None,
         session_id: str | None = None,
+        reasoning_effort: str = "minimal",
     ) -> AsyncIterator[tuple[str, ModelResponse | None]]:
         """
         Generate a response with streaming. Yields (content_delta, None) for each
         text chunk and ("", response) at the end.
         """
-        self.logger.info("llm_call_stream",
-                         model=self.model, provider="openai")
+        self.logger.info("llm_call_stream", model=self.model, provider="openai", reasoning_effort=reasoning_effort)
         input_items = self._convert_messages(messages)
         response_tools = (self._convert_tools(tools) if tools else [
         ]) + self._convert_agents_to_tools(agents)
@@ -420,6 +434,7 @@ class OpenAIClient:
             system=system,
             stream=True,
             session_id=session_id,
+            reasoning_effort=reasoning_effort,
         )
 
         stream = await self.client.responses.create(**kwargs)

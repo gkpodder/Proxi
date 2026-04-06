@@ -28,6 +28,7 @@ class Planner:
         stream_callback: Callable[[str], Awaitable[None]] | None = None,
         deferred_tool_count: int = 0,
         deferred_specs: list[ToolSpec] | None = None,
+        reasoning_effort: str = "minimal",
     ) -> tuple[ModelDecision, dict[str, int]]:
         """
         Make a decision based on current state.
@@ -70,6 +71,7 @@ class Planner:
                 agents=agents or [],
                 system=payload.system,
                 session_id=session_id,
+                reasoning_effort=reasoning_effort,
             ):
                 if chunk:
                     await stream_callback(chunk)
@@ -82,6 +84,7 @@ class Planner:
                     agents=agents or [],
                     system=payload.system,
                     session_id=session_id,
+                    reasoning_effort=reasoning_effort,
                 )
             return response.decision, response.usage
         else:
@@ -91,5 +94,6 @@ class Planner:
                 agents=agents or [],
                 system=payload.system,
                 session_id=session_id,
+                reasoning_effort=reasoning_effort,
             )
             return response.decision, response.usage

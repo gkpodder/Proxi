@@ -57,7 +57,7 @@ async function gatewayGet(pathname) {
 async function gatewayPost(pathname, body = {}) {
   const response = await fetch(`${gatewayBaseUrl}${pathname}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Proxi-Source": "react" },
     body: JSON.stringify(body),
   });
   const payload = await response.json().catch(() => ({}));
@@ -158,7 +158,7 @@ function createGatewaySessionController(ws) {
 
     try {
       const response = await fetch(
-        `${gatewayBaseUrl}/v1/sessions/${encodeURIComponent(sessionId)}/stream`,
+        `${gatewayBaseUrl}/v1/sessions/${encodeURIComponent(sessionId)}/stream?subscriber=react`,
         { signal: controller.signal }
       );
 
@@ -176,6 +176,19 @@ function createGatewaySessionController(ws) {
         sseBuffer += decoder.decode(value, { stream: true });
         sseBuffer = parseSseChunk(sseBuffer, (eventData) => {
           if (!eventData || eventData.startsWith(":")) return;
+          // Only forward events from this client's own prompts or from broadcast sources.
+          // Events from other interactive channels (tui, discord) are filtered out.
+          try {
+            const evt = JSON.parse(eventData);
+            const sid = evt?.source_id;
+            const stype = evt?.source_type;
+            const BROADCAST_TYPES = new Set(["cron", "heartbeat", "webhook"]);
+            const isReact = sid === "react";
+            const isBroadcast = BROADCAST_TYPES.has(stype) || BROADCAST_TYPES.has(sid);
+            if ((sid || stype) && !isReact && !isBroadcast) return;
+          } catch {
+            // Non-JSON or parse error — let it through (boot/ready events)
+          }
           sendToClient(eventData);
         });
       }
@@ -364,34 +377,34 @@ async function upsertApiKey(keyName, value) {
   return JSON.parse(raw || "{}");
 }
 
-async function listMcps() {
+async function listIntegrations() {
   if (gatewayEnabled) {
-    const payload = await gatewayGet("/v1/mcps");
-    const mcps = Array.isArray(payload?.mcps) ? payload.mcps : [];
-    return mcps.map((item) => ({
-      mcp_name: String(item?.name || ""),
+    const payload = await gatewayGet("/v1/integrations");
+    const integrations = Array.isArray(payload?.integrations) ? payload.integrations : [];
+    return integrations.map((item) => ({
+      integration_name: String(item?.name || ""),
       enabled: Boolean(item?.enabled),
     }));
   }
 
-  const raw = await runPython(["-m", "proxi.security.key_store", "list-mcps"]);
+  const raw = await runPython(["-m", "proxi.security.key_store", "list-integrations"]);
   const payload = JSON.parse(raw || "{}");
-  return payload.mcps || [];
+  return payload.integrations || [];
 }
 
-async function toggleMcp(mcpName, enabled) {
+async function toggleIntegration(integrationName, enabled) {
   if (gatewayEnabled) {
-    const currentMcps = await listMcps();
-    const current = currentMcps.find((entry) => entry.mcp_name === mcpName);
+    const current_integrations = await listIntegrations();
+    const current = current_integrations.find((entry) => entry.integration_name === integrationName);
     const currentEnabled = Boolean(current?.enabled);
     if (currentEnabled !== enabled) {
-      await gatewayPost(`/v1/mcps/${encodeURIComponent(mcpName)}/toggle`, {});
+      await gatewayPost(`/v1/integrations/${encodeURIComponent(integrationName)}/toggle`, {});
     }
-    return { ok: true, mcp_name: mcpName, enabled };
+    return { ok: true, integration_name: integrationName, enabled };
   }
 
-  const command = enabled ? "enable-mcp" : "disable-mcp";
-  const raw = await runPython(["-m", "proxi.security.key_store", command, mcpName]);
+  const command = enabled ? "enable-integration" : "disable-integration";
+  const raw = await runPython(["-m", "proxi.security.key_store", command, integrationName]);
   return JSON.parse(raw || "{}");
 }
 
@@ -576,29 +589,29 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (url.pathname === "/api/mcps" && method === "GET") {
+  if (url.pathname === "/api/integrations" && method === "GET") {
     try {
-      const mcps = await listMcps();
-      sendJson(res, 200, { mcps });
+      const integrations = await listIntegrations();
+      sendJson(res, 200, { integrations });
     } catch (error) {
       sendError(res, error);
     }
     return;
   }
 
-  if (url.pathname.startsWith("/api/mcps/") && method === "PUT") {
+  if (url.pathname.startsWith("/api/integrations/") && method === "PUT") {
     try {
-      const mcpName = decodeURIComponent(url.pathname.replace("/api/mcps/", "")).trim().toLowerCase();
-      if (!mcpName) {
-        sendJson(res, 400, { error: "MCP name is required" });
+      const integrationName = decodeURIComponent(url.pathname.replace("/api/integrations/", "")).trim().toLowerCase();
+      if (!integrationName) {
+        sendJson(res, 400, { error: "Integration name is required" });
         return;
       }
 
       const body = await readJsonBody(req);
       const enabled = Boolean(body?.enabled);
 
-      await toggleMcp(mcpName, enabled);
-      sendJson(res, 200, { ok: true, mcpName, enabled });
+      await toggleIntegration(integrationName, enabled);
+      sendJson(res, 200, { ok: true, integrationName, enabled });
     } catch (error) {
       sendError(res, error);
     }
@@ -684,6 +697,22 @@ const server = createServer(async (req, res) => {
 
       const config = await updateLlmConfig(provider, model);
       sendJson(res, 200, config);
+    } catch (error) {
+      sendError(res, error);
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/sessions/") && url.pathname.endsWith("/clear-history") && method === "POST") {
+    try {
+      const sessionId = decodeURIComponent(url.pathname.replace("/api/sessions/", "").replace("/clear-history", "")).trim();
+      if (!sessionId) {
+        sendJson(res, 400, { error: "Session id is required" });
+        return;
+      }
+
+      const payload = await gatewayPost(`/v1/sessions/${encodeURIComponent(sessionId)}/clear-history`, {});
+      sendJson(res, 200, { ok: true, ...payload });
     } catch (error) {
       sendError(res, error);
     }

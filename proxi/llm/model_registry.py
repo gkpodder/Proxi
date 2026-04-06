@@ -39,14 +39,20 @@ _CONTEXT_WINDOWS: dict[str, int] = {
     "o4-mini": 200_000,
 }
 
-# Default models per provider (must match defaults in AnthropicClient / OpenAIClient).
+# Default models per provider (must match defaults in AnthropicClient / OpenAIClient / VLLMClient).
 DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-3-5-sonnet-20241022",
     "openai": "gpt-5-mini-2025-08-07",
+    # vLLM: model name is whatever the server is serving; "local" is a placeholder.
+    "vllm": "local",
 }
 
 # Reserve 15% of the context window for output tokens.
-_BUDGET_FRACTION = 0.85
+#
+# Keep compaction trigger lower than this value so compaction happens before
+# we approach the hard input budget.
+INPUT_BUDGET_FRACTION = 0.90
+DEFAULT_COMPACTION_THRESHOLD = 0.85
 
 
 def get_context_window(model: str) -> int:
@@ -65,7 +71,7 @@ def get_context_window(model: str) -> int:
 
 def token_budget_for_model(model: str) -> int:
     """Return the recommended input token budget (85% of context window)."""
-    return int(get_context_window(model) * _BUDGET_FRACTION)
+    return int(get_context_window(model) * INPUT_BUDGET_FRACTION)
 
 
 def _provider_for_model(model: str) -> str:
@@ -77,8 +83,12 @@ def _provider_for_model(model: str) -> str:
 
 
 def get_supported_models_by_provider() -> dict[str, list[str]]:
-    """Return registry model ids grouped by provider."""
-    grouped: dict[str, list[str]] = {"openai": [], "anthropic": []}
+    """Return registry model ids grouped by provider.
+
+    vLLM models are user-defined (any model can be served), so the vllm list is
+    intentionally empty — the gateway skips validation for empty lists.
+    """
+    grouped: dict[str, list[str]] = {"openai": [], "anthropic": [], "vllm": []}
     for model in sorted(_CONTEXT_WINDOWS.keys()):
         grouped[_provider_for_model(model)].append(model)
     return grouped
@@ -86,7 +96,8 @@ def get_supported_models_by_provider() -> dict[str, list[str]]:
 
 def get_model_limits_by_provider() -> dict[str, list[dict[str, int | str]]]:
     """Return model metadata grouped by provider with context and budget limits."""
-    grouped: dict[str, list[dict[str, int | str]]] = {"openai": [], "anthropic": []}
+    grouped: dict[str, list[dict[str, int | str]]] = {
+        "openai": [], "anthropic": [], "vllm": []}
     for model in sorted(_CONTEXT_WINDOWS.keys()):
         grouped[_provider_for_model(model)].append(
             {

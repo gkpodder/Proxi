@@ -19,6 +19,7 @@ import { HitlForm } from "./components/HitlForm.js";
 import { AnswerForm } from "./components/AnswerForm.js";
 import { CommandPalette } from "./components/CommandPalette.js";
 import { PlanTodosOverlay } from "./components/PlanTodosOverlay.js";
+import { PlanModeOverlay } from "./components/PlanModeOverlay.js";
 import { UsageOverlay } from "./components/UsageOverlay.js";
 
 type StatusKind = "tool" | "subagent" | "progress" | null;
@@ -45,7 +46,7 @@ export default function App() {
   const [scrollback, setScrollback] = useState<ScrollbackItem[]>([]);
   const [streamingContent, setStreamingContent] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [planTodosOverlay, setPlanTodosOverlay] = useState<"plan" | "todos" | null>(null);
+  const [planTodosOverlay, setPlanTodosOverlay] = useState<"todos" | null>(null);
   const [usageOverlay, setUsageOverlay] = useState<{
     tokens_used: number;
     token_budget: number;
@@ -58,6 +59,23 @@ export default function App() {
   const [userSendPending, setUserSendPending] = useState(false);
   const [tuiActiveDepth, setTuiActiveDepth] = useState(0);
   const [lastTuiAbortableStatus, setLastTuiAbortableStatus] = useState(false);
+  const [autoCompactPercent, setAutoCompactPercent] = useState<number | null>(null);
+  const [isCompacting, setIsCompacting] = useState(false);
+  const [btwMode, setBtwMode] = useState(false);
+  const btwReturnSessionRef = useRef<string>("");
+  const btwSavedScrollbackRef = useRef<ScrollbackItem[]>([]);
+  const [planModeOverlay, setPlanModeOverlay] = useState<string | null>(null);
+  const [planModeOverlayMeta, setPlanModeOverlayMeta] = useState<{
+    plan_path?: string;
+    active_plan_path?: string;
+  } | null>(null);
+  const planGoalInputRef = useRef(false);
+  const [isPlanActive, setIsPlanActive] = useState(false);
+
+  const reasoningEffortModeRef = useRef(false);
+  const providerModeRef = useRef(false);
+  const [tuiReasoningEffort, setTuiReasoningEffort] = useState<string>("low");
+  const [tuiLlmProvider, setTuiLlmProvider] = useState<string | null>(null);
 
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
@@ -91,16 +109,33 @@ export default function App() {
   const clearSessionPromiseRef = useRef<Promise<void> | null>(null);
   const handleMsgRef = useRef<(msg: BridgeMessage) => void>(() => {});
   const onAbortRef = useRef<() => void>(() => {});
+  const statsFetchInFlightRef = useRef(false);
 
   useInput(
     (_, key) => {
       if (!key.escape) return;
+      // Order must match render priority: CommandPalette → UsageOverlay → PlanTodosOverlay
       const { planTodosOverlay: plan, commandPaletteOpen: palette, usageOverlayOpen } = overlayRef.current;
-      if (plan) setPlanTodosOverlay(null);
-      else if (palette) setCommandPaletteOpen(false);
+      if (palette) setCommandPaletteOpen(false);
       else if (usageOverlayOpen) setUsageOverlay(null);
+      else if (plan) setPlanTodosOverlay(null);
     },
     { isActive: planTodosOverlay !== null || commandPaletteOpen || usageOverlay !== null }
+  );
+
+  useInput(
+    (_, key) => {
+      if (!key.escape) return;
+      handleBtwReturn();
+    },
+    {
+      isActive:
+        btwMode &&
+        hitlSpec === null &&
+        !commandPaletteOpen &&
+        usageOverlay === null &&
+        planTodosOverlay === null,
+    }
   );
 
   const commitStreamToScrollback = useCallback(() => {
@@ -125,6 +160,23 @@ export default function App() {
   }, []);
 
   handleMsgRef.current = (msg: BridgeMessage) => {
+    // Only show events from the TUI's own prompts or from broadcast sources (cron/heartbeat/webhook).
+    // Events from other interactive channels (discord, react) are filtered out.
+    // source_id identifies the named source; source_type identifies its kind.
+    const msgSourceId = (msg as { source_id?: string }).source_id;
+    const msgSourceType = (msg as { source_type?: string }).source_type;
+    if (msgSourceId || msgSourceType) {
+      const BROADCAST_TYPES = new Set(["cron", "heartbeat", "webhook"]);
+      const isTui = msgSourceId === "tui";
+      const isBroadcast = BROADCAST_TYPES.has(msgSourceType ?? "") || BROADCAST_TYPES.has(msgSourceId ?? "");
+      if (!isTui && !isBroadcast) {
+        const DISPLAY_TYPES = new Set([
+          "text_stream", "tool_start", "tool_log", "tool_done",
+          "subagent_start", "subagent_done", "inbound_turn", "status_update",
+        ]);
+        if (DISPLAY_TYPES.has(msg.type)) return;
+      }
+    }
     switch (msg.type) {
       case "ready":
         setBridgeReady(true);
@@ -136,6 +188,9 @@ export default function App() {
         setLastTuiAbortableStatus(false);
         setTuiActiveDepth(0);
         setUserSendPending(false);
+        setIsCompacting(false);
+        void refreshSessionStats();
+        void refreshLlmConfig();
         break;
       case "text_stream":
         streamingRef.current += msg.content;
@@ -173,6 +228,11 @@ export default function App() {
         });
         break;
       case "status_update": {
+        const statusLabelLower = (msg.label ?? "").toLowerCase();
+        const isCompactionStatus = statusLabelLower.includes("compact");
+        if (isCompactionStatus) {
+          setIsCompacting(msg.status === "running");
+        }
         const tab = msg.tui_abortable === true;
         if (msg.tui_abortable !== undefined) {
           setLastTuiAbortableStatus(tab);
@@ -195,11 +255,23 @@ export default function App() {
         setStatusLabel(msg.status === "done" ? null : (msg.label ?? null));
         setStatusKind(msg.status === "done" ? null : kind);
         setIsProgress(progress && msg.status === "running");
+        if (msg.status === "done") {
+          void refreshSessionStats();
+        }
         commitStreamToScrollback();
         break;
       }
       case "user_input_required":
         setHitlSpec(msg);
+        break;
+      case "plan_ready":
+        commitStreamToScrollback();
+        setPlanModeOverlay(msg.content);
+        setPlanModeOverlayMeta({
+          plan_path: (msg as import("./protocol.js").PlanReady).plan_path,
+          active_plan_path: (msg as import("./protocol.js").PlanReady).active_plan_path,
+        });
+        setIsPlanActive(true);
         break;
       case "inbound_turn":
         commitStreamToScrollback();
@@ -237,7 +309,7 @@ export default function App() {
 
     const connect = async () => {
       try {
-        const res = await fetch(`${GATEWAY}/v1/sessions/${session}/stream`, {
+        const res = await fetch(`${GATEWAY}/v1/sessions/${session}/stream?subscriber=tui`, {
           signal: controller.signal,
           headers: { Accept: "text/event-stream" },
         });
@@ -399,6 +471,7 @@ export default function App() {
       setUserSendPending(false);
       setTuiActiveDepth(0);
       setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
       setError(null);
       sessionRef.current = "";
       setBootHint("Choose an agent below.");
@@ -436,6 +509,29 @@ export default function App() {
   }, [connectSse, startAgentSwitch]);
 
   // --- HTTP helpers ---
+  const refreshSessionStats = useCallback(async () => {
+    const sid = sessionRef.current;
+    if (!sid || statsFetchInFlightRef.current) return;
+    statsFetchInFlightRef.current = true;
+    try {
+      const res = await fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(sid)}/stats`);
+      if (!res.ok) return;
+      const stats = (await res.json()) as {
+        tokens_used: number;
+        context_window: number;
+        compaction_threshold?: number;
+      };
+      const thresholdFraction = stats.compaction_threshold ?? 0.7;
+      const thresholdTokens = Math.max(1, Math.floor(stats.context_window * thresholdFraction));
+      const remaining = Math.max(0, thresholdTokens - stats.tokens_used);
+      setAutoCompactPercent(Math.round((remaining / thresholdTokens) * 100));
+    } catch {
+      // best effort
+    } finally {
+      statsFetchInFlightRef.current = false;
+    }
+  }, []);
+
   const sendToGateway = useCallback(async (body: Record<string, unknown>) => {
     const pendingClear = clearSessionPromiseRef.current;
     if (pendingClear) {
@@ -462,79 +558,218 @@ export default function App() {
     }
   }, []);
 
+  const refreshLlmConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${GATEWAY}/v1/llm-config`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { provider?: string };
+      if (data.provider) setTuiLlmProvider(data.provider);
+    } catch {
+      // best effort
+    }
+  }, []);
+
+  const startProviderFlow = useCallback(async () => {
+    providerModeRef.current = true;
+    try {
+      const res = await fetch(`${GATEWAY}/v1/llm-config`);
+      if (!res.ok) {
+        providerModeRef.current = false;
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Could not load LLM config (${res.status}). Is the gateway running?`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+        return;
+      }
+      const data = (await res.json()) as { provider: string; model: string; providers: string[] };
+      setTuiLlmProvider(data.provider);
+      const title =
+        data.provider === "openai"
+          ? "OpenAI"
+          : data.provider === "anthropic"
+            ? "Anthropic"
+            : data.provider;
+      setHitlSpec({
+        type: "user_input_required" as const,
+        method: "select" as const,
+        prompt: `Gateway LLM\nCurrent: ${title} — ${data.model}\nApplies to every session until you switch again.`,
+        options: [...data.providers].sort(),
+        ui: "provider",
+        preferredOption: data.provider,
+      });
+    } catch (err: unknown) {
+      providerModeRef.current = false;
+      const m = err instanceof Error ? err.message : String(err);
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `LLM config error: ${m}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handleProviderSubmit = useCallback(
+    async (value: string | boolean | number) => {
+      providerModeRef.current = false;
+      setHitlSpec(null);
+      const chosen = String(value).trim().toLowerCase();
+      if (!chosen) return;
+      if (chosen === tuiLlmProvider) {
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Already using provider '${chosen}'.`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+        return;
+      }
+      try {
+        const res = await fetch(`${GATEWAY}/v1/llm-config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: chosen, model: "" }),
+        });
+        const raw = await res.text();
+        if (res.ok) {
+          try {
+            const data = JSON.parse(raw) as { provider: string; model: string };
+            setTuiLlmProvider(data.provider);
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: `LLM → ${data.provider} · ${data.model}`,
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+          } catch {
+            setTuiLlmProvider(chosen);
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: `LLM provider updated to ${chosen}.`,
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+          }
+          return;
+        }
+        let errDetail = raw || res.statusText;
+        try {
+          const j = JSON.parse(raw) as { detail?: string };
+          if (j.detail) errDetail = String(j.detail);
+        } catch {
+          /* keep text */
+        }
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Provider switch failed: ${errDetail}`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+      } catch (err: unknown) {
+        const m = err instanceof Error ? err.message : String(err);
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Provider switch failed: ${m}`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+      }
+    },
+    [tuiLlmProvider]
+  );
+
   const commitStreaming = useCallback(() => {
     commitStreamToScrollback();
   }, [commitStreamToScrollback]);
 
-  // --- MCP management state ---
-  const mcpModeRef = useRef(false);
+  // --- Integration management state ---
+  const integrationModeRef = useRef(false);
   const deleteModeRef = useRef(false);
   const workDirModeRef = useRef(false);
+  const compactModeRef = useRef(false);
 
-  const startMcpManagement = useCallback(async () => {
-    mcpModeRef.current = true;
-    const showMcpList = async () => {
+  const startIntegrationManagement = useCallback(async () => {
+    integrationModeRef.current = true;
+    const showIntegrationList = async () => {
       try {
-        const res = await fetch(`${GATEWAY}/v1/mcps`);
+        const res = await fetch(`${GATEWAY}/v1/integrations`);
         if (!res.ok) {
           setScrollback((s) => [
           ...s,
-          { type: "agent_line", content: `MCP fetch failed: ${res.status}`, isFirst: true, isSystem: true },
+          { type: "agent_line", content: `Integration fetch failed: ${res.status}`, isFirst: true, isSystem: true },
         ]);
-          mcpModeRef.current = false;
+          integrationModeRef.current = false;
           return;
         }
-        const data = (await res.json()) as { mcps?: { name: string; enabled: boolean }[] };
-        const mcps = data.mcps ?? [];
+        const data = (await res.json()) as { integrations?: { name: string; enabled: boolean }[] };
+        const integrations = data.integrations ?? [];
         const doneLabel = "[Done]";
-        const options = mcps.map(
+        const options = integrations.map(
           (m) => `${m.name} [${m.enabled ? "Enabled" : "Disabled"}] → ${m.enabled ? "Disable" : "Enable"}`
         );
         options.push(doneLabel);
         setHitlSpec({
           type: "user_input_required" as const,
           method: "select" as const,
-          prompt: "MCP Settings: choose an MCP to toggle, or select [Done]",
+          prompt: "Integration Settings: choose an integration to toggle, or select [Done]",
           options,
         });
       } catch (err: any) {
         setScrollback((s) => [
           ...s,
-          { type: "agent_line", content: `MCP error: ${err.message}`, isFirst: true, isSystem: true },
+          { type: "agent_line", content: `Integration error: ${err.message}`, isFirst: true, isSystem: true },
         ]);
-        mcpModeRef.current = false;
+        integrationModeRef.current = false;
       }
     };
-    await showMcpList();
+    await showIntegrationList();
   }, []);
 
-  const handleMcpSelection = useCallback(async (value: string | boolean | number) => {
+  const handleIntegrationSelection = useCallback(async (value: string | boolean | number) => {
     const choice = String(value);
     if (choice === "[Done]" || choice === "false") {
-      mcpModeRef.current = false;
+      integrationModeRef.current = false;
       setHitlSpec(null);
       setScrollback((s) => [
         ...s,
-        { type: "agent_line", content: "MCP settings updated.", isFirst: true, isSystem: true },
+        { type: "agent_line", content: "Integration settings updated.", isFirst: true, isSystem: true },
       ]);
       return;
     }
-    // Extract MCP name from option string: "name [Enabled] → Disable"
-    const mcpName = choice.split(" ")[0];
-    if (!mcpName) {
-      mcpModeRef.current = false;
+    // Extract integration name from option string: "name [Enabled] → Disable"
+    const integrationName = choice.split(" ")[0];
+    if (!integrationName) {
+      integrationModeRef.current = false;
       setHitlSpec(null);
       return;
     }
     try {
-      const res = await fetch(`${GATEWAY}/v1/mcps/${encodeURIComponent(mcpName)}/toggle`, { method: "POST" });
+      const res = await fetch(`${GATEWAY}/v1/integrations/${encodeURIComponent(integrationName)}/toggle`, { method: "POST" });
       if (res.ok) {
         const result = (await res.json()) as { enabled?: boolean };
         setScrollback((s) => [
           ...s,
           {
             type: "agent_line",
-            content: `MCP '${mcpName}' ${result.enabled ? "enabled" : "disabled"}.`,
+            content: `Integration '${integrationName}' ${result.enabled ? "enabled" : "disabled"}.`,
             isFirst: true,
             isSystem: true,
           },
@@ -546,13 +781,13 @@ export default function App() {
         { type: "agent_line", content: `Toggle failed: ${err.message}`, isFirst: true, isSystem: true },
       ]);
     }
-    // Re-show the list only if the user is still in MCP settings. If they hit [Done] or Esc
-    // while the toggle request was in flight, mcpModeRef is false — do not reopen the picker
+    // Re-show the list only if the user is still in integration settings. If they hit [Done] or Esc
+    // while the toggle request was in flight, integrationModeRef is false — do not reopen the picker
     // (would steal focus from chat and strand in-flight replies).
-    if (mcpModeRef.current) {
-      await startMcpManagement();
+    if (integrationModeRef.current) {
+      await startIntegrationManagement();
     }
-  }, [startMcpManagement]);
+  }, [startIntegrationManagement]);
 
   const startWorkDirFlow = useCallback(async () => {
     workDirModeRef.current = true;
@@ -575,6 +810,80 @@ export default function App() {
       ]);
     }
   }, []);
+
+  const handlePlanGoalSubmit = useCallback((value: string | boolean | number) => {
+    planGoalInputRef.current = false;
+    setHitlSpec(null);
+    const goal = String(value).trim();
+    if (!goal) {
+      setIsPlanActive(false);
+      return;
+    }
+    setIsPlanActive(true);
+    const msg = `/plan ${goal}`;
+    setScrollback((s) => [...s, { type: "user", content: msg }, { type: "spacing" as const }]);
+    setUserSendPending(true);
+    void sendToGateway({ message: msg });
+  }, [sendToGateway]);
+
+  const handlePlanAccept = useCallback(async () => {
+    const sid = sessionRef.current;
+    setIsPlanActive(false);
+    setPlanModeOverlay(null);
+    setPlanModeOverlayMeta(null);
+    try {
+      await fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(sid)}/plan/accept`, { method: "POST" });
+    } catch {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: "Could not accept plan — gateway unreachable.", isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handlePlanRefine = useCallback((feedback: string) => {
+    setPlanModeOverlay(null);
+    setPlanModeOverlayMeta(null);
+    // Keep plan mode active while the new plan is being generated.
+    const msg = `/plan refine ${feedback}`;
+    setScrollback((s) => [...s, { type: "user", content: msg }, { type: "spacing" as const }]);
+    setUserSendPending(true);
+    void sendToGateway({ message: msg });
+  }, [sendToGateway]);
+
+  const handlePlanReject = useCallback(async () => {
+    const sid = sessionRef.current;
+    setIsPlanActive(false);
+    setPlanModeOverlay(null);
+    setPlanModeOverlayMeta(null);
+    try {
+      await fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(sid)}/plan/reject`, { method: "POST" });
+    } catch {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: "Could not reject plan — gateway unreachable.", isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handleCompactSubmit = useCallback((value: string | boolean | number) => {
+    compactModeRef.current = false;
+    setHitlSpec(null);
+    const focus = String(value).trim();
+    const msg = focus ? `/compact ${focus}` : "/compact";
+    setScrollback((s) => [...s, { type: "user", content: msg }, { type: "spacing" as const }]);
+    void sendToGateway({ message: msg });
+  }, [sendToGateway]);
+
+  const handleReasoningEffortSubmit = useCallback((value: string | boolean | number) => {
+    reasoningEffortModeRef.current = false;
+    setHitlSpec(null);
+    const level = String(value).trim().toLowerCase() || "minimal";
+    const valid = ["minimal", "low", "medium", "high"];
+    const resolved = valid.includes(level) ? level : "minimal";
+    setTuiReasoningEffort(resolved);
+    void sendToGateway({ message: `/reasoning-effort ${resolved}` });
+  }, [sendToGateway]);
 
   const handleWorkDirSubmit = useCallback(async (value: string | boolean | number) => {
     workDirModeRef.current = false;
@@ -700,6 +1009,7 @@ export default function App() {
           setUserSendPending(false);
           setTuiActiveDepth(0);
           setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
           initialAgentPickRef.current = false;
           const ac = new AbortController();
           abortRef.current = ac;
@@ -782,6 +1092,7 @@ export default function App() {
       setUserSendPending(false);
       setTuiActiveDepth(0);
       setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
 
       const ac = new AbortController();
       abortRef.current = ac;
@@ -803,8 +1114,131 @@ export default function App() {
     startAgentSwitch();
   }, [startAgentSwitch]);
 
-  const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
+  const handleBranch = useCallback(async () => {
+    const currentSession = sessionRef.current;
+    if (!currentSession) return;
+    setScrollback((s) => [
+      ...s,
+      { type: "agent_line", content: "Branching agent…", isFirst: true, isSystem: true },
+    ]);
+    try {
+      const res = await fetch(
+        `${GATEWAY}/v1/sessions/${encodeURIComponent(currentSession)}/branch`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        const detail = await res.text();
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `Branch failed: ${detail || res.status}`, isFirst: true, isSystem: true },
+        ]);
+        return;
+      }
+      const result = (await res.json()) as { agent_id: string; session_id: string };
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Branched → ${result.agent_id}. Switching…`, isFirst: true, isSystem: true },
+      ]);
+      if (abortRef.current) abortRef.current.abort();
+      sessionRef.current = result.session_id;
+      setBootInfo(null);
+      setBridgeReady(false);
+      setStreamingContent("");
+      streamingRef.current = "";
+      bufferRef.current = "";
+      setUserSendPending(false);
+      setTuiActiveDepth(0);
+      setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
+      const ac = new AbortController();
+      abortRef.current = ac;
+      connectSse(result.session_id, ac);
+    } catch (err: any) {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `Branch error: ${err.message ?? String(err)}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, [connectSse]);
+
+  const handleBtwReturn = useCallback(() => {
+    const returnSession = btwReturnSessionRef.current;
+    const btwSession = sessionRef.current;
+    if (!returnSession || !btwMode) return;
+    setBtwMode(false);
+    btwReturnSessionRef.current = "";
+    const savedScrollback = btwSavedScrollbackRef.current;
+    btwSavedScrollbackRef.current = [];
+    if (abortRef.current) abortRef.current.abort();
+    sessionRef.current = returnSession;
+    setBootInfo(null);
+    setBridgeReady(false);
+    setScrollback(savedScrollback);
+    setStreamingContent("");
+    streamingRef.current = "";
+    bufferRef.current = "";
+    setUserSendPending(false);
+    setTuiActiveDepth(0);
+    setLastTuiAbortableStatus(false);
+    setIsCompacting(false);
+    const ac = new AbortController();
+    abortRef.current = ac;
+    connectSse(returnSession, ac);
+    // Delete the btw session after reconnecting (fire-and-forget)
+    if (btwSession) {
+      fetch(`${GATEWAY}/v1/sessions/${encodeURIComponent(btwSession)}`, { method: "DELETE" }).catch(() => undefined);
+    }
+  }, [btwMode, connectSse]);
+
+  const handleBtw = useCallback(async () => {
+    const currentSession = sessionRef.current;
+    if (!currentSession) return;
+    try {
+      const res = await fetch(
+        `${GATEWAY}/v1/sessions/${encodeURIComponent(currentSession)}/btw`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        const detail = await res.text();
+        setScrollback((s) => [
+          ...s,
+          { type: "agent_line", content: `BTW failed: ${detail || res.status}`, isFirst: true, isSystem: true },
+        ]);
+        return;
+      }
+      const result = (await res.json()) as { btw_session_id: string; return_session_id: string };
+      btwReturnSessionRef.current = result.return_session_id;
+      btwSavedScrollbackRef.current = scrollback;
+      setBtwMode(true);
+      if (abortRef.current) abortRef.current.abort();
+      sessionRef.current = result.btw_session_id;
+      setBootInfo(null);
+      setBridgeReady(false);
+      setScrollback([]);
+      setStreamingContent("");
+      streamingRef.current = "";
+      bufferRef.current = "";
+      setUserSendPending(false);
+      setTuiActiveDepth(0);
+      setLastTuiAbortableStatus(false);
+      setIsCompacting(false);
+      const ac = new AbortController();
+      abortRef.current = ac;
+      connectSse(result.btw_session_id, ac);
+    } catch (err: any) {
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `BTW error: ${err.message ?? String(err)}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, [connectSse, scrollback]);
+
+  const onSubmit = useCallback((task: string, _provider: string, _maxTurns: number) => {
     if (!task.trim()) return;
+    if (task.trim() === "/provider") {
+      void startProviderFlow();
+      return;
+    }
     setInputHistory((prev) => {
       const next = [task, ...prev.filter((t) => t !== task)].slice(0, 50);
       return next;
@@ -823,7 +1257,7 @@ export default function App() {
     });
     setUserSendPending(true);
     sendToGateway({ message: task });
-  }, [commitStreamToScrollback, sendToGateway]);
+  }, [commitStreamToScrollback, sendToGateway, startProviderFlow]);
 
   const onHitlSubmit = useCallback(
     (value: string | boolean | number) => {
@@ -843,19 +1277,46 @@ export default function App() {
         void handleAgentSelection(value);
         return;
       }
-      if (mcpModeRef.current) {
-        handleMcpSelection(value);
+      if (integrationModeRef.current) {
+        handleIntegrationSelection(value);
         return;
       }
       if (workDirModeRef.current) {
         void handleWorkDirSubmit(value);
         return;
       }
+      if (compactModeRef.current) {
+        handleCompactSubmit(value);
+        return;
+      }
+      if (planGoalInputRef.current) {
+        handlePlanGoalSubmit(value);
+        return;
+      }
+      if (providerModeRef.current) {
+        void handleProviderSubmit(value);
+        return;
+      }
+      if (reasoningEffortModeRef.current) {
+        handleReasoningEffortSubmit(value);
+        return;
+      }
       setUserSendPending(true);
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit]
+    [
+      sendToGateway,
+      handleIntegrationSelection,
+      handleAgentSelection,
+      handleCreateAgentFlowSubmit,
+      performDeleteAgent,
+      handleWorkDirSubmit,
+      handleCompactSubmit,
+      handlePlanGoalSubmit,
+      handleProviderSubmit,
+      handleReasoningEffortSubmit,
+    ]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -885,13 +1346,34 @@ export default function App() {
       setHitlSpec(null);
       return;
     }
-    if (mcpModeRef.current) {
-      mcpModeRef.current = false;
+    if (integrationModeRef.current) {
+      integrationModeRef.current = false;
       setHitlSpec(null);
       return;
     }
     if (workDirModeRef.current) {
       workDirModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    if (compactModeRef.current) {
+      compactModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    if (planGoalInputRef.current) {
+      planGoalInputRef.current = false;
+      setHitlSpec(null);
+      setIsPlanActive(false);
+      return;
+    }
+    if (reasoningEffortModeRef.current) {
+      reasoningEffortModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    if (providerModeRef.current) {
+      providerModeRef.current = false;
       setHitlSpec(null);
       return;
     }
@@ -953,6 +1435,26 @@ export default function App() {
         case "agent":
           onSwitchAgent();
           break;
+        case "branch":
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "Connect to an agent first, then use /branch.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          void handleBranch();
+          break;
+        case "btw":
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "Connect to an agent first, then use /btw.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          void handleBtw();
+          break;
         case "delete":
           if (!bootInfo) {
             setScrollback((s) => [
@@ -973,11 +1475,26 @@ export default function App() {
             prompt: `Delete agent '${bootInfo.agentId}' and all sessions? This cannot be undone.`,
           });
           break;
-        case "mcps":
-          startMcpManagement();
+        case "integrations":
+          startIntegrationManagement();
           break;
         case "work-dir":
           void startWorkDirFlow();
+          break;
+        case "compact":
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "Connect to an agent first, then use /compact.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          compactModeRef.current = true;
+          setHitlSpec({
+            type: "user_input_required" as const,
+            method: "text" as const,
+            ui: "compact",
+          });
           break;
         case "clear":
           setScrollback([]);
@@ -987,7 +1504,7 @@ export default function App() {
           setHitlSpec(null);
           setUsageOverlay(null);
           agentModeRef.current = false;
-          mcpModeRef.current = false;
+          integrationModeRef.current = false;
           deleteModeRef.current = false;
           setStatusLabel(null);
           setStatusKind(null);
@@ -995,6 +1512,7 @@ export default function App() {
           setUserSendPending(false);
           setTuiActiveDepth(0);
           setLastTuiAbortableStatus(false);
+          setIsCompacting(false);
           setError(null);
           {
             const p = fetch(
@@ -1012,7 +1530,33 @@ export default function App() {
           }
           break;
         case "plan":
-          setPlanTodosOverlay("plan");
+          if (!bootInfo) {
+            setScrollback((s) => [
+              ...s,
+              { type: "agent_line", content: "Connect to an agent first, then use /plan.", isFirst: true, isSystem: true },
+            ]);
+            break;
+          }
+          planGoalInputRef.current = true;
+          setIsPlanActive(true);
+          setHitlSpec({
+            type: "user_input_required" as const,
+            method: "text" as const,
+            ui: "plan",
+          });
+          break;
+        case "reasoning-effort":
+          reasoningEffortModeRef.current = true;
+          setHitlSpec({
+            type: "user_input_required" as const,
+            method: "select" as const,
+            prompt: "Reasoning effort",
+            options: ["minimal", "low", "medium", "high"],
+            ui: "reasoning-effort",
+          });
+          break;
+        case "provider":
+          void startProviderFlow();
           break;
         case "todos":
           setPlanTodosOverlay("todos");
@@ -1036,6 +1580,7 @@ export default function App() {
                 turns_used: number;
                 max_turns: number;
               };
+              setPlanTodosOverlay(null);
               setUsageOverlay(stats);
             })
             .catch(() => {
@@ -1050,11 +1595,15 @@ export default function App() {
           setScrollback((s) => [
             ...s,
             { type: "agent_line", content: "/agent    - Switch agent or create [+] Create new agent", isFirst: true, isSystem: true },
+            { type: "agent_line", content: "/branch   - Clone current agent with full session history", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/btw      - Temporary side session (Esc from empty input to return)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/delete   - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/mcps     - Enable/disable MCPs", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/integrations - Enable/disable integrations (gmail, spotify, etc.)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/work-dir - View or change working directory", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/compact  - Summarize context to save tokens (optionally add a focus hint)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/plan     - View current plan", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/plan     - Start an interactive planning session", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/provider - Switch LLM provider (OpenAI · Anthropic)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/todos    - View open todos", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/usage    - Show context and turn usage", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/help     - Show all commands", isFirst: false, isSystem: true },
@@ -1066,12 +1615,13 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent, startMcpManagement, startWorkDirFlow, bootInfo]
+    [onSwitchAgent, startIntegrationManagement, startWorkDirFlow, bootInfo, handleBranch, handleBtw, startProviderFlow]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
 
   const showStatusSpinner =
+    isCompacting ||
     userSendPending ||
     tuiActiveDepth > 0 ||
     (isProgress && lastTuiAbortableStatus);
@@ -1094,6 +1644,11 @@ export default function App() {
           agentId={bootInfo?.agentId}
           sessionId={bootInfo?.sessionId}
           isWaitingForInput={!!hitlSpec}
+          isBtw={btwMode}
+          isCompacting={isCompacting}
+          isPlanMode={isPlanActive}
+          reasoningEffort={tuiReasoningEffort}
+          autoCompactPercent={autoCompactPercent}
         />
         {hitlSpec ? (
           isAskUserQuestionRequired(hitlSpec) ? (
@@ -1118,9 +1673,15 @@ export default function App() {
             onCommand={onCommand}
           />
         ) : usageOverlay ? (
-          <UsageOverlay
-            stats={usageOverlay}
-            onDismiss={() => setUsageOverlay(null)}
+          <UsageOverlay stats={usageOverlay} />
+        ) : planModeOverlay ? (
+          <PlanModeOverlay
+            content={planModeOverlay}
+            planPath={planModeOverlayMeta?.plan_path}
+            activePlanPath={planModeOverlayMeta?.active_plan_path}
+            onAccept={handlePlanAccept}
+            onRefine={handlePlanRefine}
+            onReject={handlePlanReject}
           />
         ) : planTodosOverlay ? (
           <PlanTodosOverlay
@@ -1133,11 +1694,13 @@ export default function App() {
           <InputArea
             onSubmit={onSubmit}
             onCommitStreaming={commitStreaming}
-            disabled={!bridgeReady}
+            disabled={!bridgeReady || isCompacting}
             bridgeReady={bridgeReady}
             onSwitchAgent={onSwitchAgent}
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             inputHistory={inputHistory}
+            onEscapeEmpty={btwMode ? handleBtwReturn : undefined}
+            activeProvider={tuiLlmProvider ?? "openai"}
           />
         )}
       </Box>

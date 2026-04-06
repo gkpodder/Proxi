@@ -16,6 +16,11 @@ type Props = {
   agentId?: string;
   sessionId?: string;
   isWaitingForInput?: boolean;
+  isBtw?: boolean;
+  isCompacting?: boolean;
+  isPlanMode?: boolean;
+  reasoningEffort?: string;
+  autoCompactPercent?: number | null;
 };
 
 export function StatusBar({
@@ -27,6 +32,11 @@ export function StatusBar({
   agentId,
   sessionId,
   isWaitingForInput,
+  isBtw,
+  isCompacting,
+  isPlanMode,
+  reasoningEffort,
+  autoCompactPercent,
 }: Props) {
   const showTool = statusKind === "tool" && statusLabel;
   const showSubagent = statusKind === "subagent" && statusLabel;
@@ -35,7 +45,13 @@ export function StatusBar({
   // Status word per spec: ready (mint), thinking (purpleDim), acting (peach), waiting for input (purple)
   let statusWord: string;
   let statusColor: string;
-  if (isWaitingForInput) {
+  if (isPlanMode) {
+    statusWord = "planning";
+    statusColor = theme.lavender;
+  } else if (isCompacting) {
+    statusWord = "compacting";
+    statusColor = theme.peach;
+  } else if (isWaitingForInput) {
     statusWord = "waiting for input";
     statusColor = theme.purple;
   } else if (showTool || showSubagent || showProgress) {
@@ -55,6 +71,24 @@ export function StatusBar({
       <Text color={theme.purple}>◆ {agentId ?? "—"}</Text>
       <Text color={theme.purpleDim}>  ·  </Text>
       <Text color={theme.mist}>session {sessionId ?? "—"}</Text>
+      {isBtw && (
+        <>
+          <Text color={theme.purpleDim}>  ·  </Text>
+          <Text color={theme.peach} bold>btw</Text>
+        </>
+      )}
+      {isPlanMode && (
+        <>
+          <Text color={theme.purpleDim}>  ·  </Text>
+          <Text color={theme.lavender} bold>◆ plan</Text>
+        </>
+      )}
+      {reasoningEffort && reasoningEffort !== "low" && (
+        <>
+          <Text color={theme.purpleDim}>  ·  </Text>
+          <Text color={theme.peach} bold>◆ {reasoningEffort}</Text>
+        </>
+      )}
       <Text color={theme.purpleDim}>  ·  </Text>
       <Text color={statusColor}>{statusWord}</Text>
       {(showSpinner ?? ((showTool || showSubagent || showProgress) && isProgress)) && (
@@ -70,11 +104,23 @@ export function StatusBar({
     <Box paddingX={1} paddingY={0} height={1} flexShrink={0} justifyContent="space-between">
       <Box>{leftContent}</Box>
       <Box>
-        {showAbortHint && (
+        {isBtw && (
+          <>
+            <Text color={theme.peach} bold>Esc return</Text>
+            <Text color={theme.purpleDim}> · </Text>
+          </>
+        )}
+        {!isBtw && showAbortHint && (
           <>
             <Text color="red" bold>
               Esc abort
             </Text>
+            <Text color={theme.purpleDim}> · </Text>
+          </>
+        )}
+        {autoCompactPercent !== null && autoCompactPercent !== undefined && (
+          <>
+            <Text color={theme.mist}>{autoCompactPercent}% context remaining</Text>
             <Text color={theme.purpleDim}> · </Text>
           </>
         )}

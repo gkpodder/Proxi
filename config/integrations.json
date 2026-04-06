@@ -1,0 +1,48 @@
+{
+  "integrations": {
+    "gmail": {
+      "type": "cli",
+      "description": "Gmail — read, send, and manage emails",
+      "defer_loading": true,
+      "always_load": [
+        "read_emails"
+      ]
+    },
+    "google_calendar": {
+      "type": "cli",
+      "description": "Google Calendar — manage events and schedules",
+      "defer_loading": true,
+      "always_load": [
+        "calendar_list_events"
+      ]
+    },
+    "spotify": {
+      "type": "mcp",
+      "description": "Spotify — control music playback and manage playlists",
+      "command": "uv",
+      "args": ["run", "--", "python", "-m", "proxi.mcp.servers.spotify_server"],
+      "defer_loading": true,
+      "always_load": []
+    },
+    "notion": {
+      "type": "cli",
+      "description": "Notion — read and write workspace pages",
+      "defer_loading": true,
+      "always_load": []
+    },
+    "obsidian": {
+      "type": "cli",
+      "description": "Obsidian — manage notes across vaults",
+      "defer_loading": true,
+      "always_load": []
+    },
+    "weather": {
+      "type": "cli",
+      "description": "Weather — current conditions and forecasts via Open-Meteo",
+      "defer_loading": false,
+      "always_load": [
+        "get_weather"
+      ]
+    }
+  }
+}

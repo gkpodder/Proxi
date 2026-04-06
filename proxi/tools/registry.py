@@ -49,6 +49,10 @@ class ToolRegistry:
         self._deferred_tools[tool.name] = tool
         self._rebuild_deferred_index()
 
+    def has_tool(self, name: str) -> bool:
+        """Return True if a tool with *name* is in the live tier."""
+        return name in self._tools
+
     def has_deferred_tools(self) -> bool:
         """Return True if any tools remain in the deferred tier."""
         return bool(self._deferred_tools)
@@ -199,10 +203,27 @@ class ToolRegistry:
             for t in self._deferred_tools.values()
         ]
 
-    def is_parallel_safe(self, name: str) -> bool:
-        """Whether a tool is marked safe to execute in parallel."""
+    def is_parallel_safe(self, name: str, arguments: dict[str, Any] | None = None) -> bool:
+        """Whether a tool is safe to execute in parallel.
+
+        Returns True when either parallel_safe is explicitly set or the tool
+        is read_only (read-only tools have no shared mutable state by definition).
+
+        For call_tool (the deferred wrapper), delegates to the inner tool so that
+        batched call_tool(get_weather, ...) invocations run in parallel when the
+        underlying tool is parallel-safe.
+        """
+        if name == "call_tool" and arguments:
+            inner_name = (arguments.get("tool_name") or "").strip()
+            if inner_name:
+                return self.is_parallel_safe(inner_name)
         tool = self.get(name)
-        return bool(getattr(tool, "parallel_safe", False)) if tool is not None else False
+        if tool is None:
+            # Also check the deferred tier — deferred tools are still real tools.
+            tool = self._deferred_tools.get(name)
+        if tool is None:
+            return False
+        return bool(getattr(tool, "parallel_safe", False)) or bool(getattr(tool, "read_only", False))
 
     async def execute(self, name: str, arguments: dict[str, Any]) -> ToolResult:
         """Execute a tool."""

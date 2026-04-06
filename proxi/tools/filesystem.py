@@ -13,9 +13,9 @@ class ReadFileTool(BaseTool):
         super().__init__(
             name="read_file",
             description=(
-                "Read the contents of a file. "
-                "Use offset and limit to read specific line ranges (1-based). "
-                "When offset/limit are provided, output includes line numbers."
+                "Read the contents of one file. "
+                "When you need multiple files (e.g. every file under a folder), issue one read_file per path in the same assistant turn as a single batch — do not wait turn-by-turn between reads. "
+                "Use offset and limit for line ranges (1-based); when set, output includes line numbers."
             ),
             parallel_safe=True,
             parameters_schema={
@@ -23,7 +23,10 @@ class ReadFileTool(BaseTool):
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Path to the file to read",
+                        "description": (
+                            "Path to the file to read. For N files, prefer N parallel read_file "
+                            "calls in one response over N sequential turns."
+                        ),
                     },
                     "offset": {
                         "type": "integer",
@@ -102,6 +105,7 @@ class WriteFileTool(BaseTool):
             name="write_file",
             description="Write content to a file",
             parallel_safe=False,
+            read_only=False,
             parameters_schema={
                 "type": "object",
                 "properties": {
@@ -164,6 +168,7 @@ class EditFileTool(BaseTool):
                 "Use read_file first to get the exact content to match."
             ),
             parallel_safe=False,
+            read_only=False,
             parameters_schema={
                 "type": "object",
                 "properties": {

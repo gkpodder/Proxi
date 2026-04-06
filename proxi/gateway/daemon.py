@@ -13,6 +13,7 @@ import shutil
 import httpx
 
 from proxi.observability.logging import get_logger
+from proxi.workspace import WorkspaceManager
 
 logger = get_logger(__name__)
 
@@ -104,6 +105,9 @@ def _gateway_command() -> tuple[list[str], Path | None]:
 
 def start_daemon() -> int:
     """Start the gateway as a detached background process.  Returns PID."""
+    workspace_root = Path(os.environ.get("PROXI_HOME", str(Path.home() / ".proxi"))).expanduser()
+    WorkspaceManager(root=workspace_root).ensure_global_system_prompt()
+
     if is_running():
         pid = _read_pid()
         logger.info("gateway_already_running", pid=pid)
