@@ -5,6 +5,7 @@
 \usepackage{multirow}
 \usepackage{booktabs}
 \usepackage{tabularx}
+\usepackage{longtable}
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{hyperref}
@@ -119,7 +120,7 @@ change, because the ``secrets'' that each module hides represent likely future
 changes. Design for change is valuable in SC, where modifications are frequent,
 especially during initial development as the solution space is explored.
 
-Our design follows the rules layed out by \citet{ParnasEtAl1984}, as follows:
+Our design follows the rules laid out by \citet{ParnasEtAl1984}, as follows:
 \begin{itemize}
 \item System details that are likely to change independently should be the
   secrets of separate modules.
@@ -148,6 +149,10 @@ The potential readers of this document are as follows:
   the system in various ways, such as consistency among modules, feasibility
   of the decomposition, and flexibility of the design.
 \end{itemize}
+
+Companion documents for this design include the SRS, the Module Interface
+Specification (MIS), and the V\&V Plan, all available in the public project
+repository at \href{https://github.com/gkpodder/Proxi}{GitHub}.
 
 The rest of the document is organized as follows. Section \ref{SecChange} lists
 the anticipated and unlikely changes of the software requirements. Section
@@ -221,10 +226,10 @@ deployment across devices).
 
 \section{Module Hierarchy} \label{SecMH}
 
-This section provides an overview of the module design. Modules are summarized
-in a hierarchy decomposed by secrets in Table \ref{TblMH}. The modules listed
-below, which are leaves in the hierarchy tree, are the modules that will
-actually be implemented.
+This section provides an overview of the module design. The modules are
+summarized below in a hierarchy decomposed by secrets, and their detailed
+descriptions are provided later in Section \ref{SecMD}. The leaves in this
+hierarchy are the modules that will actually be implemented.
 
 \begin{description}
 
@@ -524,18 +529,24 @@ stable routines for transcription and speech synthesis to BH modules.
 
 This section shows traceability tables between the modules and the functional
 requirements plus nonfunctional requirements, and between the modules and the
-anticipated changes. Tables \ref{TblRT}, \ref{TblNFRRT}, \ref{TblNFRRTCont}, and
-\ref{TblACT} collectively provide coverage and change-impact traceability.
+anticipated changes. Table~\ref{TblRT} maps functional requirements to modules,
+Tables~\ref{TblNFRRT} and \ref{TblNFRRTCont} summarize the nonfunctional
+coverage, and Table~\ref{TblACT} links anticipated changes to the modules that
+hide them. These references should be read alongside the detailed module
+descriptions in Section~\ref{SecMD}.
 
-\begin{table}[H]
-\centering
-\caption{Traceability between functional requirements and modules}
-\label{TblRT}
 \renewcommand{\arraystretch}{1.1}
-\begin{tabular}{p{0.32\textwidth} p{0.58\textwidth}}
+\begin{longtable}{p{0.32\textwidth} p{0.58\textwidth}}
+\caption{Traceability between functional requirements and modules}
+\label{TblRT}\\
 \toprule
 \textbf{Requirement (SRS)} & \textbf{Modules}\\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Requirement (SRS)} & \textbf{Modules}\\
+\midrule
+\endhead
 FUNC.R.1 - Accept input via speech and text
   & \mref{mBHInput}, \mref{mHHIO}, \mref{mBHUI}, \mref{mSDConfig} \\
 FUNC.R.2 - Convert speech to text (STT)
@@ -561,18 +572,20 @@ FUNC.R.9 - Confirm privileged/system-level actions
   & \mref{mBHSafety}, \mref{mBHUI}, \mref{mBHPlan},
     \mref{mSDTypes}, \mref{mSDLog}, \mref{mSDStore} \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{longtable}
 
-\begin{table}[H]
-\centering
-\caption{Traceability between nonfunctional requirements and modules}
-\label{TblNFRRT}
 \renewcommand{\arraystretch}{1.1}
-\begin{tabular}{p{0.32\textwidth} p{0.58\textwidth}}
+\begin{longtable}{p{0.32\textwidth} p{0.58\textwidth}}
+\caption{Traceability between nonfunctional requirements and modules}
+\label{TblNFRRT}\\
 \toprule
 \textbf{Nonfunctional Requirement} & \textbf{Modules}\\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Nonfunctional Requirement} & \textbf{Modules}\\
+\midrule
+\endhead
 APP.1--APP.5 (Appearance)
   & \mref{mBHUI}, \mref{mBHFeedback}, \mref{mBHInput}, \mref{mSDConfig},
     \mref{mSDStore} \\
@@ -630,18 +643,20 @@ PRIV-01 (Privacy)
 IMM-01--IMM-02 (Immunity)
   & \mref{mSDConfig}, \mref{mSDLog} \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{longtable}
 
-\begin{table}[H]
-\centering
-\caption{Traceability between nonfunctional requirements and modules continued}
-\label{TblNFRRTCont}
 \renewcommand{\arraystretch}{1.1}
-\begin{tabular}{p{0.32\textwidth} p{0.58\textwidth}}
+\begin{longtable}{p{0.32\textwidth} p{0.58\textwidth}}
+\caption{Traceability between nonfunctional requirements and modules continued}
+\label{TblNFRRTCont}\\
 \toprule
 \textbf{Nonfunctional Requirements Continued} & \textbf{Modules}\\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Nonfunctional Requirements Continued} & \textbf{Modules}\\
+\midrule
+\endhead
 CULR-01--CULR-02 (Cultural)
   & \mref{mBHUI}, \mref{mBHFeedback}, \mref{mBHInput} \\
 LGL-01--LGL-02 (Legal)
@@ -649,22 +664,24 @@ LGL-01--LGL-02 (Legal)
 STDCOMP-01--STDCOMP-02 (Standards compliance)
   & \mref{mBHUI}, \mref{mBHFeedback}, \mref{mSDTypes}, \mref{mSDStore} \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{longtable}
 
 The following table links anticipated changes (ACs) from
 Section~\ref{SecChange} to the modules that hide the corresponding design
 decisions.
 
-\begin{table}[H]
-\centering
-\caption{Traceability between anticipated changes and modules}
-\label{TblACT}
 \renewcommand{\arraystretch}{1.1}
-\begin{tabular}{p{0.32\textwidth} p{0.58\textwidth}}
+\begin{longtable}{p{0.32\textwidth} p{0.58\textwidth}}
+\caption{Traceability between anticipated changes and modules}
+\label{TblACT}\\
 \toprule
 \textbf{Anticipated Change} & \textbf{Modules}\\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Anticipated Change} & \textbf{Modules}\\
+\midrule
+\endhead
 \acref{acHardware} - Hardware platform (microphone, speakers, OS automation)
   & \mref{mHHIO}, \mref{mHHAuto} \\
 \acref{acInput} - Input format / source (voice-only~vs.~mixed voice + text)
@@ -683,40 +700,40 @@ decisions.
 \acref{acStorage} - Logging and storage of history/preferences
   & \mref{mSDStore}, \mref{mSDLog}, \mref{mBHSession} \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{longtable}
 
-\section{Use Hierarchy Between Modules} \label{SecUse}
+\section{Uses Hierarchy Between Modules} \label{SecUse}
 
 In this section, the uses hierarchy between modules is provided.
 \citet{Parnas1978} said of two programs A and B that A {\em uses} B if correct
 execution of B may be necessary for A to complete the task described in its
 specification. That is, A {\em uses} B if there exist situations in which the
 correct functioning of A depends upon the availability of a correct
-implementation of B. Figure \ref{FigUH} illustrates the use relation between the
-modules. It can be seen that the graph is a directed acyclic graph (DAG). Each
-level of the hierarchy offers a testable and usable subset of the system, and
-modules in the higher level of the hierarchy are essentially simpler because
-they use modules from the lower levels.
+implementation of B. Figure~\ref{FigUH} illustrates the uses relation between
+the modules. The different node shapes distinguish the hardware-hiding,
+behaviour-hiding, and shared type / software-decision modules. The graph is a
+directed acyclic graph (DAG), and each level of the hierarchy offers a testable
+and usable subset of the system.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=1.15\textwidth,trim=50 0 0 0,clip]{UsesHierarchy.pdf}
-\caption{Use hierarchy among modules}
+\includegraphics[width=\textwidth,trim=50 0 0 0,clip]{UsesHierarchy.pdf}
+\caption{Uses hierarchy among modules. Distinct node shapes indicate different module categories.}
 \label{FigUH}
 \end{figure}
 
 \section{User Interfaces}
 
-This section goes over the user interfaces. The UI is designed to have a voice
-first interaction while also having keyboard and mouse input as secondary
-options.
+This section goes over the user interfaces. The UI is designed to support a
+voice-first interaction while also allowing keyboard and mouse input as
+secondary options.
 
 \subsection{Main Desktop Panel}
 
-The primary interface is a desktop window that can be visible while the user
-works in other applications. It can also run in background and will listen to
-user. It gives:
+The primary interface is a desktop window that can remain visible while the
+user works in other applications. It can also run in the background and listen
+to the user. Figure~\ref{FigMainUI} shows a mockup of this interface. The panel
+provides:
 
 \begin{itemize}
   \item A clear indication of whether the program is idle, listening, processing,
