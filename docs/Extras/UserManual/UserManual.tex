@@ -3,11 +3,12 @@
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{float}
+\usepackage{graphicx}
 
-\input{../Comments}
-\input{../Common}
+\input{../../Comments}
+\input{../../Common}
 
-\title{User Guide\\\progname}
+\title{User Manual\\\progname}
 
 \author{\authname}
 
@@ -23,7 +24,8 @@
 \toprule
 \textbf{Date} & \textbf{Developer(s)} & \textbf{Change}\\
 \midrule
-April 5, 2026 & Savinay & Initial User Guide release with interface startup, TUI/GUI settings, MCP setup, and Discord integration guidance\\
+April 5, 2026 & Savinay & Initial User Manual release with interface startup, TUI/GUI settings, MCP setup, and Discord integration guidance\\
+April 6, 2026 & Savinay & Added \texttt{uv run proxi setup} installation flow and documented the GUI voice controls\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -36,12 +38,31 @@ April 5, 2026 & Savinay & Initial User Guide release with interface startup, TUI
 
 \section{Overview}
 
-This guide describes the recommended workflow for Proxi:
+This manual describes the recommended workflow for Proxi:
 \begin{enumerate}
 	\item Start exactly one gateway process
 	\item Choose either the TUI or the GUI as your interface
 	\item If you use the GUI, configure settings (API keys, Integrations, and cron jobs)
 \end{enumerate}
+
+\section{Installation}
+
+From the repository root, install dependencies and initialize the local Proxi setup with:
+
+\begin{verbatim}
+uv sync
+uv run proxi setup
+\end{verbatim}
+
+This one-time setup flow:
+
+\begin{itemize}
+	\item Installs Python dependencies with \texttt{uv}
+	\item Installs the Node dependencies needed by the TUI, GUI, and Discord relay
+	\item Initializes or verifies the local API key database in \texttt{config/api\_keys.db}
+\end{itemize}
+
+If you ever need to repair a local environment, rerun \texttt{uv run proxi setup}. It is safe to run more than once.
 
 \section{Starting the Interface}
 
@@ -54,6 +75,13 @@ Run:
 uv run proxi gateway start
 \end{verbatim}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/gateway_run_command.png}
+\caption{Gateway startup command in terminal.}
+\label{fig:gateway-start}
+\end{figure}
+
 \subsection{Step 2: Choose an Interface}
 
 \subsubsection{Option A: TUI}
@@ -65,6 +93,13 @@ uv run proxi
 \end{verbatim}
 \end{quote}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/proxi_tui.png}
+\caption{Proxi TUI interface after launch.}
+\label{fig:tui-home}
+\end{figure}
+
 \subsubsection{Option B: GUI (React Frontend)}
 \begin{quote}
 Run:
@@ -73,6 +108,13 @@ Run:
 uv run proxi frontend
 \end{verbatim}
 \end{quote}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/proxi_gui_homescreen.png}
+\caption{Proxi GUI home screen.}
+\label{fig:gui-home}
+\end{figure}
 
 \subsubsection{Option C: Discord}
 \begin{quote}
@@ -108,13 +150,19 @@ In the TUI input box, type:
 /
 \end{verbatim}
 
-You can then:
 \begin{itemize}
 	\item Type to filter commands
 	\item Use up/down arrows to select
 	\item Press Enter to execute
 	\item Press Esc to close the palette
 \end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/tui_slash_commands.png}
+\caption{TUI slash command interface and command discovery flow.}
+\label{fig:tui-slash-commands}
+\end{figure}
 
 \subsection{Complete Slash Command Reference}
 
@@ -173,6 +221,7 @@ Open \textbf{Settings} from the GUI top bar. The settings modal is organized int
 	\item Integrations
 	\item Cron Jobs
 	\item Webhooks
+	\item Voice
 \end{enumerate}
 
 \subsection{General}
@@ -194,6 +243,13 @@ Use this section for quick session and model controls.
 	\item Use \textbf{Compact} when context gets large
 	\item Use \textbf{Switch LLM Provider} after selecting provider/model
 \end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/gui_settings_general.png}
+\caption{GUI Settings: General section.}
+\label{fig:gui-settings-general}
+\end{figure}
 
 \subsection{Agent}
 
@@ -232,6 +288,13 @@ Use this section to personalize assistant behavior.
 	\item Update profile when switching environments (school/work/personal)
 \end{itemize}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/gui_settings_profile.png}
+\caption{GUI Settings: Profile section.}
+\label{fig:gui-settings-profile}
+\end{figure}
+
 \subsection{API Keys}
 
 Use this section to add integration credentials and model-provider keys.
@@ -265,6 +328,13 @@ Weather & Usually no API key required in this setup \\
 	\item After adding keys, refresh and verify they are listed
 \end{itemize}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/gui_settings_api_keys.png}
+\caption{GUI Settings: API Keys section.}
+\label{fig:gui-settings-api-keys}
+\end{figure}
+
 \subsection{Integrations}
 
 Use this section to enable or disable integrations after key setup.
@@ -276,6 +346,13 @@ Use this section to enable or disable integrations after key setup.
 	\item Save/refresh
 	\item Run one test prompt per integration
 \end{enumerate}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/gui_settings_integrations.png}
+\caption{GUI Settings: Integrations section.}
+\label{fig:gui-settings-integrations}
+\end{figure}
 
 \subsection{Cron Jobs}
 
@@ -335,12 +412,19 @@ Additional examples:
 	\item \texttt{30 17 * * 1-5}: run at 17:30 on weekdays
 \end{itemize}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/gui_settings_cron_jobs.png}
+\caption{GUI Settings: Cron Jobs section.}
+\label{fig:gui-settings-cron-jobs}
+\end{figure}
+
 \subsection{Webhooks}
 
 Use webhooks for external event-driven automation.
 
 For detailed relay and webhook configuration, see the README webhook section:
-\url{../README.md#discord-integration-relay---gateway}
+\url{../../README.md#discord-integration-relay---gateway}
 
 \subsubsection{Key Fields}
 \begin{itemize}
@@ -359,9 +443,50 @@ For detailed relay and webhook configuration, see the README webhook section:
 	\item Expand template complexity gradually
 \end{enumerate}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/gui_settings_webhooks.png}
+\caption{GUI Settings: Webhooks section.}
+\label{fig:gui-settings-webhooks}
+\end{figure}
+
 \subsection{LLM Dependency Note}
 
 Provider/model switching lives in \textbf{General}. Ensure the corresponding provider key exists in API Keys (for example \texttt{OPENAI\_API\_KEY}).
+
+\subsection{Voice}
+
+Use this section to configure wake-word listening, speech capture behavior, and browser text-to-speech playback.
+
+\subsubsection{What You Can Configure}
+\begin{itemize}
+	\item \textbf{Wake word}: enables or disables the browser-based listener used to detect ``hey proxi''
+	\item \textbf{Auto-stop sensitivity}: sets how many seconds of silence are required before Proxi stops recording
+	\item \textbf{Auto-send after silence}: controls whether Proxi sends the transcript automatically when recording stops
+	\item \textbf{Start-listening beep}: toggles the audible beep when voice capture begins
+	\item \textbf{Text to speech}: enables or disables spoken assistant replies
+	\item \textbf{Voice / accent}: selects the browser voice used for narration
+	\item \textbf{Narration speed}: adjusts how fast spoken replies are read
+	\item \textbf{Preview Voice}: plays a short sample with the current voice settings
+\end{itemize}
+
+\subsubsection{Suggested Usage}
+\begin{itemize}
+	\item Turn on wake word if you want hands-free interaction in the GUI
+	\item Leave auto-send on for the fastest voice-first workflow
+	\item Use Preview Voice after picking a new browser voice or changing speed
+	\item Keep TTS off if you only want transcription and do not want spoken replies
+\end{itemize}
+
+\subsubsection{Main Screen Voice Controls}
+The GUI chat composer also shows the current voice state beside the session info, and the Mic button starts or stops the current recording session.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/gui_settings_voice.png}
+\caption{GUI Settings: Voice section.}
+\label{fig:gui-settings-voice}
+\end{figure}
 
 \subsection{MCP Setup by Integration}
 
@@ -493,11 +618,29 @@ On first Spotify action, a browser window opens for Spotify login/consent. After
 \subsubsection{Weather MCP}
 \begin{quote}
 \noindent\textbf{Required Inputs}\\
-In many setups, no extra API key is required beyond MCP configuration.
+No API key is required in this setup. Weather uses the built-in Open-Meteo integration.
+
+\medskip
+\noindent\textbf{Setup Note}\\
+Enable \textbf{Weather} in \textbf{Settings \textgreater\ Integrations}. Accurate location and timezone settings in your profile help weather responses stay relevant.
 
 \medskip
 \noindent\textbf{Validation Prompt}\\
 ``What is the weather in Hamilton, ON today?''
+\end{quote}
+
+\subsubsection{Web MCP}
+\begin{quote}
+\noindent\textbf{Required Inputs}\\
+No API key is required in this setup. Web uses Proxi's built-in web search integration.
+
+\medskip
+\noindent\textbf{Setup Note}\\
+Enable \textbf{Web} in \textbf{Settings \textgreater\ Integrations} when you want web search and browser-style lookup tools available to the assistant.
+
+\medskip
+\noindent\textbf{Validation Prompt}\\
+``Search the web for the latest news about OpenAI.''
 \end{quote}
 
 \subsection{Example Setup: Complete Key and MCP Flow}
@@ -527,6 +670,7 @@ Enable these integrations in \textbf{Settings \textgreater\ Integrations}:
 	\item Obsidian
 	\item Spotify
 	\item Weather
+	\item Web
 \end{itemize}
 
 \subsubsection{Step 3: Validate One-by-One}
@@ -578,8 +722,8 @@ From project root (manual):
 
 \begin{verbatim}
 cd discord_relay
-npm install
-npm run start
+bun install
+bun run start
 \end{verbatim}
 
 Or via unified CLI:
@@ -605,6 +749,94 @@ Default prefix is \texttt{/proxi}.
 \end{itemize}
 
 To allow plain (non-prefixed) messages, set \texttt{discord\_allow\_plain: true} in gateway source config and \texttt{PROXI\_DISCORD\_ALLOW\_PLAIN=1} in relay environment.
+
+\section{Troubleshooting}
+
+This section covers common issues and quick recovery steps.
+
+\subsection{Gateway or Interface Won't Connect}
+
+\textbf{Symptoms}
+\begin{itemize}
+\item GUI shows disconnected status
+\item TUI does not respond after startup
+\item \texttt{uv run proxi frontend} exits early
+\end{itemize}
+
+\textbf{Fix}
+\begin{enumerate}
+\item Start gateway first: \texttt{uv run proxi gateway start}
+\item Start your interface after gateway is running
+\item Ensure only one gateway process is active
+\item If needed, stop and restart gateway, then relaunch TUI/GUI
+\end{enumerate}
+
+\subsection{Voice Input Is Misheard or Not Triggering}
+
+\textbf{Symptoms}
+\begin{itemize}
+\item Wake word does not activate listening
+\item Spoken text is inaccurate
+\item Mic button starts but no transcript appears
+\end{itemize}
+
+\textbf{Fix}
+\begin{enumerate}
+\item In GUI \textbf{Settings \textgreater\ Voice}, confirm wake word is enabled
+\item Allow microphone permission in your browser
+\item Reduce background noise and speak more clearly
+\item Use the Mic button manually if wake-word activation is unreliable
+\item Increase auto-stop sensitivity if recording ends too quickly
+\end{enumerate}
+
+\subsection{Integration Commands Fail (Gmail, Calendar, Spotify, etc.)}
+
+\textbf{Symptoms}
+\begin{itemize}
+\item Commands return auth errors
+\item Integration tools are unavailable
+\item Actions fail after keys were recently changed
+\end{itemize}
+
+\textbf{Fix}
+\begin{enumerate}
+\item Verify required API keys are present in \textbf{Settings \textgreater\ API Keys}
+\item Confirm the integration is enabled in \textbf{Settings \textgreater\ Integrations}
+\item Re-run first-time authorization flow when prompted in browser
+\item Send one simple validation prompt for that integration
+\item Restart gateway if tool availability appears stale
+\end{enumerate}
+
+\subsection{Cron or Webhook Jobs Do Not Run}
+
+\textbf{Symptoms}
+\begin{itemize}
+\item Scheduled prompts never trigger
+\item Webhook calls are accepted but do not produce actions
+\end{itemize}
+
+\textbf{Fix}
+\begin{enumerate}
+\item Confirm the source/job is not paused
+\item Validate cron format and target agent/session values
+\item Re-check webhook secret configuration if signatures are enabled
+\item Inspect gateway logs for source-specific errors
+\end{enumerate}
+
+\subsection{Setup or Dependency Problems}
+
+\textbf{Symptoms}
+\begin{itemize}
+\item Missing dependencies after pulling new changes
+\item Commands fail due to missing runtime packages
+\end{itemize}
+
+\textbf{Fix}
+\begin{enumerate}
+\item From repository root run: \texttt{uv sync}
+\item Re-run setup: \texttt{uv run proxi setup}
+\item Retry gateway startup and then launch your selected interface
+\end{enumerate}
 
 \section{Quick End-to-End Flow}
 
