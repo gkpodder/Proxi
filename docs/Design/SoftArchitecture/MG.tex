@@ -87,7 +87,7 @@ OutputMode & Output type (VoiceOnly, TextOnly, Both).\\
 Plan & Structured action sequence from BH-Plan.\\
 QA & Quality Assurance (software testing process).\\
 RiskLevel & Safety classification for user actions.\\
-SD & Software-Decision module (e.g., SD-Types, SD-Log).\\
+SD & Software-Decision module (e.g., SD-ToolRegistry, SD-Log).\\
 SRS & System Requirements Specification.\\
 STT & Speech-to-Text (audio input converted to text).\\
 TTS & Text-to-Speech (text output converted to speech).\\
@@ -261,8 +261,8 @@ actually be implemented.
 
   % SD
   \item [\refstepcounter{mnum} \mthemnum \label{mSDTypes}:]
-  \textbf{SD-Types (Core Data Types)} defines ADTs for Command, Intent, Plan,
-  and related structures.
+  \textbf{SD-Types (Core Data Types)} defines shared type and record definitions
+  for Command, Intent, Plan, and related structures.
   \item [\refstepcounter{mnum} \mthemnum \label{mSDRegistry}:]
   \textbf{SD-ToolRegistry (Tool Registry)} maps intents to MCP tools and
   actions.
@@ -469,18 +469,18 @@ rules.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsection{Software Decision Modules (\mref{mSDTypes})-(\mref{mSDLog})}
+\subsection{Shared Type Definitions and Software Decision Modules (\mref{mSDTypes})-(\mref{mSDLog})}
 
-The software-decision modules define shared data representations and system-wide
-services such as tool mapping, persistence, AI service integration, and logging.
+These modules define shared domain representations and system-wide services such
+as tool mapping, persistence, AI service integration, and logging.
 
-\subsubsection{SD-Types: Core Data Types (\mref{mSDTypes})}
+\subsubsection{SD-Types: Core Data Definitions (\mref{mSDTypes})}
 \begin{description}
 \item[Secrets:] Internal representation of commands, actions, risks, policies,
 and tool metadata.
-\item[Services:] Defines shared ADTs used system-wide.
+\item[Services:] Defines the shared type and record definitions used system-wide.
 \item[Implemented By:] \progname{}
-\item[Type Of Module:] Abstract Data Type
+\item[Type Of Module:] Library
 \end{description}
 
 \subsubsection{SD-ToolRegistry: Tool Registry (\mref{mSDRegistry})}

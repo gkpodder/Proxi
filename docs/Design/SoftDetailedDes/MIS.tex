@@ -104,7 +104,7 @@ OutputMode & Output type (VoiceOnly, TextOnly, Both).\\
 Plan & Structured action sequence from BH-Plan.\\
 QA & Quality Assurance (software testing process).\\
 RiskLevel & Safety classification for user actions.\\
-SD & Software-Decision module (e.g., SD-Types, SD-Log).\\
+SD & Software-Decision module (e.g., SD-ToolRegistry, SD-Log).\\
 SRS & System Requirements Specification.\\
 STT & Speech-to-Text (audio input converted to text).\\
 TTS & Text-to-Speech (text output converted to speech).\\
@@ -265,8 +265,8 @@ confirmations, and results; supports full voice-only interaction.
 Implements \textit{FUNC.R.8}.\\
 \midrule
 
-\multirow{5}{*}{\textbf{Software-Decision}} &
-\textbf{SD-Types (Core Structures)} defines abstract data types for
+\multirow{5}{*}{\textbf{Shared Types / Software-Decision}} &
+\textbf{SD-Types (Core Structures)} defines shared type and record definitions for
 Command, Intent, and Plan.\\
 & \textbf{SD-ToolRegistry (Action Map)} maintains the mapping between
 recognized intents and available system actions.\\
