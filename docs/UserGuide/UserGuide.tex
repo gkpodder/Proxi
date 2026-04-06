@@ -24,6 +24,7 @@
 \textbf{Date} & \textbf{Developer(s)} & \textbf{Change}\\
 \midrule
 April 5, 2026 & Savinay & Initial User Guide release with interface startup, TUI/GUI settings, MCP setup, and Discord integration guidance\\
+April 6, 2026 & Savinay & Added \texttt{uv run proxi setup} installation flow and documented the GUI voice controls\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -42,6 +43,25 @@ This guide describes the recommended workflow for Proxi:
 	\item Choose either the TUI or the GUI as your interface
 	\item If you use the GUI, configure settings (API keys, Integrations, and cron jobs)
 \end{enumerate}
+
+\section{Installation}
+
+From the repository root, install dependencies and initialize the local Proxi setup with:
+
+\begin{verbatim}
+uv sync
+uv run proxi setup
+\end{verbatim}
+
+This one-time setup flow:
+
+\begin{itemize}
+	\item Installs Python dependencies with \texttt{uv}
+	\item Installs the Node dependencies needed by the TUI, GUI, and Discord relay
+	\item Initializes or verifies the local API key database in \texttt{config/api\_keys.db}
+\end{itemize}
+
+If you ever need to repair a local environment, rerun \texttt{uv run proxi setup}. It is safe to run more than once.
 
 \section{Starting the Interface}
 
@@ -107,8 +127,8 @@ In the TUI input box, type:
 \begin{verbatim}
 /
 \end{verbatim}
-
-You can then:
+bun install
+bun run start
 \begin{itemize}
 	\item Type to filter commands
 	\item Use up/down arrows to select
@@ -173,6 +193,7 @@ Open \textbf{Settings} from the GUI top bar. The settings modal is organized int
 	\item Integrations
 	\item Cron Jobs
 	\item Webhooks
+	\item Voice
 \end{enumerate}
 
 \subsection{General}
@@ -363,6 +384,33 @@ For detailed relay and webhook configuration, see the README webhook section:
 
 Provider/model switching lives in \textbf{General}. Ensure the corresponding provider key exists in API Keys (for example \texttt{OPENAI\_API\_KEY}).
 
+\subsection{Voice}
+
+Use this section to configure wake-word listening, speech capture behavior, and browser text-to-speech playback.
+
+\subsubsection{What You Can Configure}
+\begin{itemize}
+	\item \textbf{Wake word}: enables or disables the browser-based listener used to detect ``hey proxi''
+	\item \textbf{Auto-stop sensitivity}: sets how many seconds of silence are required before Proxi stops recording
+	\item \textbf{Auto-send after silence}: controls whether Proxi sends the transcript automatically when recording stops
+	\item \textbf{Start-listening beep}: toggles the audible beep when voice capture begins
+	\item \textbf{Text to speech}: enables or disables spoken assistant replies
+	\item \textbf{Voice / accent}: selects the browser voice used for narration
+	\item \textbf{Narration speed}: adjusts how fast spoken replies are read
+	\item \textbf{Preview Voice}: plays a short sample with the current voice settings
+\end{itemize}
+
+\subsubsection{Suggested Usage}
+\begin{itemize}
+	\item Turn on wake word if you want hands-free interaction in the GUI
+	\item Leave auto-send on for the fastest voice-first workflow
+	\item Use Preview Voice after picking a new browser voice or changing speed
+	\item Keep TTS off if you only want transcription and do not want spoken replies
+\end{itemize}
+
+\subsubsection{Main Screen Voice Controls}
+The GUI chat composer also shows the current voice state beside the session info, and the Mic button starts or stops the current recording session.
+
 \subsection{MCP Setup by Integration}
 
 This section explains setup for each requested MCP.
@@ -493,11 +541,29 @@ On first Spotify action, a browser window opens for Spotify login/consent. After
 \subsubsection{Weather MCP}
 \begin{quote}
 \noindent\textbf{Required Inputs}\\
-In many setups, no extra API key is required beyond MCP configuration.
+No API key is required in this setup. Weather uses the built-in Open-Meteo integration.
+
+\medskip
+\noindent\textbf{Setup Note}\\
+Enable \textbf{Weather} in \textbf{Settings \textgreater\ Integrations}. Accurate location and timezone settings in your profile help weather responses stay relevant.
 
 \medskip
 \noindent\textbf{Validation Prompt}\\
 ``What is the weather in Hamilton, ON today?''
+\end{quote}
+
+\subsubsection{Web MCP}
+\begin{quote}
+\noindent\textbf{Required Inputs}\\
+No API key is required in this setup. Web uses Proxi's built-in web search integration.
+
+\medskip
+\noindent\textbf{Setup Note}\\
+Enable \textbf{Web} in \textbf{Settings \textgreater\ Integrations} when you want web search and browser-style lookup tools available to the assistant.
+
+\medskip
+\noindent\textbf{Validation Prompt}\\
+``Search the web for the latest news about OpenAI.''
 \end{quote}
 
 \subsection{Example Setup: Complete Key and MCP Flow}
@@ -527,6 +593,7 @@ Enable these integrations in \textbf{Settings \textgreater\ Integrations}:
 	\item Obsidian
 	\item Spotify
 	\item Weather
+	\item Web
 \end{itemize}
 
 \subsubsection{Step 3: Validate One-by-One}
@@ -578,8 +645,8 @@ From project root (manual):
 
 \begin{verbatim}
 cd discord_relay
-npm install
-npm run start
+bun install
+bun run start
 \end{verbatim}
 
 Or via unified CLI:
