@@ -27,6 +27,7 @@ September 21, 2025 & Savinay Chhabra  & Created Draft Development Plan; Sections
 September 22, 2025 & Savinay Chhabra  & Sections 6, 8\\ 
 September 22, 2025 & Ajay Singh Grewal & Section 9, 10, 11\\
 September 22, 2025 & Amanbeer Singh Minhas & Team Charter and Reflection\\
+April 6, 2026 & Ajay Singh Grewal & Revised the POC Demo Plan to focus on feasibility risk and November demonstration scope\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -138,27 +139,30 @@ What is the main risk, or risks, for the success of your project?  What will you
 demonstrate during your proof of concept demonstration to convince yourself that
 you will be able to overcome this risk?
 
-The main risks revolve around security, adaptability, and user trust, since the AI will have access and control to one’s 
-computer through model context protocols, functioning as the central master control program. 
+The main feasibility risk for Proxi is whether an AI assistant can reliably 
+control a user's computer well enough to complete a meaningful task from a 
+natural-language command. Since the core value of Proxi is accessible, 
+hands-free computer interaction, the project depends on proving that the 
+assistant can correctly interpret a request, understand the user's environment, 
+and execute the proper action on the machine. Concerns such as security, 
+hallucinations, and long-term user trust are also important, but for this proof 
+of concept the primary question is whether the basic interaction is technically 
+feasible at all.
 
-Granting the AI full control of the computer introduces major security risks and vulnerabilities. Since the MCP will have 
-deep access to a user’s computer, including files, settings, and applications, any vulnerabilities could lead to catastrophic 
-consequences. Malicious actors could exploit the system to steal sensitive data, install harmful software, or commit unintended 
-actions which could become destructive. This risk must be reduced by having safeguards the AI must adhere to, a thoroughly tested 
-environment, user permission before completing risky actions, and the ability to rollback changes. Hence, a robust error handling 
-and recovery system is needed so incorrect commands do not disrupt any workflows or overall user experience.
+Our November proof of concept demonstration will therefore focus on one concrete 
+end-to-end workflow. A user will issue a voice or text command such as opening 
+an application, locating a file, summarizing its contents, or creating a 
+calendar event, and Proxi will interpret the intent, use the required tools, 
+and visibly complete the task. This will demonstrate that the team's chosen 
+automation technology, language model pipeline, and system architecture are 
+sufficient to support real computer interaction rather than only simulated 
+responses.
 
-Another big risk is the AI being capable enough to adapt to diverse range of computer environments. Every computer is different, 
-with certain operating systems, setups, workflows, and personal preferences. If the AI cannot accurately understand its environment, 
-it can lead to incorrect commands, actions, and overall poor experience. The AI must be capable of learning its environment in a 
-dynamic manner and customize its actions accordingly. 
-
-Furthermore, since the AI has full control of one’s computer, transparency is essential. If users feel uncertain of how the 
-AI is doing things on their computer, it can risk user trust, leading to hesitance in using the tool. Creating a clear and 
-intuitive user interface, where the technology is properly explained, will help mitigate this risk. 
-
-To address these risks, the PoC will focus on showing that the MCP and AI can safely and effectively interact with a computer, 
-learn its environment, and execute meaningful tasks while keeping user trust. 
+If this proof of concept fails, it would indicate that the current approach to 
+AI-driven computer control is too unreliable or too difficult to implement 
+within the Capstone timeline. In that case, the project would need to reduce 
+its scope toward a narrower, more supervised assistant that supports a smaller 
+set of predefined tasks instead of broader autonomous computer control.
 
 
 \section{Expected Technology}
