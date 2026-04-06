@@ -1,9 +1,9 @@
-% THIS DOCUMENT IS FOLLOWS THE VOLERE TEMPLATE BY Suzanne Robertson and James Robertson
-% ONLY THE SECTION HEADINGS ARE PROVIDED
+% THIS DOCUMENT FOLLOWS THE VOLERE TEMPLATE BY
+% Suzanne Robertson and James Robertson.
+% ONLY THE SECTION HEADINGS ARE PROVIDED.
 %
-% Initial draft from https://github.com/Dieblich/volere
-%
-% Risks are removed because they are covered by the Hazard Analysis
+% Risks are removed because they are covered by the Hazard Analysis.
+
 \documentclass[12pt]{article}
 
 \usepackage{booktabs}
@@ -11,26 +11,54 @@
 \usepackage{hyperref}
 \usepackage{graphicx}
 \usepackage{float}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{pdflscape}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{caption}
+\usepackage{natbib}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.35em}
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.15}
+\setlist[itemize]{leftmargin=1.5em, itemsep=0.25em, topsep=0.35em}
+\setlist[enumerate]{leftmargin=1.5em, itemsep=0.25em, topsep=0.35em}
+\setlist[description]{itemsep=0.25em, topsep=0.35em}
+
 \hypersetup{
-    bookmarks=true,         % show bookmarks bar?
-      colorlinks=true,      % false: boxed links; true: colored links
-    linkcolor=red,          % color of internal links (change box color with linkbordercolor)
-    citecolor=green,        % color of links to bibliography
-    filecolor=magenta,      % color of file links
-    urlcolor=cyan           % color of external links
+  bookmarks=true,
+  colorlinks=true,
+  linkcolor=red,
+  citecolor=green,
+  filecolor=magenta,
+  urlcolor=cyan
 }
 
 \newcommand{\lips}{\textit{Insert your content here.}}
+\newcommand{\reqcard}[5]{%
+\noindent\begin{tabularx}{\textwidth}{@{}p{2.35cm}X@{}}
+\textbf{ID} & \textbf{#1} \\
+\textbf{Requirement} & #2 \\
+\textbf{Rationale} & #3 \\
+\textbf{Fit Criterion} & #4 \\
+\textbf{Priority} & #5 \\
+\end{tabularx}\par\medskip
+}
 
 \input{../Comments}
 \input{../Common}
 
 \begin{document}
 
-\title{Software Requirements Specification for \progname: AI Voice Assistant} 
+\title{
+  Software Requirements Specification for Project Proxi
+}
 \author{\authname}
 \date{\today}
-	
+
 \maketitle
 
 ~\newpage
@@ -43,214 +71,518 @@
 
 \section*{Revision History}
 
-\begin{tabularx}{\textwidth}{p{3cm}p{2cm}X}
-\toprule {\textbf{Date}} & {\textbf{Version}} & {\textbf{Notes}}\\
+\begin{tabularx}{\textwidth}{p{2.3cm}p{1.1cm}X}
+\toprule
+\textbf{Date} & \textbf{Ver.} & \textbf{Notes} \\
 \midrule
-10/10/2025 & 1.0 & Added Initial SRS\\
+10/10/2025 & 1.0 & Added initial SRS. \\
+05/04/2026 & 1.1 & Added introductory text for major sections. \\
+ &  & Moved repeated numeric thresholds into a symbolic constants section. \\
+ &  & Rewrote project goals to be higher level. \\
+ &  & Reordered glossary entries alphabetically. \\
+ &  & Corrected spelling and wording issues. \\
+ &  & Added rationale for key constraints. \\
+ &  & Labeled assumptions as A1, A2, etc. \\
+ &  & Clarified how personas affect requirement priorities. \\
+ &  & Improved spacing and readability in Section 8.3. \\
+ &  & Added dedicated traceability from requirements to use cases. \\
+ &  & Expanded schedule and task-planning detail. \\
+ &  & Added a formalized safety interaction protocol and a system state diagram subsection. \\
+ 
 \bottomrule
 \end{tabularx}
 
-~\\
+\newpage
 
-~\newpage
 \section{Purpose of the Project}
+
 \subsection{User Business}
-Proxi is an AI-powered desktop assistant that lets people operate a computer
-entirely through natural speech. It targets users who face barriers with traditional
-input devices (keyboard, mouse, complex UIs) and organizations that want to provide
-inclusive access to essential digital tasks (communication, learning, work). Proxi
-augments independence and reduces the digital divide by turning voice into safe,
-precise computer actions. While accessibility is the primary driver, Proxi is
-equally intended for general users who want faster, lower‑friction workflows so it
-benefits both disabled and non‑disabled users.
+Proxi is an AI-powered desktop assistant designed to make everyday
+computer use more accessible, efficient, and dependable. It allows
+people to operate a computer through natural speech and text rather
+than requiring every task to be completed through traditional mouse-
+and keyboard-heavy workflows. The product is especially relevant for
+users who face barriers with complex graphical interfaces, older adults
+who benefit from simpler interaction paths, and users with temporary
+or permanent accessibility needs who need more flexible control of the
+desktop environment~\citep{WHODisability2023,W3CWCAG22}.
+
+From a business perspective, Proxi addresses two closely related needs.
+The first is accessibility: many users cannot consistently rely on
+precise pointing, shortcut memorization, or dense interface navigation,
+so a natural-language assistant can reduce friction and increase
+independence. The second is productivity: even experienced users often
+want faster, lower-friction workflows for repetitive desktop tasks such
+as opening applications, searching for files, drafting messages, or
+triggering common actions. By supporting both groups, Proxi can serve
+as a practical daily-use assistant rather than a novelty interface.
+
+Proxi's business value comes from converting user intent into safe,
+traceable computer actions. Instead of forcing users to translate their
+goals into technical steps, the system handles interpretation, planning,
+confirmation, and execution in a way that preserves user control. This
+reduces the digital divide, improves confidence for novice users, and
+gives power users a more direct way to complete routine work while still
+keeping destructive or risky actions visible and confirmable.
 
 \subsection{Goals of the Project}
-\begin{description}
-\item[G-1 (Latency)] Spoken system responses for common commands shall begin within 
-$\leq$ 2.0 s from end-of-speech in a quiet environment.
+The goals in this subsection are intentionally high level. Quantitative
+targets that serve as fit criteria are centralized in the symbolic
+constants table in Section~\ref{sec:symbolic-constants} so that the
+same values can be referenced consistently throughout the document.
+This separation helps keep the goals stable even when implementation
+details evolve, while still preserving measurable acceptance criteria in
+later requirement sections. It also improves traceability by ensuring
+that performance, usability, and safety thresholds are defined once and
+reused uniformly across functional requirements, non-functional
+requirements, and verification activities.
 
-\item[G-2 (Recognition Accuracy)] Command recognition accuracy for supported 
-language(s) in quiet environment shall be $\geq$ 90\% intent-level accuracy.
+\begin{tabularx}{\textwidth}{p{4.1cm}X}
+\textbf{G-1 (Accessibility)} & Proxi shall improve computer access for users who face barriers with keyboards, mice, and complex user interfaces. \\
+\textbf{G-2 (Independent Task Completion)} & Proxi shall allow users to complete a meaningful set of everyday computer tasks through voice or text interaction. \\
+\textbf{G-3 (Safety and Trust)} & Proxi shall support safe task execution through clear feedback, explicit confirmation for risky actions, and traceable results. \\
+\textbf{G-4 (Usability)} & Proxi shall be simple enough for new users to learn quickly and useful enough for experienced users to adopt in everyday work. \\
+\textbf{G-5 (Extensibility)} & Proxi shall provide a modular foundation that can be extended with new tools, interaction modes, and accessibility improvements. \\
+\textbf{G-6 (Stretch Goals)} & Stretch goals include stronger personalization, offline support, multimodal input, and broader language coverage. \\
+\end{tabularx}
 
-\item[G-3 (Task Coverage)] Users from the primary user group shall complete $\geq$ 
-80\% of a predefined core task suite (open app/file, browse, compose, save, 
-schedule) using voice or keyboard.
+\section{Naming Conventions and Terminology}
+This section defines project terms, abbreviations, and shared
+constants. The glossary is ordered alphabetically to improve lookup,
+and the symbolic constants centralize repeated numeric thresholds so
+the same values can be used consistently across goals, requirements,
+and fit criteria.
 
-\item[G-4 (Effectiveness)] Compared to baseline (traditional input for same users), 
-Proxi shall improve task completion rate by $\geq$ 20\%.
+\subsection{Symbolic Constants}
+\label{sec:symbolic-constants}
+\begin{samepage}
+\vspace{-0.5\baselineskip}
+This section defines the main symbolic constants used throughout this
+document. These constants centralize recurring thresholds so values are
+defined once and referenced consistently across goals, functional
+requirements, non-functional requirements, and fit criteria. Using
+symbolic names instead of repeating raw numbers also improves
+maintainability: if a target changes, it can be updated in one place
+without introducing inconsistencies in downstream sections.
 
-\item[G-5 (Satisfaction)] Accessibility-focused usability tests shall yield 4.0/5.0 satisfaction score.
+\begingroup
+\small
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.35}
+\captionsetup{aboveskip=4pt, belowskip=4pt}
+\begin{center}
+\captionof{table}{Symbolic Constants}
+\label{tab:symbolic-constants}
+\begin{tabularx}{0.92\textwidth}{p{3.35cm}p{2.0cm}X}
+\toprule
+\textbf{Name} & \textbf{Value} & \textbf{Meaning} \\
+\midrule
+\texttt{APP\_CPU\_MAX} & 30\% &
+Maximum CPU use during normal operation. \\
+\texttt{APP\_LOAD\_TIME} & 200 ms &
+Maximum time to load a new feature. \\
+\texttt{INDOOR\_NOISE\_MAX} & 65 dB &
+Moderate indoor noise limit. \\
+\texttt{MOD\_NOISE\_ACC\_MIN} & 80\% &
+Minimum accuracy in moderate indoor noise. \\
+\texttt{QUIET\_ACC\_MIN} & 90\% &
+Minimum recognition accuracy in quiet conditions. \\
+\texttt{QUIET\_RESP\_MAX} & 2.0 s &
+Maximum response-start time in quiet conditions. \\
+\texttt{ROLLBACK\_MAX} & 60 s &
+Maximum rollback time after update failure. \\
+\texttt{SESS\_DURATION\_MIN} & 4 h &
+Minimum continuous operation target. \\
+\texttt{TASK\_SUCCESS\_MIN} & 85\% &
+Minimum end-to-end task success rate. \\
+\texttt{TASK\_TIME\_MAX} & 3.0 s &
+Maximum time for common local actions. \\
+\texttt{USER\_SAT\_MIN} & 4.0/5.0 &
+Minimum usability satisfaction score. \\
+\texttt{USABILITY\_GAIN\_MIN} & 20\% &
+Minimum improvement over baseline workflow. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+\endgroup
+\end{samepage}
 
-\item[G-6 (Stretch Goals)] Voice recognition improvements, offline capabilities, 
-multimodal interaction support, personalized profiles, enhanced accessibility
-\end{description}
+\subsection{Glossary of All Terms, Including Acronyms, Used by
+Stakeholders Involved in the Project}
+
+\begin{tabularx}{\textwidth}{p{3.8cm}X}
+\toprule
+\textbf{Term} & \textbf{Definition} \\
+\midrule
+\textbf{Accessibility} & Usable by people with a wide range of abilities and disabilities. \\
+\textbf{Action} & A single execution of a tool with validated parameters. \\
+\textbf{AI Agent} & A software agent that uses artificial intelligence to carry out tasks. \\
+\textbf{Audit Log} & A record of actions taken by the system. \\
+\textbf{Command} & An instruction given by the user to the system. \\
+\textbf{Confirmation Gate} & An approval prompt shown before risky actions. \\
+\textbf{LLM} & Large Language Model. \\
+\textbf{MCP} & Model Context Protocol. \\
+\textbf{MCP Client} & An AI agent that connects to an MCP server to use tools. \\
+\textbf{MCP Server} & A local server that exposes tools through MCP. \\
+\textbf{OS Automation Tools} & Software that allows the system to interact with the operating system. \\
+\textbf{Permission Scope} & The level of access granted to the system for completing actions. \\
+\textbf{PII} & Personally Identifiable Information. \\
+\textbf{Plan} & An ordered sequence of actions used to fulfill a user intent. \\
+\textbf{POLP} & Principle of Least Privilege. \\
+\textbf{Sandbox} & A secure environment in which code can run without affecting the rest of the system. \\
+\textbf{STT} & Speech-to-Text. \\
+\textbf{Token} & A unit of text used by language models. \\
+\textbf{TTS} & Text-to-Speech. \\
+\textbf{User Interface} & The visual and interactive elements through which a user engages with the system. \\
+\bottomrule
+\end{tabularx}
+
 \section{Stakeholders}
-\subsection{Client}
-The clients for this project are the SFWRENG 4G06A Capstone teaching team at 
-McMaster University (course Instructor and assigned Teaching Assistants), serving 
-as the product owners on behalf of the department. Their mandate is to ensure the 
-solution meets accessibility, usability, and engineering quality standards 
-appropriate for a capstone deliverable and potential real‑world piloting within 
-academic environments. They provide domain expectations (accessibility best 
-practices, privacy/compliance constraints in academic settings) and approve scope 
-and milestones.
-\subsection{Customer}
-Our customers are the end-users and organizations that will deploy Proxi to enable
-inclusive and more efficient computer use:
+This section identifies the people and groups who influence scope,
+implementation, validation, and long-term use of the product. The goal
+is to make decision authority, user impact, and feedback pathways
+explicit so requirement priorities remain defensible throughout the
+project lifecycle.
 
+\subsection{Client}
+The clients for this project are the SFWRENG 4G06A Capstone teaching
+team at McMaster University, including the course instructor and the
+assigned teaching assistants.
+
+\textbf{Role:}
+They act as the academic product owners for scope, quality, and
+acceptance decisions.
+
+\textbf{Decision Authority:}
+They approve major requirement changes, milestone outcomes, and final
+deliverable readiness.
+
+\textbf{Primary Success Criteria:}
+The delivered system demonstrates strong accessibility alignment,
+usable interaction flow, and acceptable engineering rigor for a
+capstone context.
+
+\subsection{Customer}
+Our customers are the end users and organizations that will deploy
+Proxi to enable inclusive and more efficient computer use:
 \begin{enumerate}
-  \item \textbf{Educational institutions} (libraries, computer labs, accessibility
-  services) seeking hands-free or low-friction access to standard desktops and web
-  apps.
-  \item \textbf{Healthcare and community organizations} supporting users with motor,
-  vision, or hearing challenges.
-  \item \textbf{General consumers and power users} who prefer faster, voice-first or
-  mixed-modality workflows.
+  \item \textbf{Educational institutions} such as libraries, computer
+  labs, and accessibility services that need dependable low-friction
+  computer access support.
+  \item \textbf{Healthcare and community organizations} supporting
+  users with motor, vision, or hearing challenges who benefit from
+  voice-first and guided interaction.
+  \item \textbf{General consumers and power users} who value faster
+  workflows, reduced interaction overhead, and mixed-modality control
+  in daily desktop tasks.
 \end{enumerate}
 
-\subsection{Other Stakeholders}
-Other stakeholders include any person or group with interest beyond the client and
-the customer:
+Across these customer groups, the most important shared outcomes are
+\textbf{safe task completion}, \textbf{clear feedback}, and
+\textbf{predictable behavior}.
 
+\subsection{Other Stakeholders}
+Other stakeholders include:
 \begin{enumerate}
-  \item \textbf{Team Proxi (development team):} responsible for requirements, design,
-  implementation, testing, and deployment artefacts.
-  \item \textbf{Course Staff (Instructor \& TA):} guidance, assessment, feedback, and
-  approvals.
-  \item \textbf{Accessibility Advisors (if engaged):} best practices for WCAG/AT
+  \item \textbf{Team Proxi (development team):} Responsible for
+  requirements analysis, architecture, implementation, testing,
+  documentation, and integration quality.
+  \item \textbf{Course staff:} Provide assessment criteria,
+  risk-oriented feedback, and milestone governance.
+  \item \textbf{Accessibility advisors (if engaged):} Contribute
+  practical guidance on WCAG-aligned decisions and assistive-technology
   compatibility.
-  \item \textbf{Pilot participants:} individuals who will use the system during user
-  studies and provide feedback.
+  \item \textbf{Pilot participants:} Provide early evidence of
+  usability barriers, task-flow friction, and communication clarity.
 \end{enumerate}
 
 \subsection{Hands-On Users of the Project}
 Primary hands-on users who will directly interact with Proxi:
-
 \begin{enumerate}
-  \item \textbf{Accessibility-focused users:} People with motor impairments or
-  temporary/situational limitations needing hands-free or simplified control.
-  \item \textbf{General users/power users:} Users seeking faster workflows via
-  voice/text commands with optional keyboard/mouse confirmation.
+  \item \textbf{Accessibility-focused users:} People with motor
+  impairments or temporary and situational limitations who need
+  hands-free, low-complexity, and error-tolerant interaction.
+  \item \textbf{General and power users:} Users seeking faster and
+  more natural workflows through voice or text, while retaining
+  keyboard and mouse fallback paths.
 \end{enumerate}
+
+These groups are expected to use the same core capabilities, but they
+place different emphasis on speed, guidance density, and confirmation
+behavior.
 
 \subsection{Personas}
-
 \begin{enumerate}
-  \item \textbf{P1: Amrita (72) - Elderly User:} Amrita is a retired teacher who uses
-  her desktop to check emails, pay bills, and video call her family. She struggles
-  with small buttons, complicated menus, and remembering multi-step actions, which
-  makes her anxious about using technology. She needs a way to perform common tasks
-  more easily and with clear guidance to feel confident online.
+  \item \textbf{P1: Amrita (72) - Elderly User}
 
-  \item \textbf{P2: Leo (21) - User with Motor Disability:} Leo is a computer science
-  student who finds it difficult to use a keyboard or mouse due to a motor
-  impairment. He needs to read PDFs, take notes, and switch between different apps
-  for his coursework. He requires a way to interact with his computer hands-free and
-  complete his work without relying on physical input.
+  \textbf{Profile:}
+  Amrita is a retired teacher with moderate digital literacy who uses
+  her desktop for personal communication, banking, government forms,
+  and telehealth appointments.
 
-  \item \textbf{P3: Ari (28) - Power User:} Ari works with spreadsheets, emails, and
-  web tools throughout the day and often repeats the same steps over and over.
-  Switching between programs slows him down, and remembering different commands and
-  shortcuts is frustrating. He needs a more efficient way to complete multi-step
-  tasks and manage his work without constant interruptions.
+  \textbf{Primary Tasks:}
+  Read and respond to email, open documents from family members,
+  complete simple web forms, and join scheduled video calls.
+
+  \textbf{Pain Points:}
+  Small controls, dense interfaces, and multi-step flows increase
+  cognitive load. She often loses track of where she is in a process
+  and worries about making irreversible mistakes.
+
+  \textbf{Accessibility and Usability Needs:}
+  Large and readable text, plain-language prompts, explicit progress
+  feedback, low-jargon error recovery, and clear confirmation before
+  risky actions.
+
+  \textbf{Success Indicators:}
+  She can complete common tasks without external help, understands
+  system status at each step, and confidently recovers from mistakes.
+
+  \item \textbf{P2: Leo (21) - User with Motor Disability}
+
+  \textbf{Profile:}
+  Leo is a university student with a motor impairment that makes
+  prolonged keyboard and mouse interaction painful and slow.
+
+  \textbf{Primary Tasks:}
+  Open and navigate course documents, switch between browser tabs and
+  note-taking tools, draft assignment text, and manage file
+  organization during study sessions.
+
+  \textbf{Pain Points:}
+  Repetitive fine-motor interactions, shortcut-heavy workflows, and
+  precise cursor targeting create fatigue and reduce productivity.
+  Frequent context switching further amplifies input overhead.
+
+  \textbf{Accessibility and Usability Needs:}
+  Reliable voice-first execution, complete keyboard-free coverage of
+  core actions, captioned feedback, predictable command structure, and
+  low-latency responses for uninterrupted work.
+
+  \textbf{Success Indicators:}
+  He can complete end-to-end coursework workflows hands-free with
+  minimal corrections and without dependency on another person.
+
+  \item \textbf{P3: Ari (28) - Power User}
+
+  \textbf{Profile:}
+  Ari is a productivity-focused knowledge worker who manages high task
+  volume across spreadsheets, email, messaging, and browser-based
+  systems.
+
+  \textbf{Primary Tasks:}
+  Trigger repeated multi-step workflows, retrieve files quickly,
+  draft routine communications, and coordinate tasks across several
+  applications in short cycles.
+
+  \textbf{Pain Points:}
+  Workflow fragmentation, repeated navigation, and command recall
+  overhead interrupt concentration and reduce throughput.
+
+  \textbf{Accessibility and Usability Needs:}
+  Fast execution, concise confirmations, efficient follow-up commands,
+  and reusable patterns that reduce repetitive interaction cost while
+  preserving guardrails for risky operations.
+
+  \textbf{Success Indicators:}
+  He completes repeated workflows in fewer interaction steps, with
+  lower context-switch overhead and sustained trust in system safety.
 \end{enumerate}
 
+\textbf{Persona Design Implication:}
+The interface must balance \textbf{clarity-first interaction} for users
+like Amrita and Leo with \textbf{efficiency-first flow} for users like
+Ari, without compromising safety controls.
+
 \subsection{Priorities Assigned to Users}
-The \textbf{highest priority} users for this project are \textbf{accessibility-focused} users, 
-including elderly users like Amrita and users with motor impairments like Leo, as 
-the main goal is to improve computer access and usability for people who face 
-physical challenges or find current systems difficult to use. Their needs guide 
-the core features and design decisions of the project. \textbf{Power users} like Ari are 
-the \textbf{secondary priority} because, while they do not face accessibility barriers, 
-their focus on speed and efficiency helps shape advanced features that make the 
-system useful to a wider audience. Prioritizing these groups ensures the solution 
-is both inclusive for those who need accessibility support and valuable for 
-everyday users seeking more efficient workflows.
+\textbf{Primary Priority Group:}
+Accessibility-focused users, including elderly users like Amrita and
+users with motor impairments like Leo. Their needs define baseline
+acceptance for usability, interaction clarity, caption support, voice
+control, and safety confirmation.
+
+\textbf{Secondary Priority Group:}
+General and power users like Ari. Their needs mainly influence
+efficiency, reduced interaction steps, and high-frequency workflow
+support after accessibility-critical requirements are satisfied.
+
+\subsection{How Personas Affect the Requirements}
+The personas directly influence requirement priorities. P1 Amrita and
+P2 Leo drive the highest-priority requirements for simple language,
+low-friction task completion, captions, scalable text, voice-first
+operation, and explicit safety confirmation. P3 Ari mainly influences
+secondary requirements related to speed, efficient task flow, and
+support for repeated multi-step tasks.
+
+In practical terms, persona influence is applied as follows:
+\begin{enumerate}
+  \item \textbf{P1 and P2 constraints are treated as release-critical}
+  for core interaction flows.
+  \item \textbf{P3-driven optimizations are treated as quality
+  multipliers} once baseline accessibility and safety are satisfied.
+  \item \textbf{Conflicts are resolved in favor of safety and
+  accessibility} when speed and guardrails compete.
+\end{enumerate}
+
 \subsection{User Participation}
-Estimated participation during the project will primarily involve end users and the
-development team. Accessibility-focused users are expected to participate for about 1
-hour per week through remote or in-lab sessions focused on usability testing,
-feedback, and formative evaluations. General users and power users will contribute
-roughly 1 hour per week by taking part in efficiency and performance testing of new
-features. Additionally, the development team will dedicate around 8–10 hours per week
-to designing, building, testing, and refining the system based on user feedback and
-project milestones.
+Estimated participation during the project will primarily involve end
+users and the development team. Accessibility-focused users are
+expected to participate for about one hour per week through remote or
+in-lab sessions focused on usability testing and feedback. General
+users and power users will contribute roughly one hour per week by
+taking part in efficiency and performance testing of new features.
+
+\textbf{Participation Objectives:}
+Collect actionable feedback on command clarity, confirmation
+understandability, error recovery flow, and end-to-end task success.
+
+\textbf{Expected Outputs:}
+Prioritized usability findings, requirement refinements, and targeted
+validation scenarios for upcoming milestones.
+
 \subsection{Maintenance Users and Service Technicians}
-The primary maintenance users for this project will be the development team. During the
-capstone project, they will be responsible for identifying and fixing issues, releasing 
-updates and patches, and ensuring that the system continues to function as expected throughout 
-development. They will also create and maintain documentation such as installation guides and
-user manuals to support future use and potential handoff of the project after completion.
+The primary maintenance users for this project will be the development
+team. During the capstone project, they will be responsible for
+identifying and fixing issues, releasing updates and patches, and
+ensuring that the system continues to function as expected.
+
+\textbf{Maintenance Scope:}
+Bug triage, integration fixes, dependency upkeep, and documentation
+updates for installation and troubleshooting.
+
+\textbf{Operational Goal:}
+Preserve reliability and traceability across revisions while minimizing
+regression risk in accessibility and safety-critical behaviors.
 
 \section{Mandated Constraints}
+This section records external constraints and important project-level
+decisions that bound the solution space. Each constraint includes a
+short rationale so it is clear whether it comes from the project
+context, target environment, or a team decision.
+
 \subsection{Solution Constraints}
-\begin{itemize}
-    \item \textbf{SOL-01}: The application must be lightweight and run without requiring any 
-    speacial hardware
-    \item \textbf{SOL-02}: The application will operate without requiring user accounts or 
-    signups.
-\end{itemize}
+\reqcard{SOL-01}{The application shall run on standard consumer
+hardware and shall not require specialized assistive hardware.}{The
+target users are expected to use ordinary personal computers at home,
+school, or work.}{The application installs and operates on ordinary
+laptops or desktops with a standard microphone, speakers, display, and
+keyboard.}{High}
+
+\reqcard{SOL-02}{The application shall operate without requiring a
+Proxi-specific user account or sign-up flow.}{Reducing setup friction
+is important for accessibility, first-time use, and privacy.}{A user
+can install and run Proxi without creating a Proxi-managed
+account.}{High}
 
 \subsection{Implementation Environment of the Current System}
-\begin{itemize}
-    \item \textbf{IMECS-01}: The application is designed to run on the personal computers of the 
-    users running mainstream operating systems like Windows and MacOS.
-    \item \textbf{IMECS-02}: The application uses standard I/O devices like mice, keyboards, mics, 
-    and screens to interact with the user.
-    \item \textbf{IMECS-03}: The software bundle includes JavaScript support, the MCP (modular 
-    control platform) and any other required libraries.
-\end{itemize}
+\reqcard{IMECS-01}{The application shall run on mainstream desktop
+operating systems such as Windows and macOS.}{These are the primary
+environments available to the intended users during the capstone
+project.}{The application builds and runs on supported Windows and
+macOS test machines.}{High}
+
+\reqcard{IMECS-02}{The application shall rely on standard input and
+output devices such as microphones, speakers, keyboards, and
+displays.}{The product is intended to be deployable without extra
+equipment.}{All core user flows are executable using only standard
+desktop peripherals.}{High}
+
+\reqcard{IMECS-03}{The implementation may depend on a web-based or
+JavaScript-based application stack and on MCP-compatible libraries when
+this simplifies delivery.}{This is a team design decision for
+implementation speed and ecosystem support, not a client-mandated
+constraint.}{The selected implementation stack supports the required
+Proxi features within the project timeline.}{Medium}
 
 \subsection{Partner or Collaborative Applications}
-\begin{itemize}
-    \item \textbf{PCA-01}: The application may use AI services via secure APIs for natural 
-    language processing and logic.
-    \item \textbf{PCA-02}: Integration with external accessibility tools like screen readers may 
-    be supported to enhance usability for older adults and users with 
-    disabilities.
-\end{itemize}
+\reqcard{PCA-01}{The application may use external AI services through
+secure APIs for natural-language understanding, planning support, and
+response generation.}{External AI services can improve language
+coverage and implementation speed while preserving modularity.}{When
+enabled, external AI calls use secure transport and return
+task-relevant outputs that integrate with the local execution
+flow.}{Medium}
+
+\reqcard{PCA-02}{Integration with external accessibility tools,
+including screen readers and related assistive technologies, may be
+supported to improve usability for older adults and users with
+disabilities.}{Compatibility with existing assistive ecosystems reduces
+adoption barriers and improves inclusiveness.}{Supported workflows do
+not block core interactions when common assistive tools are active on
+target platforms.}{Medium}
 
 \subsection{Off-the-Shelf Software}
-The application will use off-the-shelf software components to reduce devlopement
- time:
- \begin{itemize}
-    \item \textbf{OTSS-01}: MCP (Modular Control Platform) will be used for accessibility and 
-    interface  management.
-    \item \textbf{OTSS-02}: JavaScript libraries and frameworks will be used to implement 
-    interactive elements and handle input/output operations.
-    \item \textbf{OTSS-03}: LLM services will be used to provide natural language responses and 
-    reasoning capabilities. The application does not require a specialized 
-    model, so no additional training will be necessary. An off-the-shelf LLM is 
-    sufficient to deliver accurate and reliable results for the intended 
-    functionality.
-\end{itemize}
+\reqcard{OTSS-01}{MCP-compatible infrastructure shall be used to
+provide modular tool discovery, invocation, and interface
+coordination.}{Using MCP-compatible components improves extensibility
+and reduces custom integration overhead.}{Tools are registerable and
+invokable through the selected MCP integration path in the working
+build.}{High}
+
+\reqcard{OTSS-02}{Off-the-shelf JavaScript libraries and frameworks
+shall be used where appropriate to implement interactive elements and
+handle input and output operations.}{Mature libraries accelerate
+development and reduce implementation risk for standard interaction
+patterns.}{Core UI and interaction flows are implemented using
+maintained third-party components with project-appropriate
+licenses.}{High}
+
+\reqcard{OTSS-03}{Off-the-shelf LLM services may be used for
+natural-language responses and reasoning capabilities; no specialized
+model training is required for baseline scope.}{Pretrained LLM
+services are sufficient for capstone-level baseline intent handling and
+response generation.}{Baseline intent interpretation and response
+quality meet the relevant functional and usability targets without
+custom model training.}{Medium}
 
 \subsection{Anticipated Workplace Environment}
-\begin{itemize}
-    \item \textbf{AWE-01}: The application is expected to run on the personal computers of the 
-    users at their homes or assited-living facilities.
-    \item \textbf{AWE-02}: The application will be used primarily on Windows and MacOS operating 
-    systems.
-    \item \textbf{AWE-03}: The system is designed for users with limited technical experience, 
-    including older adults and people with disabilities, requiring a simple, 
-    intuitive interface.
-    \item \textbf{AWE-04}: Devices may vary in screen size, input methods, and processing power, 
-    so the app must function on standard consumer computers without 
-    specialized hardware.
-    \item \textbf{AWE-05}: Environmental factors such as background noise or poor acoustics may 
-    affect voice interactions. Therefore, the application shall provide 
-    alternative input methods, such as text or on-screen controls, to ensure 
-    usability when voice input is infeasible.
-\end{itemize}
+\reqcard{AWE-01}{The application is expected to run on users' personal
+computers in homes, schools, offices, and assisted-living
+facilities.}{The deployment context is primarily everyday desktop
+environments, not specialized labs.}{Core workflows execute in
+representative home, school, and office test environments on supported
+desktop systems.}{High}
 
+\reqcard{AWE-02}{The application shall be usable primarily on Windows
+and macOS operating systems.}{These operating systems represent the
+primary target environments for project users.}{Core features are
+demonstrated and validated on supported versions of Windows and
+macOS.}{High}
+
+\reqcard{AWE-03}{The system shall support users with limited technical
+experience, including older adults and people with disabilities,
+through a simple and intuitive interaction model.}{Ease of
+understanding is essential for inclusive adoption and safe
+use.}{Usability sessions with novice and accessibility-focused users
+show completion of representative tasks with minimal facilitator
+support.}{High}
+
+\reqcard{AWE-04}{The application shall function on standard consumer
+computers with varying screen sizes, input methods, and processing
+power, without requiring specialized hardware.}{Hardware variability is
+expected in the target user population.}{Core functionality remains
+available across representative low- to mid-range desktop hardware
+profiles.}{Medium}
+
+\reqcard{AWE-05}{Because background noise and poor acoustics can reduce
+voice performance, the application shall provide alternative input
+paths, including text and on-screen controls, when voice input is
+infeasible.}{Reliable fallback input is required to preserve task
+continuity in non-ideal listening conditions.}{Representative tasks
+remain completable through non-voice input during noise-degraded test
+scenarios.}{High}
 
 \subsection{Schedule Constraints}
-Development will follow the planned project timeline ensuring that deliverables 
-are completed before the deadlines.
+Development will follow the planned project timeline while giving
+earlier attention to the highest-priority accessibility, safety, and
+core-task features. Table~\ref{tab:proj-schedule} summarizes the main
+external milestones.
 
-\begin{table}[!h]
-\caption{Project Timeline} \label{ProjScheduling}
-\begin{tabularx}{\textwidth}{lXl}
+\begin{table}[H]
+\centering
+\caption{Project Timeline}
+\label{tab:proj-schedule}
+\begin{tabularx}{\textwidth}{p{6.6cm}X}
 \toprule
 \textbf{Deliverable} & \textbf{Deadline} \\
 \midrule
@@ -258,204 +590,261 @@ Req. Doc. and Hazard Analysis Revision 0 & October 6, 2025 \\
 V\&V Plan Revision 0 & October 27, 2025 \\
 Design Document Revision -1 & November 10, 2025 \\
 Design Document Revision 0 & January 19, 2026 \\
-Revision 0 Demonstration &  February 13, 2026\\
-V\&V Report and Extras Revision 0 & March 09, 2026 \\
-Final Demonstration (Revision 1)  &  March 29, 2026 \\
-EXPO Demonstration & TBD \\
-Final Documentation (Revision 1) & April 06, 2026 \\
+Revision 0 Demonstration & February 13, 2026 \\
+V\&V Report and Extras Revision 0 & March 9, 2026 \\
+Final Demonstration (Revision 1) & March 29, 2026 \\
+Final Documentation (Revision 1) & April 6, 2026 \\
+EXPO Demonstration & April 7, 2026 \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 \subsection{Budget Constraints}
-The project budget is limited to \$500 in total expenditure. Of this \$500, 
+The project budget is limited to \$500 in total expenditure. Of this,
 \$125 will be provided by the CAS department for approved expenses.
 
 \subsection{Enterprise Constraints}
-There are no enterprise constraints for this application. The application will 
-be allowed to use any service or LLM as required as long as it adheres to the 
-budget constraints. This ensures flexibility and future adaptability.
+There are no enterprise constraints beyond the need to satisfy course
+requirements and academic policies. The application may use any
+service or LLM as required as long as it adheres to the budget
+constraints.
 
-\section{Naming Conventions and Terminology}
-\subsection{Glossary of All Terms, Including Acronyms, Used by Stakeholders
-involved in the Project}
-\begin{description}
-  \item[MCP (Model Context Protocol)] A contract with which an AI agent can find 
-  and invoke a toolset to accomplish specific tasks.
+\section{Relevant Facts and Assumptions}
+This section separates established project facts, business rules, and
+explicit assumptions. Assumptions are labeled so they can be
+referenced by design, testing, and later revisions.
 
-  \item[MCP Server] A local server that implements the MCP to allow AI agents
-  to discover and use the available tools.
-
-  \item[MCP Client] An AI agent that connects to the MCP server to use the 
-  provided tools.
-
-  \item[AI Agent] A software (LLM) that uses artificial intelligence to perform 
-  tasks.
-
-  \item[LLM (Large Language Model)] A type of AI model that can understand and
-  generate human language.
-
-  \item[Token] A unit of text used in LLMs to process and generate language.
-
-  \item[Sandbox] A secure environment in which code can be run and tested 
-  without affecting the rest of the system.
-
-  \item[Action] A single execution of a tool with validated parameters.
-
-  \item[Plan] An ordered sequence of actions to fulfill a user intent.
-
-  \item[Command] An instruction given by the user to the AI agent.
-
-  \item[Permission Scope] Level of access that is given to the AI agent for 
-  completing actions.
-
-  \item[Confirmation Gate] A approval prompt given to the user by the AI before 
-  completing risky actions.
-
-  \item[TTS (Text-to-Speech)] Tool that converts written text into spoken words.
-
-  \item[STT (Speech-to-Text)] Tool that converts spoken words into written text.
-
-  \item[Audit Log] A record of all actions taken by the AI agent.
-
-  \item[Accessibility] It is usable by people with a wide range of 
-  abilities/disabilities.
-
-  \item[User Interface (UI)] The visual elements of the software (frontend) in 
-  which a user will engage with the system.
-
-  \item[PII (Personally Identifiable Information)] Any data that could identify 
-  a specific individual.
-
-  \item[POLP (Principle of Least Privilege)] A security concept in which the 
-  AI agent will have minimum levels of access necessary to perform certain tasks.
-
-  \item[OS Automation Tools] Software on one's computer that gives the AI agent 
-  the ability to control and engage with their OS.
-\end{description}
-
-\section{Relevant Facts And Assumptions}
 \subsection{Relevant Facts}
-\begin{description}
-  \item[1:] The Proxi's main goal is to enable hands-free computer control
-  through natural language commands for disabled users. It also provides
-  users with a more efficient workflow. Tasks include opening applications,
-  reading and writing files, browsing the web, and scheduling events.
-  Interaction with Proxi is via voice command, with a textual input option.
+\begin{enumerate}
+  \item Proxi's main goal is to enable hands-free computer control
+  through natural language commands for disabled users while also
+  supporting users who want a more efficient workflow.
+  \item The system will run on desktop operating systems such as
+  Windows and macOS and will interact with common applications such as
+  web browsers, file browsers, calendar tools, and email tools.
+  \item Some actions can be high risk, such as deleting files or
+  changing system settings, so the system must confirm with the user
+  before performing such actions.
+\end{enumerate}
 
-  \item[2:] The system will run on desktop operating systems (Windows, macOS)
-  and will engage with many common applications (web browsers, email clients,
-  and documents/file browsers).
-
-  \item[3:] Since certain actions can be considered high risk, such as deleting
-  files or changing system settings, the system will confirm with the user
-  before performing such risky actions that can potentially have destructive
-  or sensitive outcomes.
-\end{description}
 \subsection{Business Rules}
-Proxi must get user consent before accessing or handling any personal data.
-It must minimize the amount of data shared with external sources, sending only
-what is strictly needed to fulfill the user's command.
-Any command or action that involves high risk (deleting data, changing system
-settings, installing software, etc.) must be confirmed by the user before
-execution.
-All actions performed should be recorded in an audit log, allowing tracking of
-what the AI has done so incorrect actions can be traced and reversed if needed.
-Tools used by the AI can only run within a user permission scope, meaning they
-can only access and perform actions on resources the user has explicitly
-allowed.
+Proxi must get user consent before accessing or handling personal data.
+It must minimize the amount of data shared with external services and
+send only what is strictly needed to fulfill the user's request. Any
+command that involves high risk, such as deleting data or changing
+system settings, must be confirmed before execution. All actions
+should be recorded in an audit log so that incorrect actions can be
+traced and, when possible, reversed. Tools may operate only within the
+permission scope explicitly granted by the user.
 
 \subsection{Assumptions}
-\begin{description}
-  \item[Hardware] The user has a working computer with a microphone and audio
-  output, capable of running the software on a modern OS (Windows, macOS).
-  \item[Permissions] The user can grant the permissions needed by the AI agent
-  (microphone, screen access, automation APIs) and can run the MCP server.
-  \item[Internet] The user has a reliable internet connection to use the AI
-  agent, as the LLM and online tools (browser, web search) require connectivity.
-  \item[Environment and Language] The user is in a quiet environment where the
-  microphone can pick up sound clearly, and will speak in a supported language
-  (English).
-\end{description}
+
+\noindent\textbf{A1 (Hardware)} \\
+The user has a working computer with a microphone and audio output and
+can run the software on a modern desktop operating system.
+
+\noindent\textbf{A2 (Permissions)} \\
+The user can grant the permissions needed by the system, including
+microphone, accessibility, or automation permissions.
+
+\noindent\textbf{A3 (Internet)} \\
+The user has a reliable internet connection when using features that
+depend on remote LLM or web services.
+
+\noindent\textbf{A4 (Environment and Language)} \\
+The user is in an environment where the microphone can capture speech
+clearly and will speak in a supported language.
+
+\noindent\textbf{A5 (Off-the-Shelf Model Adequacy)} \\
+An off-the-shelf LLM is assumed to be adequate for the baseline
+command-understanding tasks in scope. This assumption will be checked
+through verification activities tied to functional accuracy, task
+success, and usability.
 
 \section{The Scope of the Work}
+This section describes the current problem context, the project's role
+within that context, the high-level partitioning of the work, and the
+main business use case that motivates the product.
+
 \subsection{The Current Situation}
-In the current computing landscape, many individuals face barriers when interacting 
-with traditional computer interfaces such as keyboards, mice, and complex graphical 
-user interfaces. People with motor disabilities, visual impairments, elderly users, 
-or those lacking technical proficiency often struggle to perform basic computer tasks 
-efficiently. Existing digital assistants (e.g., Siri, Alexa, or Google Assistant) 
-provide limited task execution and lack deep integration with desktop environments 
-or productivity applications. As a result, accessibility remains a significant challenge, 
-and there is a growing demand for more adaptive, intelligent, and inclusive systems 
-that can understand user intent through natural language and perform meaningful 
-actions across software environments.
+Desktop computing still assumes that users can reliably navigate dense
+graphical interfaces, operate precise pointer controls, and remember
+multi-step interaction paths. For many users, this assumption does not
+hold in everyday practice.
+
+\textbf{Current Barriers:}
+\begin{itemize}
+  \item Users with motor impairments or temporary mobility limits may
+  find keyboard and mouse interaction slow, fatiguing, or infeasible.
+  \item Elderly and novice users can struggle with interface complexity,
+  hidden settings, and jargon-heavy error messages.
+  \item Voice assistants commonly used today provide limited
+  task-execution depth for desktop workflows and often stop at shallow
+  command handling.
+\end{itemize}
+
+As a result, many users cannot complete routine digital tasks with
+consistent independence, speed, and confidence. This creates a clear
+need for an assistant that is not only conversational, but also
+operationally useful across real desktop tasks.
+
 \subsection{The Context of the Work}
-The proposed project aims to develop an AI-powered assistive technology platform 
-designed to improve computer accessibility by leveraging natural language processing, 
-speech recognition, and intelligent task automation. The system will act as an intermediary 
-between the user and the computer, interpreting spoken or textual commands and 
-executing them through modular software agents. These agents will be capable of 
-reasoning, planning, and performing actions such as sending emails, browsing the 
-web, or managing files. The work will combine accessibility design principles with 
-AI technologies to create an inclusive experience that empowers users who cannot 
-easily interact with conventional input devices.
+This project addresses the above gap by building an AI-powered,
+desktop-oriented assistive platform that converts natural-language
+intent into safe and traceable computer actions.
+
+\textbf{Project Positioning:}
+\begin{itemize}
+  \item Proxi acts as an \textbf{intermediary layer} between the user
+  and the operating environment.
+  \item It accepts \textbf{speech and text input}, interprets intent,
+  plans executable steps, and invokes tools through a modular
+  integration model.
+  \item It emphasizes \textbf{accessible interaction} and
+  \textbf{safety-aware execution}, including explicit confirmation for
+  risky actions and clear user feedback.
+\end{itemize}
+
+Within the scope of this capstone, the work focuses on practical
+desktop task support (for example opening applications, navigating
+files, and handling common communication workflows) rather than
+building full replacements for third-party software. This keeps the
+solution applicable, testable, and aligned with project constraints.
+
 \subsection{Work Partitioning}
-The work will be divided into the following major components:
+The work is partitioned into six coordinated workstreams so design,
+implementation, and validation can proceed in parallel while remaining
+traceable to requirements.
+
 \begin{enumerate}
-    \item \textbf{Input and Recognition Layer:} Responsible for capturing and processing user input through speech recognition or text interfaces.
-    \item \textbf{Natural Language Understanding (NLU):} Converts the user’s intent into structured commands that can be acted upon by the agent system.
-    \item \textbf{Agent Planning and Execution Layer:} Deploys intelligent agents capable of reasoning, planning, and interacting with tools or APIs to achieve user goals.
-    \item \textbf{Feedback and Output Layer:} Returns the results of executed actions to the user through text or synthesized speech, ensuring clarity and accessibility.
-    \item \textbf{Accessibility and Usability Design:} Focused on interface simplicity, adaptive behavior, and inclusive design for users with various needs.
-    \item \textbf{Evaluation and Testing:} Involves user studies and performance evaluation to ensure reliability, accuracy, and user satisfaction.
+  \item \textbf{Input and Recognition Layer}
+
+  Captures user requests through voice and text channels and normalizes
+  them into a consistent input format for downstream processing.
+
+  \item \textbf{Natural Language Understanding Layer}
+
+  Interprets normalized input, resolves intent and entities, and
+  produces structured task representations suitable for planning.
+
+  \item \textbf{Planning and Execution Layer}
+
+  Generates safe execution plans and invokes modular tools to perform
+  user-requested desktop actions within configured permission scope.
+
+  \item \textbf{Feedback and Output Layer}
+
+  Communicates status, confirmations, errors, and outcomes through
+  readable text and optional speech, with emphasis on clarity and
+  recoverability.
+
+  \item \textbf{Accessibility and Usability Design}
+
+  Defines interaction constraints and interface behavior for inclusive
+  use, including readability, low-friction controls, and
+  confirmation-oriented safety design.
+
+  \item \textbf{Evaluation and Testing}
+
+  Verifies functional correctness, usability, performance, and safety
+  behavior through scenario-based testing, stakeholder feedback, and
+  milestone-aligned validation activities.
 \end{enumerate}
+
+Together, these workstreams establish a clear delivery path from user
+input to validated task outcomes while preserving modularity for future
+extension.
+
 \subsection{Specifying a Business Use Case (BUC)}
-\textbf{BUC–01: Intelligent Accessibility Assistant}
+\textbf{BUC-01: Intelligent Accessibility Assistant}
 
-\noindent
-\textbf{Primary Actor:} User (individual with limited mobility or low computer literacy)\\
-\textbf{Goal:} To perform computer-based tasks through natural speech or text commands without relying on traditional input devices.
+\noindent\textbf{Primary Actor:}
+User with limited mobility, low computer literacy, or hands-busy use.
 
-\noindent
-\textbf{Preconditions:}
+\noindent\textbf{Supporting Actors:}
+Operating system services, desktop applications, and connected tool
+integrations invoked through Proxi.
+
+\noindent\textbf{Goal:}
+Complete desktop tasks through natural speech or text with minimal
+manual navigation while preserving user safety and control.
+
+\noindent\textbf{Trigger:}
+The user issues a request in voice or text, for example
+``Open my email and draft a message to my doctor.''
+
+\noindent\textbf{Preconditions:}
 \begin{itemize}
-    \item The user has access to a device with a microphone, speaker, and internet connectivity.
-    \item The assistive system is installed and running in the background.
+  \item The user has access to a supported device with microphone,
+  speakers, and input fallback options.
+  \item The assistive system is installed, running, and has the
+  required permissions for the requested action.
+  \item If applicable, network connectivity is available for remote
+  services used by the request.
 \end{itemize}
 
-\noindent
-\textbf{Main Flow:}
+\noindent\textbf{Main Success Scenario:}
 \begin{enumerate}
-    \item The user issues a command such as “Open my email and send a message to my doctor.”
-    \item The system processes the speech or text input and identifies the intended task.
-    \item The planning agent determines which actions or tools are required to complete the task.
-    \item The system executes the corresponding steps (e.g., opens an email client, composes a message, and sends it).
-    \item The system provides feedback to the user confirming the task completion.
+  \item The user submits a request using voice or text.
+  \item The system captures and normalizes the input.
+  \item The system identifies intent and required entities.
+  \item The system generates a task plan using available tools.
+  \item For risky actions, the system requests explicit confirmation.
+  \item The system executes the approved plan.
+  \item The system reports outcome status and next-step guidance in
+  plain language (with speech and text when enabled).
+  \item The system records interaction and execution events for
+  traceability.
 \end{enumerate}
 
-\noindent
-\textbf{Alternative Flows:}
+\noindent\textbf{Extensions and Exception Flows:}
 \begin{itemize}
-    \item If the system cannot interpret the user’s request, it will ask clarifying questions.
-    \item If a required tool or permission is missing, the system will notify the user and suggest corrective actions.
+  \item \textbf{E1 - Ambiguous Request:} The system asks a concise
+  clarification question and resumes planning after user disambiguation.
+  \item \textbf{E2 - Missing Permission or Tool Access:} The system
+  stops execution, explains the blocker, and provides corrective steps.
+  \item \textbf{E3 - High-Risk Action Denied:} The system cancels the
+  risky step, confirms no destructive change was made, and offers safe
+  alternatives.
+  \item \textbf{E4 - Execution Failure:} The system reports failure
+  cause, logs diagnostic context, and suggests retry or fallback action.
 \end{itemize}
 
-\noindent
-\textbf{Postconditions:}
+\noindent\textbf{Success Guarantee (Postconditions on Success):}
 \begin{itemize}
-    \item The requested action is completed successfully or an appropriate message is returned.
-    \item The system logs the interaction for future learning and performance improvement.
+  \item Requested task is completed or progressed to a valid next step.
+  \item User receives clear completion feedback and any relevant
+  follow-up options.
+  \item Audit trail entries are persisted for command, plan, and
+  outcome events.
 \end{itemize}
+
+\noindent\textbf{Minimal Guarantee (Postconditions on Failure):}
+\begin{itemize}
+  \item No unconfirmed destructive action is executed.
+  \item The user receives an understandable failure message and
+  recovery guidance.
+  \item Failure context is logged for support and debugging.
+\end{itemize}
+
+\noindent\textbf{Business Value:}
+This use case operationalizes inclusive, low-friction computer control
+by converting natural-language intent into safe, traceable desktop
+actions across everyday workflows.
 
 \section{Business Data Model and Data Dictionary}
+This section defines the core business entities and their main
+attributes. Figure~\ref{fig:business-data-model} presents the business
+data model, and the subsequent tables define each entity.
+
 \subsection{Business Data Model}
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
-  \includegraphics[width=0.9\textwidth]{Business_Model.png}
+  \includegraphics[width=0.88\textwidth]{Business_Model.png}
   \caption{Business Data Model}
   \label{fig:business-data-model}
 \end{figure}
+
 \subsection{Data Dictionary}
 
 \subsubsection*{User}
@@ -464,19 +853,8 @@ The work will be divided into the following major components:
 \textbf{Attribute} & \textbf{Type} & \textbf{Description} \\
 \midrule
 userId & UUID & Unique identifier for a user \\
-displayName & String & Name shown in confirmations/UI \\
-role & Enum & Authorization role (\textit{Standard}, \textit{Admin}) \\
-\bottomrule
-\end{tabularx}\par\medskip
-
-\subsubsection*{Device}
-\noindent\begin{tabularx}{\textwidth}{@{} l l X @{}}
-\toprule
-\textbf{Attribute} & \textbf{Type} & \textbf{Description} \\
-\midrule
-deviceId & UUID & Logical device identity \\
-osFamily & Enum & OS family (\textit{Windows}/\textit{macOS}) \\
-osVersion & String & OS version string \\
+displayName & String & Name shown in confirmations or UI \\
+role & Enum & Authorization role \\
 \bottomrule
 \end{tabularx}\par\medskip
 
@@ -485,9 +863,9 @@ osVersion & String & OS version string \\
 \toprule
 \textbf{Attribute} & \textbf{Type} & \textbf{Description} \\
 \midrule
-sessionId & UUID & Logical dialog/control session \\
-startedAt / endedAt & Timestamp & Session start/end \\
-status & Enum & \textit{Active}, \textit{Ended}, or \textit{Error} \\
+sessionId & UUID & Logical dialog or control session \\
+startedAt / endedAt & Timestamp & Session start and end \\
+status & Enum & Active, Ended, or Error \\
 \bottomrule
 \end{tabularx}\par\medskip
 
@@ -497,8 +875,8 @@ status & Enum & \textit{Active}, \textit{Ended}, or \textit{Error} \\
 \textbf{Attribute} & \textbf{Type} & \textbf{Description} \\
 \midrule
 commandId & UUID & Captured user request \\
-modality & Enum & \textit{Voice}, \textit{Text}, or \textit{Mixed} \\
-rawText & String & Transcribed/typed command text \\
+modality & Enum & Voice, Text, or Mixed \\
+rawText & String & Transcribed or typed command text \\
 timestamp & Timestamp & Capture time \\
 \bottomrule
 \end{tabularx}\par\medskip
@@ -509,8 +887,8 @@ timestamp & Timestamp & Capture time \\
 \textbf{Attribute} & \textbf{Type} & \textbf{Description} \\
 \midrule
 intentId & UUID & Normalized goal \\
-name & Enum/String & Label \\
-confidence & Float & Classifier confidence (0.0--1.0) \\
+name & String & Intent label \\
+confidence & Float & Classifier confidence \\
 \bottomrule
 \end{tabularx}\par\medskip
 
@@ -521,7 +899,7 @@ confidence & Float & Classifier confidence (0.0--1.0) \\
 \midrule
 planId & UUID & Ordered set of actions \\
 summary & String & One-line description \\
-status & Enum & \textit{Proposed}, \textit{Running}, \textit{Succeeded}, \textit{Failed} \\
+status & Enum & Proposed, Running, Succeeded, Failed \\
 \bottomrule
 \end{tabularx}\par\medskip
 
@@ -532,9 +910,9 @@ status & Enum & \textit{Proposed}, \textit{Running}, \textit{Succeeded}, \textit
 \midrule
 actionId & UUID & Atomic operation \\
 toolId & UUID & Tool to invoke \\
-parameters & JSON & Tool inputs (schema-validated) \\
-result & JSON & Tool outputs/return \\
-riskLevel & Enum & \textit{Low}, \textit{Medium}, \textit{High} \\
+parameters & JSON & Tool inputs \\
+result & JSON & Tool outputs or return value \\
+riskLevel & Enum & Low, Medium, or High \\
 \bottomrule
 \end{tabularx}\par\medskip
 
@@ -545,819 +923,1107 @@ riskLevel & Enum & \textit{Low}, \textit{Medium}, \textit{High} \\
 \midrule
 toolId & UUID & Unique tool capability \\
 name & String & Human-friendly tool name \\
-description & String & Purpose/constraints \\
-isDestructive & Boolean & Writes/installs/deletes \\
-\bottomrule
-\end{tabularx}\par\medskip
-
-\subsubsection*{Confirmation}
-\noindent\begin{tabularx}{\textwidth}{@{} l l X @{}}
-\toprule
-\textbf{Attribute} & \textbf{Type} & \textbf{Description} \\
-\midrule
-confirmationId & UUID & Approval record \\
-method & Enum & \textit{GUI} or \textit{Voice} \\
-approvedAt & Timestamp & Time of approval \\
+description & String & Purpose and constraints \\
+isDestructive & Boolean & Writes, installs, or deletes \\
 \bottomrule
 \end{tabularx}\par\medskip
 
 \subsubsection*{AuditLog}
-\noindent\begin{tabularx}{\textwidth}{@{} l l X @{}} 
+\noindent\begin{tabularx}{\textwidth}{@{} l l X @{}}
 \toprule
 \textbf{Attribute} & \textbf{Type} & \textbf{Description} \\
 \midrule
 auditId & UUID & Append-only log entry \\
-eventType & Enum & example: \textit{CommandCaptured}, \textit{ActionSucceeded} \\
+eventType & Enum & Example: CommandCaptured, ActionSucceeded \\
 details & String/JSON & Minimal facts about the event \\
 createdAt & Timestamp & When the entry was written \\
 \bottomrule
 \end{tabularx}\par\medskip
 
-
 \section{The Scope of the Product}
+This section defines the product boundary and summarizes the main ways
+in which users will interact with the system. The use cases in this
+section describe the major user-visible capabilities that motivate the
+functional requirements in Section~9.
 
 \subsection{Product Boundary}
-Proxi is a desktop helper that lets people run their computer with short voice or
-text commands. In this project, Proxi listens, figures out what the user means,
-asks for a quick confirmation when needed, and then carries out the task on the
-local machine through tools (MCP).
+Proxi is an assistive desktop orchestration layer that enables users
+to perform common computer tasks through natural speech or text. It
+translates user intent into safe, scoped actions and provides clear
+feedback before, during, and after execution.
+
+\textbf{Boundary Definition:}
+The product coordinates supported actions across the existing desktop
+environment; it does not replace full third-party applications.
 
 \textbf{In-Scope Features:}
 \begin{itemize}
-  \item \textbf{Input and understanding:} Listen for a request, interpret the
-  intent, and ask a brief follow-up if there are multiple matches. Learn about
-  the user's system and common tasks as time goes on to make Proxi more
-  efficient.
-  \item \textbf{Desktop actions via MCP:} Perform common tasks such as: open an
-  app or file, learn and interact with user apps, browse/search, save/move/rename
-  files using local tools with least privilege access.
-  \item \textbf{Safety and privacy:} Ask before anything destructive, offer a
-  simple undo when possible, and keep a short audit trail of what happened.
-  \item \textbf{Accessible, plain language:} Show captions for spoken output, use
-  readable defaults (contrast/size), and support keyboard or voice for every step.
+  \item Multi-modal input capture and interpretation (voice and text).
+  \item Desktop action execution through MCP-compatible tool
+  integrations.
+  \item Safety guardrails, including confirmation before risky or
+  destructive operations.
+  \item Accessible system feedback through text, speech, or both.
+  \item Short-term session context and local audit logging for
+  traceability.
 \end{itemize}
 
 \textbf{Out-of-Scope Features:}
 \begin{itemize}
-  \item Replacing full third-party apps (complete email client, calendar, or
-  browser).
-  \item Unattended background automation, remote administration, or multiple users
-  controlling the same desktop session.
-  \item Offline language understanding/generation, enterprise policy management,
-  or default long-term cloud storage of user data.
+  \item Full replacement of third-party tools such as complete email
+  clients, browsers, or office suites.
+  \item Unattended remote administration or unsupervised control of
+  user systems.
+  \item Enterprise-scale policy governance and organization-wide IT
+  management.
+  \item Default long-term cloud retention of user interaction data.
 \end{itemize}
 
 \subsection{Product Use Case Table}
+Table~\ref{tab:puc-table} summarizes the main product use cases.
+
 \begin{table}[H]
 \centering
-\renewcommand{\arraystretch}{1.15}
-\begin{tabular}{|p{2.8cm}|p{2.0cm}|p{3.2cm}|p{3.2cm}|p{2.6cm}|}
-\hline
-\textbf{Use Case} & \textbf{Actors} & \textbf{Description} & \textbf{Preconditions}
-& \textbf{Outcome} \\
-\hline
-PUC-01: Open Application & User & Open a named app. & App installed; automation
-allowed. & App launched or focused. \\
-\hline
-PUC-02: Open and Read File & User & Open a file; preview/read. & File exists;
-within scope. & File opened; content visible. \\
-\hline
-PUC-03: Browse and Search & User & Go to a URL or search. & Browser available;
-internet on. & Page or results shown. \\
-\hline
-PUC-04: Compose Draft & User & Create a short email/message draft. & Default
-mail/editor set. & Draft opens prefilled. \\
-\hline
-PUC-05: Save/Organize File & User & Save As, move, or rename. & Paths allowed;
-confirm overwrite. & Operation completed; confirmed. \\
-\hline
-PUC-06: Interact with User Apps & User & Perform simple actions in an open app
-(click, type, select). & Target app is open; within allowed scope. & Action done
-or clear reason shown. \\
-\hline
-\end{tabular}
 \caption{Product Use Case Table}
 \label{tab:puc-table}
+\begin{tabular}{|p{2.7cm}|p{2.1cm}|p{3.2cm}|p{3.2cm}|p{2.6cm}|}
+\hline
+\textbf{Use Case} &
+\textbf{Actors} &
+\textbf{Description} &
+\textbf{Preconditions} &
+\textbf{Outcome} \\
+\hline
+PUC-01: Open Application &
+User &
+Open a named app. &
+App installed; automation allowed. &
+App launched or focused. \\
+\hline
+PUC-02: Open and Read File &
+User &
+Open a file; preview or read. &
+File exists; within scope. &
+File opened; content visible. \\
+\hline
+PUC-03: Browse and Search &
+User &
+Go to a URL or search. &
+Browser available; internet on. &
+Page or results shown. \\
+\hline
+PUC-04: Draft Message or Email &
+User &
+Create a short draft. &
+Mail or editor available. &
+Draft opens prefilled. \\
+\hline
+PUC-05: Save or Organize File &
+User &
+Save As, move, or rename. &
+Paths allowed; confirm overwrite. &
+Operation completed. \\
+\hline
+PUC-06: Interact with Open App &
+User &
+Perform simple in-app actions. &
+Target app open; allowed scope. &
+Action done or reason shown. \\
+\hline
+\end{tabular}
 \end{table}
 
 \subsection{Individual Product Use Cases (PUC's)}
+This subsection expands each product use case with concise behavioral
+detail to support design alignment and test planning.
 
-\textbf{PUC-01: Open Application}  
-The user asks Proxi to open an application by name. If there are several matches,
-Proxi lists them and the user picks one. Proxi checks permissions, opens or
-focuses the app, and confirms success. If the app isn’t available, Proxi explains
-why and suggests the next step.
+\medskip
+\noindent\textbf{PUC-01: Open Application}
 
-\textbf{PUC-02: Open and Read File}  
-The user asks to open or read a file. Proxi resolves the path or name within the
-allowed scope, opens it in the default viewer, and can read a section aloud or
-give a short summary on request. If the file can’t be accessed, Proxi says why
-and offers alternatives.
+\textbf{Intent:} Open or focus a named application quickly.
 
-\textbf{PUC-03: Browse and Search}  
-The user says to go to a certain URL or to search for something, Proxi validates
-the URL or forms a search, opens the default browser, and lands on the right
-page. If the link looks unsafe, Proxi warns the user and asks for confirmation.
+\textbf{Behavior:} Proxi resolves candidate matches, requests
+disambiguation if needed, validates execution scope, and opens or
+focuses the selected app.
 
-\textbf{PUC-04: Compose Draft}  
-The user dictates a short message or email. Proxi extracts recipients and
-content, opens a new draft in the default app, and fills in the fields. The user
-reviews and sends. If a recipient is unknown, Proxi asks for the address.
+\textbf{Result:} The requested application becomes available and a
+clear success message is returned.
 
-\textbf{PUC-05: Save/Organize File}  
-The user asks to Save as, Move, or Rename. Proxi checks the target path, handles
-name collisions, and asks before any overwrite. After the operation, Proxi
-confirms what changed; if it couldn’t proceed, it explains the reason and
-options.
+\medskip
+\noindent\textbf{PUC-02: Open and Read File}
 
-\textbf{PUC-06: Interact with User Apps}  
-The user asks Proxi to do a simple action inside an app that’s already open (for
-example: click a menu item, type a short phrase, press a button, or toggle a
-setting). If there’s any ambiguity, Proxi asks a brief follow-up (“Which
-button?”) and then performs the action. If the app can’t be controlled, Proxi
-explains why and suggests the next step.
+\textbf{Intent:} Access and review file contents with minimal manual
+navigation.
+
+\textbf{Behavior:} Proxi resolves file identity within allowed scope,
+opens it in the default viewer, and can optionally provide readback or
+short summary assistance.
+
+\textbf{Result:} The user can inspect target content and continue with
+follow-up tasks.
+
+\medskip
+\noindent\textbf{PUC-03: Browse and Search}
+
+\textbf{Intent:} Navigate to a destination or find information on the
+web.
+
+\textbf{Behavior:} Proxi validates user input as URL or query, launches
+the browser path, and requests confirmation when destinations appear
+risky or ambiguous.
+
+\textbf{Result:} The correct page or search results are displayed with
+clear status feedback.
+
+\medskip
+\noindent\textbf{PUC-04: Draft Message or Email}
+
+\textbf{Intent:} Produce communication drafts from natural-language
+instructions.
+
+\textbf{Behavior:} Proxi extracts recipient and message details, opens
+the draft surface in the chosen application, and pre-fills content for
+user review.
+
+\textbf{Result:} An editable draft is created, with final send control
+remaining with the user.
+
+\medskip
+\noindent\textbf{PUC-05: Save or Organize File}
+
+\textbf{Intent:} Complete common file organization tasks safely.
+
+\textbf{Behavior:} Proxi validates paths and operation type, handles
+conflicts (for example name collisions), and requests confirmation for
+overwrite or destructive impact.
+
+\textbf{Result:} Requested file-state changes are completed safely or a
+clear blocker is reported.
+
+\medskip
+\noindent\textbf{PUC-06: Interact with Open App}
+
+\textbf{Intent:} Perform focused actions inside an already-open
+application.
+
+\textbf{Behavior:} Proxi executes simple in-app operations (select,
+click, type, toggle) and asks follow-up questions when intent is
+underspecified.
+
+\textbf{Result:} The target action is completed or failure is explained
+with a suggested next step.
+
+\subsection{System State Diagram}
+The following state model captures the critical safety-oriented flow of
+a Proxi interaction. This visual specification complements the formal
+interaction protocol in Section~9.3.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=1.0\textwidth,height=0.42\textheight]{StateDiagram.png}
+  \caption{System State Diagram}
+  \label{fig:state-diagram}
+\end{figure}
 
 \section{Functional Requirements}
+This section states what the system does. To preserve traceability with
+the existing design and V\&V documents, the requirement identifiers are
+kept the same even where the wording has been refined.
+
 \subsection{Functional Requirements}
+
+\reqcard{FUNC.R.1}{The system shall accept user input through both
+speech and text interfaces.}{Proxi must support hands-free
+accessibility use and fallback text interaction for noisy or
+inaccessible environments.}{Supported voice and text commands are
+accepted and passed into the processing pipeline during system
+testing.}{High}
+
+\reqcard{FUNC.R.2}{The system shall convert speech input into text
+using an automatic speech recognition module.}{Speech input must be
+normalized into text before intent interpretation.}{Speech input is
+converted into text suitable for downstream intent
+processing.}{High}
+
+\reqcard{FUNC.R.3}{The system shall interpret user intent from natural
+language input to determine the desired task.}{The system must
+determine what task the user wants without requiring technical
+commands.}{Natural-language requests are mapped to a structured intent
+for the task planner.}{High}
+
+\reqcard{FUNC.R.4}{The system shall create and execute a plan that
+invokes one or more tools on behalf of the user.}{User-visible task
+completion depends on safe composition of lower-level actions.}{The
+system achieves at least \texttt{TASK\_SUCCESS\_MIN} successful
+completion on representative end-to-end task scenarios.}{High}
+
+\reqcard{FUNC.R.5}{The system shall present task status and task
+results to the user in text, speech, or both.}{Users need continuous
+feedback to understand what the system is doing.}{Each executed command
+produces a user-visible status or result message.}{High}
+
+\reqcard{FUNC.R.6}{The system shall maintain short-term session context
+so that users can issue follow-up commands.}{Natural interaction
+requires short follow-up references such as ``that'' or ``the last
+one.''}{Follow-up references to recent entities or actions are resolved
+using session context.}{Medium}
+
+\reqcard{FUNC.R.7}{The system shall log user interactions and task
+results for traceability and debugging.}{Traceability is needed for
+debugging, auditing, and future improvement.}{Each user session
+produces timestamped log entries for commands, plans, and
+outcomes.}{Medium}
+
+\reqcard{FUNC.R.8}{The system shall allow users to complete supported
+tasks without requiring low-level system interfaces such as raw file
+paths or command-line tools.}{The product goal is high-level
+accessible control, not low-level system administration.}{Users can
+complete supported tasks through the Proxi interface without needing
+raw OS commands or internal file-system knowledge.}{High}
+
+\reqcard{FUNC.R.9}{The system shall request explicit confirmation
+before executing privileged or destructive actions.}{Risky tasks must
+not execute silently.}{Each privileged or destructive action triggers a
+confirmation step before execution.}{High}
+
+\subsection{Traceability Summary}
+Table~\ref{tab:persona-traceability} summarizes how the highest
+priority personas and goals map to the main requirement categories.
+
 \begin{table}[H]
 \centering
-\renewcommand{\arraystretch}{1.3}
-\begin{tabular}{|p{2.5cm}|p{8cm}|p{5cm}|}
-\hline
-\textbf{Req\#} & \textbf{Requirement} & \textbf{Fit Criterion} \\ \hline
-
-FUNC.R.1 & The system shall accept user input through both speech and text 
-interfaces. & Successful recognition and processing of at least 95\% of valid 
-user speech or text commands during testing. \\ \hline
-
-FUNC.R.2 & The system shall convert speech input into text using an automatic 
-speech recognition (ASR) module. & The transcribed text shall match user speech 
-with at least 90\% word accuracy in controlled test conditions. \\ \hline
-
-FUNC.R.3 & The system shall interpret user intent from natural language input 
-to determine the desired task. & In 90\% of test cases, the interpreted intent 
-shall match the human-labeled ground truth task. \\ \hline
-
-FUNC.R.4 & The system shall plan and execute tasks by invoking one or more 
-software agents that perform actions on behalf of the user. & The system shall 
-successfully complete end-to-end task execution in at least 85\% of test 
-scenarios. \\ \hline
-
-FUNC.R.5 & The system shall provide textual or spoken feedback describing 
-the status or results of the requested task. & Each executed command shall 
-generate a confirmation message or output within 2 seconds of task completion. 
-\\ \hline
-
-FUNC.R.6 & The system shall maintain a short-term conversational memory to
- handle contextual follow-up commands. & In at least 90\% of test cases, 
- follow-up commands dependent on prior context shall be correctly interpreted. 
- \\ \hline
-\end{tabular}
-\caption{Functional Requirements and Fit Criteria}
+\caption{Persona and Goal Traceability Matrix}
+\label{tab:persona-traceability}
+\begin{tabularx}{\textwidth}{p{2cm}p{4.6cm}X}
+\toprule
+\textbf{Source} & \textbf{Main Need} &
+\textbf{Primary Requirement Links} \\
+\midrule
+P1 Amrita &
+Clear feedback, low complexity, readable interface &
+EOU.R.1--EOU.R.3, UAP.R.1--UAP.R.3, ACC.R.2,
+APP.1--APP.5 \\
+P2 Leo &
+Hands-free control, captions, accessible workflows &
+FUNC.R.1--FUNC.R.9, ACC.R.1--ACC.R.2,
+SAF.R.1--SAF.R.2 \\
+P3 Ari &
+Efficient repeated workflows and fast task completion &
+FUNC.R.4--FUNC.R.8, SAL.R.1--SAL.R.2,
+SOE.R.1--SOE.R.2 \\
+G-1 &
+Accessibility &
+ACC.R.1--ACC.R.2, EOU.R.1--EOU.R.3,
+APP.1--APP.5 \\
+G-2 &
+Independent task completion &
+FUNC.R.1--FUNC.R.9, POA.R.1--POA.R.2,
+SAL.R.1--SAL.R.2 \\
+G-3 &
+Safety and trust &
+SAF.R.1--SAF.R.2, UAP.R.2--UAP.R.3,
+ROFT.R.1--ROFT.R.2 \\
+\bottomrule
+\end{tabularx}
 \end{table}
 
-\begin{table}[H]
-\centering
-\renewcommand{\arraystretch}{1.3}
-\begin{tabular}{|p{2.5cm}|p{8cm}|p{5cm}|}
-\hline
-\textbf{Req\#} & \textbf{Requirement} & \textbf{Fit Criterion} \\ \hline
-FUNC.R.7 & The system shall log all user interactions and task results for 
-analysis and traceability purposes. & Each user session shall generate a 
-verifiable log entry containing timestamped input and outcome data. \\ \hline
+\subsection{Formalization of Interaction Safety Protocol}
+A critical portion of the system is the user-command execution flow for
+potentially risky actions. Proxi shall follow the state machine below.
 
-FUNC.R.8 & The system shall operate without requiring the user to interact 
-with low-level system interfaces (e.g., OS file paths or command-line tools). 
-& In usability tests, 100\% of user operations shall be achievable through 
-high-level natural language commands only. \\ \hline
-FUNC.R.9 & The system shall ensure that all agent actions requiring system-level 
-access request user confirmation before execution. & Each privileged action 
-(e.g., deleting files) shall trigger a confirmation request and require explicit 
-user approval. \\ \hline
-\end{tabular}
-\caption{Functional Requirements and Fit Criteria - Continued}
-\end{table}
+Let
+\[
+S =
+\{ Idle, Listening, Interpreting, AwaitingConfirm, Executing, Reporting
+\}.
+\]
+
+Let
+\[
+E =
+\{ startInput, inputReady, intentReady, risky, confirm, deny,
+execDone, reset \}.
+\]
+
+Let
+\[
+\delta : S \times E \rightarrow S.
+\]
+
+The required transitions are:
+\[
+\delta(Idle, startInput) = Listening
+\]
+\[
+\delta(Listening, inputReady) = Interpreting
+\]
+\[
+\delta(Interpreting, intentReady) = Executing
+\]
+\[
+\delta(Interpreting, risky) = AwaitingConfirm
+\]
+\[
+\delta(AwaitingConfirm, confirm) = Executing
+\]
+\[
+\delta(AwaitingConfirm, deny) = Reporting
+\]
+\[
+\delta(Executing, execDone) = Reporting
+\]
+\[
+\delta(Reporting, reset) = Idle
+\]
+
+Safety invariant:
+\[
+\forall a \in RiskyActions :
+Execute(a) \Rightarrow Confirmed(a)
+\]
+
+This invariant states that any risky action may execute only after an
+explicit confirmation event has been observed.
 
 \section{Look and Feel Requirements}
+This section describes the intended visual style and presentation of
+the system. These requirements guide interface consistency and are
+supported by the usability and accessibility requirements that follow.
 
 \subsection{Appearance Requirements}
+\reqcard{APP.1}{The interface shall look simple and familiar, like a
+normal desktop tool with a clear status area that shows when the
+system is listening, thinking, or ready.}{Users should understand the
+current system state at a glance.}{The main interface visibly displays
+system state in all tested interaction modes.}{High}
 
-\begin{description}
-  \item[APP.1] The interface should look simple and familiar, like a normal 
-  desktop tool with a small status bar that shows when the system is 
-  listening, thinking, or ready.
-  
-  \item[APP.2] Main actions such as listen, stop, undo, and confirm should 
-  be clearly visible as buttons on the main screen.
-  
-  \item[APP.3] The screen should not feel crowded; only the most important 
-  options should be shown, and advanced options hidden in a simple menu.
-  
-  \item[APP.4] Text and buttons should be large and easy to read or click, 
-  especially for new or elderly users.
-  
-  \item[APP.5] A light and dark theme toggle should be available so users 
-  can choose what is most comfortable for them.
-\end{description}
+\reqcard{APP.2}{Main actions such as listen, stop, undo, and confirm
+shall be clearly visible as controls on the main screen.}{Critical
+controls must be discoverable without deep navigation.}{All critical
+controls are accessible within one main view.}{High}
+
+\reqcard{APP.3}{The interface shall avoid clutter and show only the
+most important options by default.}{Minimalism reduces cognitive
+load.}{Advanced settings are separated from the main interaction
+flow.}{Medium}
+
+\reqcard{APP.4}{Text and buttons shall be large enough to be easy to
+read and select.}{Large text and controls support elderly and
+low-vision users.}{The interface remains usable at 200\% text
+scaling.}{High}
+
+\reqcard{APP.5}{A light and dark theme option shall be
+available.}{Users have different comfort and visibility
+preferences.}{Users can switch between light and dark themes without
+loss of functionality.}{Low}
 
 \subsection{Style Requirements}
+\reqcard{STY.1}{Labels and messages shall use short, plain language
+with no unnecessary technical jargon.}{The target users should not
+need specialist knowledge to understand system feedback.}{Reviewed
+messages avoid internal or tool-specific jargon in user-facing
+flows.}{High}
 
-\begin{description}
-  \item[STY.1] Labels and messages should use short, plain language with no 
-  technical hard language.
-  
-  \item[STY.2] When the system speaks, the text should also appear on 
-  screen as captions.
-  
-  \item[STY.3] Icons should stay consistent and have a short text label 
-  underneath to avoid confusion.
-\end{description}
+\reqcard{STY.2}{When the system speaks, the same content shall also
+appear on screen as captions.}{Captions improve accessibility and
+reinforce spoken feedback.}{All spoken responses have matching
+on-screen text.}{High}
+
+\reqcard{STY.3}{Icons shall be consistent and paired with short text
+labels.}{Text labels reduce ambiguity in icon
+interpretation.}{Primary icons used in the interface have
+corresponding labels.}{Medium}
 
 \section{Usability and Humanity Requirements}
+This section captures how approachable, learnable, understandable, and
+accessible the system should be for the target users identified
+earlier.
 
 \subsection{Ease of Use Requirements}
+\reqcard{EOU.R.1}{The system shall be easy for new users to start
+using.}{Low-friction onboarding is necessary for
+accessibility-focused users.}{Basic tasks such as opening an
+application or reading a file require only one simple command or
+button press in typical flows.}{High}
 
-\begin{itemize}
-  \item \textbf{EOU.R.1} The system shall be easy for new users to start using. 
-  Basic tasks like opening an application or reading a file should require only 
-  one simple command or button press.
+\reqcard{EOU.R.2}{The system shall have an intuitive interface that
+does not overwhelm users.}{Users should not struggle to find core
+actions.}{Main actions such as listen, stop, undo, and confirm are
+clearly visible and easy to access.}{High}
 
-  \item \textbf{EOU.R.2} The system shall have an intuitive interface that does 
-  not overwhelm users. Main actions such as listen, stop, undo, and confirm 
-  must be clearly visible and easy to access.
-
-  \item \textbf{EOU.R.3} After a short introduction, users should be able to 
-  complete most everyday tasks without assistance, and tasks should become 
-  faster with practice.
-\end{itemize}
+\reqcard{EOU.R.3}{After a short introduction, users should be able to
+complete most everyday tasks without assistance.}{The system should
+become useful quickly in real use.}{Task effectiveness improves by at
+least \texttt{USABILITY\_GAIN\_MIN} over a baseline workflow.}{High}
 
 \subsection{Personalization and Internationalization Requirements}
+\reqcard{PER.R.1}{The system shall adapt to a user's speech patterns
+over time to improve recognition quality.}{Repeated use should reduce
+friction for frequent users.}{The system stores and applies allowed
+local personalization settings.}{Medium}
 
-\begin{itemize}
-  \item \textbf{PER.R.1} The system shall adapt to a user's speech patterns over 
-  time to improve recognition accuracy.
-
-  \item \textbf{PER.R.2} The system shall support Canadian English standards 
-  for language, date, and time formatting and allow future translation if needed.
-\end{itemize}
+\reqcard{PER.R.2}{The system shall support Canadian English standards
+for language, date, and time formatting and allow future localization
+if needed.}{The project is developed in a Canadian academic
+context.}{Default language and formatting reflect Canadian English
+conventions.}{Medium}
 
 \subsection{Learning Requirements}
+\reqcard{LEA.R.1}{The system shall have a short learning curve,
+allowing new users to understand and use basic commands
+quickly.}{The first-use experience should not require formal
+training.}{New users can understand the basic interaction model within
+a short guided introduction.}{High}
 
-\begin{itemize}
-  \item \textbf{LEA.R.1} The system shall have a short learning curve, allowing 
-  new users to understand and use basic commands within 30 minutes.
-
-  \item \textbf{LEA.R.2} The system shall provide a list of example commands 
-  or a ``what can I say'' option to help users learn available features quickly.
-\end{itemize}
+\reqcard{LEA.R.2}{The system shall provide a list of example commands
+or a ``What can I say?'' help option.}{Users need discoverable
+examples to build confidence.}{Example commands are accessible through
+the interface during use.}{High}
 
 \subsection{Understandability and Politeness Requirements}
+\reqcard{UAP.R.1}{The system shall use simple and clear language for
+all user-facing messages.}{Clarity reduces user confusion and error
+recovery time.}{User-facing messages avoid unexplained technical
+terminology.}{High}
 
-\begin{itemize}
-  \item \textbf{UAP.R.1} The system shall use simple and clear language for all 
-  text and messages, avoiding technical jargon.
+\reqcard{UAP.R.2}{The system shall confirm actions that could change
+or delete important files or settings before executing them.}{Clear
+confirmation protects user trust and data.}{All destructive or
+privileged actions trigger explicit confirmation.}{High}
 
-  \item \textbf{UAP.R.2} The system shall confirm actions that could change or 
-  delete important files or settings before executing them.
-
-  \item \textbf{UAP.R.3} Error messages shall be polite, explain the issue in 
-  plain language, and suggest a next step to fix it.
-\end{itemize}
+\reqcard{UAP.R.3}{Error messages shall be polite, explain the issue in
+plain language, and suggest a next step.}{Helpful error recovery is
+part of usable accessibility support.}{Tested error messages include
+cause and suggested recovery step.}{Medium}
 
 \subsection{Accessibility Requirements}
+\reqcard{ACC.R.1}{The system shall allow all core actions, including
+setup and exit, to be performed using voice commands without requiring
+a keyboard or mouse.}{Hands-free control is a core accessibility
+goal.}{Core actions are completable through the voice-only path during
+testing.}{High}
 
-\begin{itemize}
-  \item \textbf{ACC.R.1} The system shall allow all actions, including setup and 
-  exit, to be performed using voice commands without requiring a keyboard 
-  or mouse.
-
-  \item \textbf{ACC.R.2} The system shall comply with recognized accessibility 
-  standards such as \textbf{WCAG 2.2} and the \textbf{Accessibility for Ontarians 
-  with Disabilities Act (AODA)}. All interface elements must provide captions for 
-  spoken responses, support text scaling, and ensure sufficient color contrast to 
-  assist users with visual impairments.
-\end{itemize}
-
+\reqcard{ACC.R.2}{The system shall comply with recognized
+accessibility standards such as WCAG 2.2 and AODA where applicable to
+the interface.}{The system should follow established accessibility
+guidance rather than ad hoc design choices.}{The interface provides
+captions for spoken responses, supports text scaling, and ensures
+sufficient contrast in tested views.}{High}
 
 \section{Performance Requirements}
+This section defines quantitative expectations for latency, accuracy,
+fault tolerance, and capacity. Where possible, the fit criteria are
+expressed using the symbolic constants from
+Table~\ref{tab:symbolic-constants}.
 
 \subsection{Speed and Latency Requirements}
+\reqcard{SAL.R.1}{The system shall begin responding to a voice
+command within \texttt{QUIET\_RESP\_MAX} under normal quiet
+conditions.}{Fast acknowledgment improves confidence and
+usability.}{Measured response-start time does not exceed
+\texttt{QUIET\_RESP\_MAX} in quiet-room testing.}{High}
 
-\begin{itemize}
-  \item \textbf{SAL.R.1} The system shall begin responding to a voice command 
-  within 2 seconds under normal conditions.
-  
-  \item \textbf{SAL.R.2} Common actions, such as opening an application or 
-  navigating files, shall complete within 3 seconds on standard hardware.
-\end{itemize}
+\reqcard{SAL.R.2}{Common local actions such as opening an application
+or navigating files shall complete within \texttt{TASK\_TIME\_MAX} on
+standard hardware.}{Core task execution must feel
+responsive.}{Representative local actions complete within
+\texttt{TASK\_TIME\_MAX} during testing.}{High}
 
 \subsection{Safety-Critical Requirements}
+\reqcard{SAF.R.1}{Any action that changes files or system settings
+shall require user confirmation before execution.}{Potentially harmful
+actions must not run silently.}{All tested risky actions require
+explicit confirmation.}{High}
 
-\begin{itemize}
-  \item \textbf{SAF.R.1} Any action that changes files or system settings shall 
-  require user confirmation before execution.
-  
-  \item \textbf{SAF.R.2} The system shall allow users to undo or roll back 
-  critical actions in a single step to prevent accidental changes.
-\end{itemize}
+\reqcard{SAF.R.2}{The system shall allow users to undo or roll back
+critical actions when such rollback is technically feasible.}{Undo
+support reduces the impact of mistakes.}{Supported critical actions
+provide an undo or rollback path.}{Medium}
 
 \subsection{Precision or Accuracy Requirements}
+\reqcard{POA.R.1}{The system shall correctly recognize at least
+\texttt{QUIET\_ACC\_MIN} of supported commands in a quiet
+environment.}{Quiet-condition recognition defines the baseline
+usability target.}{Measured recognition accuracy in quiet-room testing
+is at least \texttt{QUIET\_ACC\_MIN}.}{High}
 
-\begin{itemize}
-  \item \textbf{POA.R.1} The system shall correctly recognize at least 90\% of 
-  supported voice commands in a quiet environment.
-  
-  \item \textbf{POA.R.2} In a moderately noisy environment, the system shall 
-  maintain at least 80\% command recognition accuracy.
-\end{itemize}
+\reqcard{POA.R.2}{In a moderately noisy indoor environment, the
+system shall maintain at least \texttt{MOD\_NOISE\_ACC\_MIN} command
+recognition accuracy.}{The system must remain usable outside ideal
+test conditions.}{Measured recognition accuracy in moderate-noise
+testing is at least \texttt{MOD\_NOISE\_ACC\_MIN}.}{Medium}
 
 \subsection{Robustness or Fault-Tolerance Requirements}
+\reqcard{ROFT.R.1}{The system shall log and report input or execution
+errors without crashing or losing user data.}{Robust recovery is
+necessary for trust and debugging.}{Invalid or failed tasks generate
+visible feedback and log entries without terminating the
+application.}{High}
 
-\begin{itemize}
-  \item \textbf{ROFT.R.1} The system shall log and report input errors without 
-  crashing or losing user data.
-  
-  \item \textbf{ROFT.R.2} The system shall continue running even if it receives 
-  an invalid or incomplete command.
-\end{itemize}
+\reqcard{ROFT.R.2}{The system shall continue running even if it
+receives an invalid or incomplete command.}{One bad input must not
+collapse the whole application.}{Invalid commands are rejected
+gracefully and the application remains operational.}{High}
 
 \subsection{Capacity Requirements}
+\reqcard{CAP.R.1}{The system shall support continuous operation for at
+least \texttt{SESS\_DURATION\_MIN} without significant
+degradation.}{The product should be suitable for extended daily
+use.}{The application remains usable for at least
+\texttt{SESS\_DURATION\_MIN} in continuous testing.}{Medium}
 
-\begin{itemize}
-  \item \textbf{CAP.R.1} The system shall support continuous operation for at 
-  least 4 hours without performance degradation.
-  
-  \item \textbf{CAP.R.2} CPU usage shall remain under 30\% during normal 
-  operation on standard hardware.
-\end{itemize}
+\reqcard{CAP.R.2}{CPU usage shall remain under
+\texttt{APP\_CPU\_MAX} during normal operation on standard
+hardware.}{The application should not excessively burden the host
+system.}{Measured CPU usage remains below \texttt{APP\_CPU\_MAX}
+during normal-use scenarios.}{Medium}
 
 \subsection{Scalability or Extensibility Requirements}
+\reqcard{SOE.R.1}{The system shall allow new features or modules to
+be added without major changes to existing functionality.}{The product
+should remain evolvable after the capstone period.}{New tools can be
+added through the modular architecture with limited changes to
+existing components.}{Medium}
 
-\begin{itemize}
-  \item \textbf{SOE.R.1} The system shall allow new features or modules to be 
-  added without major changes to existing functionality.
-  
-  \item \textbf{SOE.R.2} Any new feature or skill shall load and become 
-  available for use within 200 milliseconds.
-\end{itemize}
+\reqcard{SOE.R.2}{Any new feature or skill shall load and become
+available for use within \texttt{APP\_LOAD\_TIME} after
+initialization of the interface.}{Dynamic features should not
+significantly slow user interaction.}{Added features become available
+within \texttt{APP\_LOAD\_TIME} in supported workflows.}{Low}
 
 \subsection{Longevity Requirements}
+\reqcard{LON.R.1}{The system shall retain user settings and allowed
+personalization data after updates.}{Users should not lose preferred
+settings after upgrades.}{Existing local settings persist across
+normal update scenarios.}{Medium}
 
-\begin{itemize}
-  \item \textbf{LON.R.1} The system shall retain all user settings and 
-  personalization data after updates.
-  
-  \item \textbf{LON.R.2} The system shall allow rollback to a previous version 
-  within 60 seconds if an update fails.
-\end{itemize}
-
+\reqcard{LON.R.2}{The system shall allow rollback to a previous
+version within \texttt{ROLLBACK\_MAX} if an update fails.}{Recovery
+from failed updates is necessary for maintainability.}{A failed update
+can be reversed within \texttt{ROLLBACK\_MAX}.}{Low}
 
 \section{Operational and Environmental Requirements}
+This section describes the environments in which the system is expected
+to operate and the interfaces it must support.
+
 \subsection{Expected Physical Environment}
-\begin{itemize}
-    \item \textbf{EPE.R.1} The system shall operate on personal computing devices
-     such as laptops, desktop computers, equipped with standard hardware
-      components, including a microphone, speakers, and a stable internet connection.
-    \item \textbf{EPE.R.2} The system shall be designed to work optimally for indoor environments
-     such as homes, offices where noise levels are moderate(under 65dB).
-    \item \textbf{EPE.R.3} The speech recognition capability shall achieve reliable
-     accuracy when the user speaks within approximately one meter of the microphone input.
-    \item \textbf{EPE.R.4} The system shall be able to operate effectively under
-     normal indoor environmental conditions, including temperatures between 15°C
-      and 30°C.
-\end{itemize}
+\reqcard{EPE.R.1}{The system shall operate on personal computing
+devices such as laptops and desktop computers with standard hardware
+including a microphone, speakers, and a stable internet connection
+when needed.}{The target environment is ordinary consumer desktop
+hardware.}{Core Proxi workflows execute on supported consumer laptops
+and desktops.}{High}
+
+\reqcard{EPE.R.2}{The system shall be designed to work optimally for
+indoor environments where noise levels are moderate, up to
+\texttt{INDOOR\_NOISE\_MAX}.}{Proxi is primarily intended for indoor
+personal-computing contexts.}{Voice interaction remains functional in
+moderate indoor noise.}{Medium}
+
 \subsection{Wider Environment Requirements}
-\begin{itemize} 
-    \item \textbf{WER.R.1} The system shall integrate safely within digital ecosystems, 
-    ensuring that its automation does not interfere with other running applications.  
-    \item \textbf{WER.R.2} The system shall be designed to minimize environmental impact 
-    by reducing unnecessary computational load and optimizing resource usage.  
-\end{itemize}
+\reqcard{WER.R.1}{The system shall integrate safely within the desktop
+ecosystem, ensuring that its automation does not interfere with
+unrelated running applications.}{Automation must be scoped to the
+intended task.}{Tested actions affect only the targeted application or
+resource.}{High}
+
 \subsection{Requirements for Interfacing with Adjacent Systems}
-\begin{itemize}
-    \item \textbf{IAS.R.1} The system shall provide secure APIs or middleware for integration
-     with third-party tools and applications (e.g., email, web browsers, file systems).  
-    \item \textbf{IAS.R.2} The system shall support standard communication protocols such
-     as HTTPS, MCP and RESTful API calls.  
-    \item \textbf{IAS.R.3} The system shall interact with speech recognition engines
-     (e.g., Whisper, Google ASR) and text-to-speech systems through well-defined interfaces.  
-    \item \textbf{IAS.R.4} The system shall log interactions with external systems for
-     traceability and debugging.  
-\end{itemize}
+\reqcard{IAS.R.1}{The system shall provide safe interfaces for
+integration with third-party tools and applications such as email
+tools, browsers, and file systems.}{Proxi exists to orchestrate
+adjacent tools rather than replace them.}{Supported integrations are
+invokable through controlled interfaces.}{High}
+
+\reqcard{IAS.R.2}{The system shall support standard communication
+mechanisms such as HTTPS and MCP where appropriate.}{Standard
+protocols simplify interoperability.}{External integrations use
+supported standard communication methods.}{Medium}
+
 \subsection{Productization Requirements}
-\begin{itemize}
-    \item \textbf{PRD.R.1} The system shall be packaged as a deployable desktop or web-based
-     application with minimal setup steps.  
-    \item \textbf{PRD.R.2} The product shall include installation documentation and user
-     onboarding instructions in the github repo  
-    \item \textbf{PRD.R.3} The design shall allow modular upgrades, enabling future
-     integration of improved AI models or additional tools.   
-\end{itemize}
+\reqcard{PRD.R.1}{The system shall be packaged as a deployable desktop
+or desktop-style application with minimal setup steps.}{Users should
+be able to install and run the product easily.}{A documented
+installation path exists and is usable by testers.}{High}
+
+\reqcard{PRD.R.2}{The product shall include installation
+documentation and user onboarding instructions in the
+repository.}{Basic support material is necessary for handoff and
+evaluation.}{Installation and onboarding instructions are present in
+the repository.}{High}
+
+\reqcard{PRD.R.3}{The design shall allow modular upgrades, enabling
+future integration of improved AI models or additional
+tools.}{The product should remain maintainable beyond the capstone
+period.}{The architecture isolates tool and model integrations behind
+defined interfaces.}{Medium}
+
 \subsection{Release Requirements}
-\begin{itemize}
-    \item \textbf{REL.R.1} The releases will follow the MAJOR.MINOR.PATCH versioning scheme.
-    \item \textbf{REL.R.2} The release package shall be version-controlled and archived for reproducibility.  
-\end{itemize}
+\reqcard{REL.R.1}{Releases shall follow a documented versioning
+scheme.}{Clear versioning supports reproducibility and
+maintenance.}{Released builds are labeled using a consistent
+scheme.}{Medium}
+
+\reqcard{REL.R.2}{The release package shall be version-controlled and
+archived for reproducibility.}{Capstone evaluation and later
+maintenance require reproducible builds.}{Released versions are
+preserved in version control with tags or equivalent records.}{Medium}
 
 \section{Maintainability and Support Requirements}
+This section describes the qualities needed to keep the product
+modifiable, supportable, and adaptable over time.
+
 \subsection{Maintenance Requirements}
-\begin{itemize}
-  \item \textbf{1:} The project shall include a short README and setup steps so new
-  contributors can build and run it without help.
-  \item \textbf{2:} Adding a new MCP tool shall only require a new module and a
-  registry entry; existing tools do not need to be changed.
-\end{itemize}
+\reqcard{MTN.R.1}{The project shall include a short README and setup
+steps so new contributors can build and run it without help.}{Low
+friction onboarding improves maintainability.}{A new contributor can
+build and run the project using repository documentation.}{High}
+
+\reqcard{MTN.R.2}{Adding a new MCP tool shall require only a new
+module and a registry entry, without modifying unrelated
+tools.}{Tool extensibility should not create broad
+regressions.}{A new tool can be integrated by localized
+changes.}{Medium}
 
 \subsection{Supportability Requirements}
-\begin{itemize}
-  \item \textbf{1:} The release shall include a simple user guide (quick start,
-  common commands, basic troubleshooting).
-  \item \textbf{2:} The app shall offer a Report Problem button that bundles recent
-  logs and basic system info into a ZIP with the user’s consent.
-\end{itemize}
+\reqcard{SUP.R.1}{The release shall include a simple user guide with
+a quick start, common commands, and basic troubleshooting.}{Users need
+lightweight self-help material.}{The delivered documentation includes
+quick start, common commands, and troubleshooting content.}{High}
+
+\reqcard{SUP.R.2}{The application shall offer a report-problem
+workflow that bundles recent logs and basic system information with
+the user's consent.}{Support data helps diagnose failures without
+silent data collection.}{Users can opt in to produce a support bundle
+from the interface.}{Medium}
 
 \subsection{Adaptability Requirements}
-\begin{itemize}
-  \item \textbf{1:} The system shall run on current versions of Windows and macOS
-  on standard hardware.
-  \item \textbf{2:} The system shall keep working if the user switches default apps
-  by updating configuration only, no code changes.
-\end{itemize}
+\reqcard{ADP.R.1}{The system shall run on current supported versions
+of Windows and macOS on standard hardware.}{Users do not all share the
+same desktop environment.}{Core functionality is demonstrated on
+supported Windows and macOS systems.}{High}
+
+\reqcard{ADP.R.2}{The system shall continue to function if the user
+switches default applications by updating configuration only.}{The
+system should adapt to ordinary desktop configuration changes.}{Default
+application changes do not require code changes to restore supported
+workflows.}{Medium}
 
 \section{Security Requirements}
-\subsection{Access Requirements}
-\begin{itemize}
-    \item \textbf{ACS-01} :The application will be available publicly 
-    and no user registration or account is required.
-    \item \textbf{ACS-02} :Any necessary permissions, such as 
-    itemize or screen access, must be explicitly granted by the user.
-\end{itemize}
+This section defines the access-control, integrity, privacy, audit,
+and immunity requirements needed to operate Proxi safely.
 
+\subsection{Access Requirements}
+\reqcard{ACS.R.1}{The application shall not require a Proxi-managed
+user registration or login to operate.}{Authentication should not
+become a barrier to accessibility.}{Users can access core
+functionality without Proxi-managed credentials.}{High}
+
+\reqcard{ACS.R.2}{Any necessary permissions, such as microphone or
+automation access, shall be explicitly granted by the user.}{Permission
+use must be visible and consent-based.}{Permission-dependent actions
+do not proceed without the required grant.}{High}
 
 \subsection{Integrity Requirements}
-\begin{itemize}
-    \item \textbf{INT-01}: The system shall ensure that any stored 
-    or transmitted data is protected from unauthorized alteration or corruption.
-\end{itemize}
-
-
+\reqcard{INT.R.1}{The system shall protect stored or transmitted data
+from unauthorized alteration or corruption.}{Users must be able to
+trust task results and system records.}{Tested interactions preserve
+the integrity of local logs and task data.}{High}
 
 \subsection{Privacy Requirements}
-\begin{itemize}
-    \item \textbf{PRIV-01}: Any stored user data will be stored 
-    acording to PIPEDA.
-    \item \textbf{PRIV-01}: If any external APIs are used, only 
-    minimal, non identifiable data may be transmitted. These services must 
-    adhere to GDPR. The user must also explicitly accept the privacy policies 
-    of these third party services.
-\end{itemize}
+\reqcard{PRIV.R.1}{Any stored user data shall be handled in a manner
+consistent with PIPEDA.}{The project operates in a Canadian context
+and should respect Canadian privacy expectations.}{Stored data handling
+follows documented privacy constraints and minimal retention.}{High}
+
+\reqcard{PRIV.R.2}{If external APIs are used, only the minimum data
+necessary to complete the request may be transmitted, and the user
+shall be informed when third-party services are involved.}{Users
+should understand when their request leaves the local
+device.}{External-service workflows disclose third-party involvement
+and use minimal task-relevant data.}{High}
 
 \subsection{Audit Requirements}
-There are no audit requirements for the application. The application does not 
-store user data, maintain user accounts or perform any actions that require 
-tracking or verification. There is nothing that requires audits or security 
-reviews. The privacy focused design eliminates the need for audit trails.
+\reqcard{AUD.R.1}{The system shall maintain local audit records of
+significant user commands, confirmations, and action
+outcomes.}{Operational traceability is needed for debugging and
+accountability.}{Significant actions produce local audit entries
+during testing.}{Medium}
+
+\reqcard{AUD.R.2}{Audit records shall avoid storing unnecessary
+sensitive content.}{Traceability should not require excessive privacy
+cost.}{Audit entries focus on operational facts rather than
+unnecessary content payloads.}{Medium}
 
 \subsection{Immunity Requirements}
-\begin{itemize}
-    \item \textbf{IMM-01}: The application must be to prevent DDos 
-    Attacks, SQL injection, and unauthorized access.
-    \item \textbf{IMM-02}: All third party libraries and 
-    dependencies must be up to date and scanned for vulnerabilities.
-\end{itemize}
+\reqcard{IMM.R.1}{The application shall reduce exposure to
+denial-of-service, injection, and unauthorized-access risks.}{Even a
+local desktop assistant can introduce abuse surfaces.}{The design uses
+scoped permissions, input validation, and restricted tool invocation
+paths.}{High}
+
+\reqcard{IMM.R.2}{Third-party libraries and dependencies shall be kept
+reasonably up to date and checked for known vulnerabilities.}{Dependency
+hygiene is part of secure maintenance.}{Dependencies are reviewed and
+updated as part of the release workflow.}{Medium}
 
 \section{Cultural Requirements}
+This section captures cultural neutrality and inclusiveness
+requirements for the interface and user-facing content.
+
 \subsection{Cultural Requirements}
-\begin{itemize}
-    \item \textbf{CULR-01}: The application shall use
-    polite, culurally neutral language, avoid slangs and any references that may
-    confuse or offend users.
-    \item \textbf{CULR-02}: The application shall support multiple
-    languages and will allow users to interact in their preferred language.
-\end{itemize}
+\reqcard{CULR.R.1}{The application shall use polite, culturally
+neutral language and avoid slang or references that may confuse or
+offend users.}{The product should remain broadly understandable and
+respectful.}{Reviewed user-facing text avoids slang and culturally
+narrow references.}{Low}
+
+\reqcard{CULR.R.2}{The application shall be designed so that future
+language expansion is possible without major redesign.}{The product
+may eventually serve a wider linguistic audience.}{User-facing strings
+are separable from core execution logic.}{Low}
 
 \section{Compliance Requirements}
-\subsection{Legal Requirements}
-\begin{itemize}
-    \item \textbf{LGL-01}: The application will adhere to PIPEDA 
-    for any stored user data.
-    \item \textbf{LGL-02}: The application shall be distributed under
-    the MIT license; allowing for free use, modification and distribution as
-    long as the original license and copyright notice is also included.
-\end{itemize}
+This section defines legal and standards-related expectations relevant
+to the product and its environment.
 
+\subsection{Legal Requirements}
+\reqcard{LGL.R.1}{The application shall adhere to PIPEDA for any
+stored user data.}{Canadian privacy law is the most relevant legal
+baseline here.}{Stored-data handling is documented in a way consistent
+with PIPEDA constraints.}{High}
+
+\reqcard{LGL.R.2}{The application shall be distributed under the MIT
+license or another approved project license.}{A clear distribution
+license is needed for handoff and reuse.}{The repository contains the
+selected project license.}{Medium}
 
 \subsection{Standards Compliance Requirements}
-\begin{itemize}
-    \item \textbf{STDCOMP-01}: The application will
-    follow WCAG 2 to ensure accessibility for users with disabilities.
-    \item \textbf{STDCOMP-02}: The application should 
-    follow ISO 25010 and ISO 27001 to ensure delivery of high quality and secure
-    software.
-\end{itemize}
+\reqcard{STDCOMP.R.1}{The application shall follow WCAG 2.2 guidance
+where applicable to the user interface.}{Accessibility should be
+grounded in recognized standards.}{Tested interface views satisfy
+targeted WCAG checks used in V\&V.}{High}
 
+\reqcard{STDCOMP.R.2}{The application should align with relevant
+software-quality and security guidance such as ISO 25010 and ISO 27001
+where practical in a capstone setting.}{These standards provide useful
+quality and security reference points.}{The design and V\&V artifacts
+reflect relevant quality and security attributes.}{Low}
+
+\section{Traceability from Requirements to Use Cases}
+This section maps the requirements to the business and product use
+cases so that each major requirement can be traced to a user-visible
+interaction or workflow.
+
+\begin{table}[H]
+\centering
+\caption{Traceability from Requirements to Use Cases}
+\label{tab:req-to-uc}
+\begin{tabularx}{\textwidth}{p{3.2cm}X}
+\toprule
+\textbf{Requirement} & \textbf{Use Case(s)} \\
+\midrule
+FUNC.R.1 & BUC-01, PUC-01, PUC-02, PUC-03, PUC-04, PUC-05, PUC-06 \\
+FUNC.R.2 & BUC-01, PUC-01, PUC-02, PUC-03, PUC-04, PUC-05, PUC-06 \\
+FUNC.R.3 & BUC-01, PUC-01, PUC-02, PUC-03, PUC-04, PUC-05, PUC-06 \\
+FUNC.R.4 & BUC-01, PUC-01, PUC-02, PUC-03, PUC-04, PUC-05, PUC-06 \\
+FUNC.R.5 & All PUCs \\
+FUNC.R.6 & PUC-02, PUC-03, PUC-04, PUC-05, PUC-06 \\
+FUNC.R.7 & All PUCs \\
+FUNC.R.8 & All PUCs \\
+FUNC.R.9 & PUC-03, PUC-04, PUC-05, PUC-06 \\
+ACC.R.1 & All PUCs \\
+ACC.R.2 & All PUCs \\
+SAF.R.1 & PUC-03, PUC-04, PUC-05, PUC-06 \\
+SAF.R.2 & PUC-04, PUC-05, PUC-06 \\
+SAL.R.1 & All voice-driven PUCs \\
+SAL.R.2 & PUC-01, PUC-02, PUC-03, PUC-05, PUC-06 \\
+POA.R.1 & All voice-driven PUCs \\
+POA.R.2 & All voice-driven PUCs \\
+ROFT.R.1 & All PUCs \\
+ROFT.R.2 & All PUCs \\
+AUD.R.1 & All PUCs \\
+PRIV.R.2 & PUC-03, PUC-04, PUC-06 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 \section{Open Issues}
+This section outlines unresolved questions and challenges that may
+impact the system and require more validation.
 
 \begin{itemize}
-  \item \textbf{OI.1} The integration of the MCP (Model Context Protocol) for 
-  controlling system-level functions is still in progress, and further testing is 
-  needed to ensure reliable and safe execution of commands across different 
-  applications.
-
-  \item \textbf{OI.2} The system’s compatibility and consistent performance 
-  across different operating systems (such as Windows, macOS, and Linux) 
-  have not yet been fully tested or confirmed.
-
-  \item \textbf{OI.3} Ensuring that user commands do not unintentionally trigger 
-  harmful or unauthorized actions on the device is still under investigation 
-  and requires additional safety checks and permission handling.
+  \item \textbf{OI.1} MCP-based system-level control is still being
+  hardened. Additional testing is needed to verify reliable and safe
+  command execution across different application types.
+  \item \textbf{OI.2} Cross-platform consistency is not yet fully
+  validated. Behavior and performance across Windows, macOS, and Linux
+  require broader test coverage.
+  \item \textbf{OI.3} Prevention of unintended or unauthorized actions
+  is still under investigation. Additional permission checks,
+  confirmation policies, and safety constraints are needed.
 \end{itemize}
 
-
 \section{Off-the-Shelf Solutions}
+This section summarizes existing technologies and design patterns that
+can be reused instead of being built from scratch.
+
 \subsection{Ready-Made Products}
-Several existing tools can cover key parts of Proxi so we do not reinvent them:
+Several existing tools can cover core parts of Proxi without
+reimplementation:
 \begin{itemize}
-  \item \textbf{Speech-to-Text (STT):} Many STT engines can perform microphone
-  input and return text with timestamps. Many computers have built-in STT
-  software that is free to use.
-  \item \textbf{Text-to-Speech (TTS):} OpenAI has its own TTS model that can
-  convert text to speech, such as GPT-4o mini TTS.
-  \item \textbf{Desktop Automation:} OS-level automation libraries can open
-  apps, switch windows, and engage with controls.
-  \item \textbf{Language Understanding:} An API to a LLM such as GPT-4o Mini
-  can be the head AI agent for understanding user commands and generating plans.
-  \item \textbf{Storage and Logging:} A lightweight database (SQLite) or a log
-  file can store audit logs and MCP settings with minimal setup.
+  \item \textbf{Speech-to-Text (STT):} STT engines capture microphone
+  input and return text suitable for intent processing. Built-in OS
+  speech-recognition capabilities may be used when they are available
+  and appropriate.
+  \item \textbf{Text-to-Speech (TTS):} TTS services can synthesize
+  spoken responses for accessibility-oriented feedback (for example,
+  GPT-4o mini TTS).
+  \item \textbf{Desktop Automation:} OS-level automation libraries can
+  open applications, switch windows, and perform scoped UI actions.
+  \item \textbf{Language Understanding:} LLM APIs can support command
+  interpretation, decomposition, and plan generation (for example,
+  GPT-4o mini as a primary planning model in baseline scope).
+  \item \textbf{Storage and Logging:} Lightweight local storage (for
+  example SQLite or structured log files) can persist settings and
+  audit records.
 \end{itemize}
 
 \subsection{Reusable Components}
-We can reuse or lightly adapt components that are common across desktop
-assistants:
+Components that can be reused or lightly adapted include:
 \begin{itemize}
-  \item \textbf{MCP tool skeletons:} A small template for tools and a registry
-  storer so new tools are added by convention.
-  \item \textbf{OS adapters:} Adapters for Windows/macOS that present the same
-  functions (open app, focus window, file operations) behind one interface.
-  \item \textbf{Prompt templates:} We can reuse templates for short, reusable
-  prompts to open apps, open files, browse/search, and save/move/rename.
+  \item \textbf{MCP tool skeletons:} Shared templates and registry
+  conventions that make new tool integration predictable.
+  \item \textbf{OS adapters:} Platform-specific adapters that expose a
+  stable interface for common actions (open app, focus window, and
+  file operations).
+  \item \textbf{Prompt templates:} Reusable prompt patterns for common
+  tasks such as opening apps or files, browse/search workflows, and
+  draft-generation actions.
 \end{itemize}
 
 \subsection{Products That Can Be Copied}
-We shall adopt proven patterns from familiar tools to speed delivery:
+Proven interaction patterns that can be adopted include:
 \begin{itemize}
-  \item \textbf{Command palette pattern:} A single search box that finds actions
-  and recent items, with arrow-key selection and enter to run it.
-  \item \textbf{Clear confirmation modal:} A dialog that states the action in
-  simple language, showing what will change, and offers approve/cancel options.
-  \item \textbf{Pre-run checklist:} A simple setup that asks for microphone
-  permission, automation permission, and desktop control on first use. Whenever
-  app access is needed, permission will be requested from the user again before
-  executing any further commands.
+  \item \textbf{Command palette pattern:} A unified search surface for
+  actions and recent targets.
+  \item \textbf{Clear confirmation modal:} A concise approval step for
+  destructive or high-risk actions.
+  \item \textbf{First-run permission checklist:} Guided permission
+  setup for microphone, automation, and app access. When additional app
+  access is needed, permission is requested again before further
+  command execution.
 \end{itemize}
 
 \section{New Problems}
+This section documents possible problems introduced by the new product
+so they can be considered during design, testing, and deployment.
+
 \subsection{Effects on the Current Environment}
-The introduction of the AI-powered assistive technology platform may alter how 
-users interact with their existing computing environment. Potential effects include:
+Potential effects include:
 \begin{itemize}
-    \item Users may become dependent on natural language commands, reducing direct 
-    interaction with traditional interfaces.
-    \item Additional system resources (CPU, memory) will be used to run AI agents, 
-    which could impact performance of other applications.
-    \item There may be changes in user workflows, requiring adaptation to the system’s 
-    operational model.
-    \item The presence of AI-driven agents could introduce unexpected interactions 
-    with other software if not properly sandboxed.
+  \item Users may become dependent on natural-language control.
+  \item Additional CPU and memory usage may affect other applications
+  under constrained hardware conditions.
+  \item Existing workflows may change when users adopt Proxi for
+  repeated tasks.
+  \item AI-driven automation may produce unexpected interactions with
+  other software if sandboxing and scope controls are insufficient.
 \end{itemize}
 
 \subsection{Effects on the Installed Systems}
-Integrating the system with existing hardware and software may create compatibility 
-challenges:
+Potential effects include:
 \begin{itemize}
-    \item Existing applications may require updated permissions or APIs to allow 
-    agent interactions.
-    \item System updates (OS or applications) may temporarily disrupt AI agent 
-    functionality.
-    \item The system may necessitate installation of additional software libraries 
-    or frameworks, which could conflict with pre-existing software.
-    \item Increased network usage for cloud-based AI services could affect other 
-    applications relying on the same connectivity.
+  \item Some applications may require additional permissions or
+  interface allowances.
+  \item OS or application updates may temporarily disrupt automation.
+  \item Extra runtime dependencies may need to be installed.
+  \item Increased network usage for cloud-backed capabilities may
+  affect other applications that share connectivity.
 \end{itemize}
 
 \subsection{Potential User Problems}
-While the system is designed to enhance accessibility, users may encounter challenges:
+Potential user problems include:
 \begin{itemize}
-    \item Misinterpretation of voice commands may lead to incorrect task execution.
-    \item Users may feel discomfort or distrust if the system performs unexpected 
-    actions.
-    \item Cognitive overload may occur if the system provides too much feedback 
-    or prompts.
-    \item Users with atypical speech patterns or accents may experience reduced 
-    recognition accuracy.
+  \item Misinterpretation of voice commands that leads to incorrect
+  task execution.
+  \item Distrust when the system behaves unexpectedly.
+  \item Confusion caused by too much feedback or too many prompts.
+  \item Reduced recognition accuracy for atypical speech patterns.
 \end{itemize}
 
-\subsection{Limitations in the Anticipated Implementation Environment That May Inhibit the New Product}
-Certain environmental and technical limitations may restrict the effectiveness of 
-the platform:
+\subsection{Limitations in the Anticipated Implementation Environment
+That May Inhibit the New Product}
+Potential limitations include:
 \begin{itemize}
-    \item Limited or unstable internet connectivity could hinder cloud-based speech 
-    recognition or AI planning.
-    \item Hardware constraints (low-end processors, insufficient RAM) may slow down 
-    task execution.
-    \item Applications with restrictive APIs/security measures may not allow full 
-    agent interaction.
+  \item Limited or unstable internet connectivity for cloud-dependent
+  services.
+  \item Low-end hardware causing slow execution.
+  \item Restrictive applications that do not expose controllable
+  interfaces.
 \end{itemize}
 
 \subsection{Follow-Up Problems}
-After deployment, additional challenges may emerge that require monitoring and mitigation:
+Potential follow-up problems include:
 \begin{itemize}
-    \item Continuous maintenance will be needed to ensure compatibility with 
-    updated applications and OS versions.
-    \item Security and privacy risks from storing or processing user data must be 
-    actively managed.
+  \item Ongoing maintenance will be required to remain compatible with
+  updated applications and OS versions.
+  \item Privacy and security risks must be monitored as integrations
+  change over time.
 \end{itemize}
 
 \section{Tasks}
+This section explains how the project will be carried out and how
+requirement priorities influence scheduling and development order.
+
 \subsection{Project Planning}
-\begin{enumerate}
-    \item The project will follow a iterative and incremental development plan. 
-    Early prototyping along with continuous feedback from beta users will help 
-    address defects early.
-    \item Core stages will include requirements, system design, development, 
-    testing, and deployment.
-    \item Developers will be responsible for coming up with test cases (unit 
-    and functional tests), so sufficient time should also be allocated to 
-    writing test cases.
-\end{enumerate}
+The project will follow an iterative and incremental development
+approach. Early prototypes and continuous feedback will be used to
+address defects and scope issues early. Core stages include
+requirements, design, implementation, testing, and deployment.
+
+Developers are also responsible for preparing and maintaining unit and
+functional test cases throughout the lifecycle.
 
 \subsection{Planning of the Development Phases}
-Since development will be interative and incremental, the phases are not 
-strictly linear. Development and testing, in particular, will be repeated 
-iteratively as part of an incremental cycle. The Development phases will be 
-broadly divided into these phases:
-\begin{itemize}
-    \item \textbf{Requirements Phase}
-    \begin{itemize}
-        \item Identify what the system must do and it's constraints.
-        \item Come up with Functional, Non-Functional requirements.
-        \item Gather input from target users.
-    \end{itemize}
+Requirement priority affects scheduling as follows: accessibility,
+safety, and core task execution are implemented first; usability and
+reliability improvements follow; advanced extensibility and stretch
+features are scheduled later. Although phase names are listed below,
+execution is iterative rather than strictly linear.
 
-    \item \textbf{System Design Phase}
-    \begin{itemize}
-        \item Create overall system architecture, high level component 
-        interactions and integrations.
-        \item Select appropriate off-the-shelf LLM model for natural language
-        processing and logic
-        \item Brainstrom and pick appropriate technology stack.
-        \item Create diagrams, mockups and data flow diagrams to aide 
-        development.
-    \end{itemize}
-
-    \item \textbf{Development Phase}
-    \begin{itemize}
-        \item Implement system according to design and feedback from previous
-        iterations.
-        \item Build the user interface using selected technology stack and 
-        integrate partner applications and technologies.
-        \item Come up with automated and manual test cases for any new features
-        added or any change in functionality. These can be added to the 
-        automated testing pipelines.
-    \end{itemize}
-
-    \item \textbf{Testing Phase}
-    \begin{itemize}
-        \item Create and conduct comprehensive test suites that include testing
-        objectives, failures, successes and stability.
-        \item Test the system with representative users, including older adults 
-        and users with disabilities, to confirm the interface is intuitive and 
-        meets accessibility standards.
-        \item Evaluate responsiveness and stability across different hardware 
-        setups, including low-spec devices.
-        \item Ensure regressions aren't introduced between successive 
-        iteractions and that new changes don't break existing features.
-        \item Document all testing results and come up with possible 
-        improvements for next development iteration.
-    \end{itemize}
-
-    \item \textbf{Deployment Phase}
-    \begin{itemize}
-        \item Ensure that instruction manuals are up to date with latest 
-        features.
-        \item Ensure installation and initial setup are simple and do not 
-        require technical expertise.
-        \item Deploy the application using the selected channel. Continuously 
-        monitor system performance and user feedback for maintenance and 
-        updates.
-        \item Maintain version control and update logs so improvements and bug 
-        fixes can be tracked systematically
-    \end{itemize}
-\end{itemize}
-
+\begin{enumerate}
+  \item \textbf{Requirements Phase:} Define system capabilities,
+  constraints, and stakeholder-validated requirements; gather input
+  from target users and establish both functional and non-functional
+  requirement baselines.
+  \item \textbf{Design Phase:} Establish architecture, component
+  boundaries, technology choices, and integration patterns; select
+  off-the-shelf models and technologies; produce supporting diagrams
+  and data-flow artifacts.
+  \item \textbf{Development Phase:} Implement prioritized features,
+  integrate tools, and update tests for each iteration; include both
+  automated and manual test-case development for new or changed
+  functionality.
+  \item \textbf{Testing and Validation Phase:} Execute functional,
+  usability, accessibility, and regression testing across target
+  environments, including representative users and low-spec hardware
+  profiles.
+  \item \textbf{Deployment and Handoff Phase:} Prepare release
+  artifacts, update user documentation, and support transition to
+  maintainers; ensure installation and onboarding remain simple and
+  version history remains traceable.
+\end{enumerate}
 
 \section{Migration to the New Product}
-\subsection{Requirements for Migration to the New Product}
-There are no special migration steps beyond just installing Proxi and granting
-the usual permissions on the first run (microphone, automation, etc.). After
-that, for access to any apps and folders, Proxi will request permission again.
-Existing workflows and applications will remain the same; users only need to
-familiarize themselves with the new voice/text command interface.
+This section explains what is needed for users to transition from
+their current workflow to the new product.
 
-\subsection{Data That Has to be Modified or Translated for the New System}
-No data conversion is needed. This tool works with the user’s existing files and
-applications as they are. The only new data created is potentially a local
-configuration file generated. Nothing else needs to be imported or translated
-from previous tools.
+\subsection{Requirements for Migration to the New Product}
+There are no special migration steps beyond installing Proxi and
+granting the usual permissions on first run, such as microphone and
+automation access. For access to specific applications and folders,
+Proxi requests permission when needed.
+
+Existing workflows and applications do not need replacement; users only
+need to become familiar with the voice/text command interaction model.
+
+\subsection{Data That Has to be Modified or Translated for the New
+System}
+No data conversion is needed. The tool works with the user's existing
+files and applications. The only new data created is local
+configuration and local logs if enabled; no prior-tool data import or
+translation is required.
 
 \section{Costs}
-To minimize costs, the project will aim to use open source and off-the-shelf 
-solutions whenever possible. Since this project is a student project as part of
-a course, development costs will not be taken into consideration. The only costs
-associated with development are related to any third-party libraries or any APIs
-used by the application. The application itself will be free to use and publicly
-available.
+This section summarizes the project cost perspective.
+
+The project will aim to use open-source and off-the-shelf solutions
+whenever possible. Since this project is a student project as part of
+a course, development labour costs are not taken into account. The
+primary costs are related to third-party APIs, hosted services, or
+software licenses used during development and testing.
 
 \section{User Documentation and Training}
+This section describes the documentation and training material needed
+to support installation, onboarding, and everyday use.
+
 \subsection{User Documentation Requirements}
 \begin{itemize}
-    \item The system shall include a user manual explaining installation, setup,
-     and configuration procedures.  
-    \item The documentation shall provide step-by-step instructions for performing
-     common tasks via speech and text commands.  
-    \item The manual shall include troubleshooting guidance for common issues such
-     as misinterpreted commands, failed task execution, or connectivity problems.  
-    \item The documentation shall provide an explanation of accessibility features,
-     including options for speech rate, font size, and interface contrast.  
-    \item The system shall include inline help or tooltips within the interface for
-     immediate guidance during use.  
-    \item Documentation shall be available in multiple formats, including PDF, 
-    HTML, and context-sensitive help within the software.
+  \item The system shall include a user manual explaining
+  installation, setup, and configuration procedures.
+  \item The documentation shall provide step-by-step instructions for
+  performing common tasks via speech and text commands.
+  \item The manual shall include troubleshooting guidance for common
+  issues such as misinterpreted commands, failed task execution, or
+  connectivity problems.
+  \item The documentation shall provide an explanation of
+  accessibility features, including options for speech rate, font
+  size, and interface contrast.
+  \item The system shall include inline help or tooltips within the
+  interface for immediate guidance during use.
+  \item Documentation shall be available in multiple formats,
+  including PDF, HTML, and context-sensitive help within the software.
 \end{itemize}
 
 \subsection{Training Requirements}
-There isn't a dedicated training program for the system but the user will be 
-provided with example scenarios that they can follow to build intuition on how 
-to direct the agentic system.
+There isn't a dedicated training program for the system but the user
+will be provided with example scenarios that they can follow to build
+intuition on how to direct the agentic system.
 
 \begin{itemize}
-    \item Users shall be able to complete an introductory tutorial that demonstrates
-     how to issue commands and interact with the AI agents.  
-    \item The system shall provide interactive training sessions or guided exercises
-     to familiarize users with core functionalities such as sending emails, managing 
-     files, and performing web searches.  
-    \item Training materials shall include examples of natural language commands, 
-    including variations in phrasing to account for diverse user speech patterns.  
-
+  \item Users shall be able to complete an introductory tutorial that
+  demonstrates how to issue commands and interact with the AI agents.
+  \item The system shall provide interactive training sessions or
+  guided exercises to familiarize users with core functionalities such
+  as sending emails, managing files, and performing web searches.
+  \item Training materials shall include examples of natural language
+  commands, including variations in phrasing to account for diverse
+  user speech patterns.
 \end{itemize}
 
 \section{Waiting Room}
-These are good ideas we’re keeping on the side for now, as they are not the most
-urgent.
+These are ideas that are being kept aside for now because they are not
+the most urgent:
 \begin{itemize}
-  \item \textbf{Offline mode:} Basic voice commands without internet using a small
-  local model.
-  \item \textbf{App plugins:} Simple SDK so other people can add new MCP tools.
-  \item \textbf{Interactions with multiple devices:} Start a task on one computer
-  and finish on another. For example, computer to computer connection.
-  \item \textbf{Custom voice:} Let users pick a voice for Text-to-Speech. A lot of
-  TTS engines have many voices to choose from. For now we shall keep it simple
-  with one voice.
-  \item \textbf{More languages:} Support more languages for voice commands and
-  responses.
+  \item Offline mode using a small local model.
+  \item Third-party app plugins.
+  \item Multi-device task continuity (for example, start on one device
+  and continue on another).
+  \item Custom TTS voice options (deferred in baseline scope).
+  \item Broader language support.
 \end{itemize}
 
 \section{Ideas for Solution}
-Proxi should stay simple and safe. The main idea is a small desktop app that
-listens for a request, confirms anything risky in plain language, and then runs a
-scoped action through a set of MCP tools.
+Proxi should stay simple and safe. The main idea is a small desktop
+app that listens for a request, confirms anything risky in plain
+language, and then runs a scoped action through a set of MCP tools.
+
 \begin{itemize}
-  \item \textbf{Local MCP server:} A set of processes expose a bunch of safe tools
-  (open app, open file, browse, save/move/rename, click buttons on screen, etc.).
-  Each tool runs with low privilege and only within user approved scopes.
-  \item \textbf{Lightweight UI:} A simple AI with options for users to click, type,
-  or speak. The UI shows status (listening, thinking, ready), captions for spoken
-  output, and a few big buttons (listen, stop, undo, approve).
-  \item \textbf{Voice in, text out (with captions):} Use a STT engine for
-  microphone input and TTS for spoken output. Always show captions to the text that
-  is coming out/in.
-  \item \textbf{Simple intent handling:} Map common phrases to a small set of
-  intents using prompts/templates (Open app, Open file, browse, save/move/rename).
-  If unclear, ask one short follow up.
-  \item \textbf{Safety by default:} Permission scopes (folders/apps) are chosen at
-  setup and can be edited or approved by the user later. Destructive operations
-  always require an explicit approval from the user.
-  \item \textbf{Traceability:} Keep a short, local audit log. Any sensitive
-  information should be kept out of the audit logs.
+  \item \textbf{Local MCP server exposing scoped tools:} Tool actions
+  run with low privilege and operate only within user-approved scopes.
+  \item \textbf{Lightweight UI with status and captions:} The
+  interface presents clear state indicators and accessible control
+  points (for example listen, stop, undo, and confirm).
+  \item \textbf{Voice in and text out with captions:} STT converts
+  microphone input to text, and TTS can provide spoken output while
+  captions remain visible.
+  \item \textbf{Simple intent handling:} Common intents use reusable
+  templates and concise follow-up questions when user requests are
+  ambiguous.
+  \item \textbf{Safety by default:} Destructive actions require
+  explicit confirmation and permission scope checks.
+  \item \textbf{Traceability:} A local audit log stores operational
+  events while avoiding unnecessary sensitive content.
 \end{itemize}
 
-
 \newpage{}
-\section*{Appendix --- Reflection}
+\section*{Appendix - Reflection}
 
 \input{../Reflection.tex}
-
 \input{../SRS_Reflection.tex}
+
+\newpage
+\bibliographystyle{plainnat}
+\bibliography{../../refs/References}
 
 \end{document}
