@@ -27,6 +27,7 @@ September 21, 2025 & Savinay Chhabra  & Created Draft Development Plan; Sections
 September 22, 2025 & Savinay Chhabra  & Sections 6, 8\\ 
 September 22, 2025 & Ajay Singh Grewal & Section 9, 10, 11\\
 September 22, 2025 & Amanbeer Singh Minhas & Team Charter and Reflection\\
+April 6, 2026 & Ajay Singh Grewal & Final docs, implemented TA feedback\\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -59,14 +60,14 @@ There is no IP to protect.
 \section{Copyright License}
 
 This project adopts the MIT License. LICENSE file can be found \href{https://github.com/gkpodder/Capstone/blob/main/LICENSE}
-{here}.
+{here}. The main project repository can be found \href{https://github.com/gkpodder/Proxi}{here}.
 
 \section{Team Meeting Plan}
 The Team will meet every Wednesday from 4:00PM - 4:45PM in person. Campus library meeting rooms will be booked weekly, depending on availability.
 \begin{itemize}
   \item A rotating chair will lead each meeting and prepare the meeting\'s agenda in advance.
   \item A rotating notetaker will record meeting minutes, action items and decisions made in the meeting.
-  \item Feature requests and Decisions will be documented using Github Issues
+  \item Feature requests and Decisions will be documented using GitHub Issues
   \item Meetings with graduate students speacializing in Human-Computer Interfaces will occur biweekly. These will either be virtual or in-person depending on availability.
 \end{itemize}
 
@@ -74,7 +75,7 @@ The Team will meet every Wednesday from 4:00PM - 4:45PM in person. Campus librar
 
 Urgent issues or clarifications will be communicated through Discord. Discord will also be used for any virtual meetings between the team. 
 Meetings with industry advisors and graduate students will take place over MS Teams if held virtually. 
-Github issues will the the source of truth for techincal information and progress tracking.
+GitHub issues will the the source of truth for techincal information and progress tracking.
 
 \section{Team Member Roles}
 
@@ -94,19 +95,21 @@ Reviewer & Responsible for evaluating Pull Requests to ensure that they adher to
 \end{tabularx}
 \end{table}
 
+Role assignments are intended to reflect each member's strengths and areas of domain or technical expertise at the start of the project; however, they are not fixed. If a team member's availability changes, or if the project's needs shift (e.g., increased testing load, a new integration requiring specialist knowledge), roles will be reassigned through team consensus at a regular weekly meeting. Any role change will be recorded in the meeting minutes and reflected in an updated version of this table. The rotating Meeting Chair and Note Taker roles already demonstrate this flexibility in practice, and the same principle applies to all other roles.
+
 \section{Workflow Plan}
 
 \begin{itemize}
-  \item Each Feature/Bug/Defect will have a Github Issue created for it. This issue will included detailed information along with current progress, assignee and appropriate labels. Github Projects will be used to track all incoming and in-progress issues.
+  \item Each Feature/Bug/Defect will have a GitHub Issue created for it. This issue will included detailed information along with current progress, assignee and appropriate labels. GitHub Projects will be used to track all incoming and in-progress issues.
 	\item Each Issue will a branch for any associated development work to be done.
 	\item Once the author is satisfied with their solution, they can put up a Pull Request to merge their changes into the main branch. Each Pull request must link to one or more issues and have a detailed description of the changes made and the user impact of those changes.
-	\item After the Pull Request has been raised and all required pre-submit checks have succeded, the author can add the "Review Needed" label to their PR.
+	\item After the Pull Request has been raised and all required pre-submit checks have succeded, the author can add the ``Review Needed'' label to their PR.
 	\item Each PR must have at least 2 reviewers. After the reviewers have approved, the PR can be merged and the associated issues can be closed.
 \end{itemize}
 
 \section{Project Decomposition and Scheduling}
 
-The team will use the Kanban Board on Github Projects to track incoming and in-progress issues.
+The team will use the Kanban Board on GitHub Projects to track incoming and in-progress issues.
 The Board for the project can be found \href{https://github.com/users/gkpodder/projects/2}{here}.
 
 
@@ -136,27 +139,30 @@ What is the main risk, or risks, for the success of your project?  What will you
 demonstrate during your proof of concept demonstration to convince yourself that
 you will be able to overcome this risk?
 
-The main risks revolve around security, adaptability, and user trust, since the AI will have access and control to one’s 
-computer through model context protocols, functioning as the central master control program. 
+The main feasibility risk for Proxi is whether an AI assistant can reliably 
+control a user's computer well enough to complete a meaningful task from a 
+natural-language command. Since the core value of Proxi is accessible, 
+hands-free computer interaction, the project depends on proving that the 
+assistant can correctly interpret a request, understand the user's environment, 
+and execute the proper action on the machine. Concerns such as security, 
+hallucinations, and long-term user trust are also important, but for this proof 
+of concept the primary question is whether the basic interaction is technically 
+feasible at all.
 
-Granting the AI full control of the computer introduces major security risks and vulnerabilities. Since the MCP will have 
-deep access to a user’s computer, including files, settings, and applications, any vulnerabilities could lead to catastrophic 
-consequences. Malicious actors could exploit the system to steal sensitive data, install harmful software, or commit unintended 
-actions which could become destructive. This risk must be reduced by having safeguards the AI must adhere to, a thoroughly tested 
-environment, user permission before completing risky actions, and the ability to rollback changes. Hence, a robust error handling 
-and recovery system is needed so incorrect commands do not disrupt any workflows or overall user experience.
+Our November proof of concept demonstration will therefore focus on one concrete 
+end-to-end workflow. A user will issue a voice or text command such as opening 
+an application, locating a file, summarizing its contents, or creating a 
+calendar event, and Proxi will interpret the intent, use the required tools, 
+and visibly complete the task. This will demonstrate that the team's chosen 
+automation technology, language model pipeline, and system architecture are 
+sufficient to support real computer interaction rather than only simulated 
+responses.
 
-Another big risk is the AI being capable enough to adapt to diverse range of computer environments. Every computer is different, 
-with certain operating systems, setups, workflows, and personal preferences. If the AI cannot accurately understand its environment, 
-it can lead to incorrect commands, actions, and overall poor experience. The AI must be capable of learning its environment in a 
-dynamic manner and customize its actions accordingly. 
-
-Furthermore, since the AI has full control of one’s computer, transparency is essential. If users feel uncertain of how the 
-AI is doing things on their computer, it can risk user trust, leading to hesitance in using the tool. Creating a clear and 
-intuitive user interface, where the technology is properly explained, will help mitigate this risk. 
-
-To address these risks, the PoC will focus on showing that the MCP and AI can safely and effectively interact with a computer, 
-learn its environment, and execute meaningful tasks while keeping user trust. 
+If this proof of concept fails, it would indicate that the current approach to 
+AI-driven computer control is too unreliable or too difficult to implement 
+within the Capstone timeline. In that case, the project would need to reduce 
+its scope toward a narrower, more supervised assistant that supports a smaller 
+set of predefined tasks instead of broader autonomous computer control.
 
 
 \section{Expected Technology}
@@ -164,12 +170,12 @@ learn its environment, and execute meaningful tasks while keeping user trust.
 \begin{itemize}
   \item Programming Language: Python for the AI agent, tool plugins, and overall backend structure. TypeScript and React for desktop UI
   \item Agent Core Libraries: pydantic, asyncio, httpx
-  \item System Automation: For Windows we will use pywin32, UIAutomationCore; for MacOS we will use pyobjc, some AppleScript/JXA bridge; For Browser we will use Playwright
+  \item System Automation: For Windows we will use pywin32, UIAutomationCore; for macOS we will use pyobjc, some AppleScript/JXA bridge; For Browser we will use Playwright
   \item Storage/Database: SQL
   \item Pre-trained Models: OpenAI GPT-4o-mini API for natural language understanding and generation
   \item Local LLM For Future (if needed)
   \item Linter Tools: pylint, Prettier, ESLint
-  \item CI/CD: Git, Github
+  \item CI/CD: Git, GitHub
 \end{itemize}
 \section{Coding Standard}
 
@@ -189,42 +195,28 @@ The team will strictly adhere to and follow the following coding standards to en
   \item \textbf{Why is it important to create a development plan prior to starting the
   project?}
   \\Having a development plan was crucial for our team because it gave us a shared understanding
-  of our goals and responsibilities. I (Aman) realized early on that without a plan, we could 
-  easily duplicate work or miss deadlines, like in a previous project where we jumped straight 
-  into coding and ended up wasting time fixing miscommunication. Ajay mentioned that in his co-op, 
-  projects without clear roles caused constant confusion, so he emphasized setting up structured 
-  responsibilities and rotating roles and meeting lead. Savinay shared that documenting meeting agendas 
-  and communication methods helped him stay accountable he had seen other projects waste time on 
-  unstructured meetings.Gourob, drawing from his experience in AI-focused work, pointed out that 
-  a well-documented technical workflow prevents misunderstandings about modules like speech recognition 
-  or NLP if we intend to use those to achieve our goals.Overall, the plan helped us coordinate efficiently, 
-  understand dependencies, and feel confident moving forward.
+  of our goals and responsibilities. Without a plan, we could easily duplicate work or miss deadlines,
+  as we have seen in past projects where jumping straight into implementation led to confusion and rework.
+  We wanted clear responsibilities, structured communication, and organized meeting roles from the start.
+  We also felt that documenting agendas, workflows, and expectations would help us stay accountable and avoid
+  wasting time in unstructured discussions. Overall, the plan helped us coordinate efficiently, understand
+  dependencies, and move forward with more confidence.
   \item \textbf{In your opinion, what are the advantages and disadvantages of using
   CI/CD?}
-  \\Our team had a lot of discussion about CI/CD and its implications. Savinay thought the biggest advantage 
-  is catching integration issues early; he recalled a project where manual merges led to significant delays, 
-  which could have been avoided with automated pipelines. I (Aman) agreed, but also noted that over-reliance 
-  on automated tests can be frustrating when debugging, especially if tests fail unexpectedly as I experienced 
-  in a small personal project. Gourob, who has worked with AI pipelines before, emphasized that CI/CD ensures 
-  multiple interdependent modules, like speech recognition and text-to-speech, remain stable even as different 
-  developers make frequent changes. Ajay raised the practical concern that setting up CI/CD initially is 
-  time consuming and misconfigurations can be discouraging, but he concluded that the long-term benefits, 
-  such as reliability and reduced errors, outweigh these challenges. Collectively, we agreed that CI/CD will help 
-  us maintain a high-quality codebase, streamline collaboration, and catch potential problems early before they escalate.
+  \\We think one of the biggest advantages of CI/CD is that it helps catch integration issues early and reduces
+  the risk of major problems appearing late in development. It also helps keep the codebase stable when multiple
+  people are working on interconnected features at the same time. At the same time, we recognize that setting up
+  CI/CD can be time consuming at the beginning, and debugging failing automated checks can sometimes be frustrating.
+  Even with those challenges, we believe the long-term benefits, such as better reliability, smoother collaboration,
+  and faster detection of errors, make CI/CD worthwhile for our project.
   \item \textbf{What disagreements did your group have in this deliverable, if any,
   and how did you resolve them?}
-  \\Our team had a few meaningful disagreements while preparing this deliverable, mainly around the level of detail
-  for our workflow and how to structure GitHub issues. Gourob argued for very detailed issue tracking and branching
-  rules because in his previous co-op, unclear workflows had caused confusion and delayed delivery. I (Aman) thought 
-  a simpler approach would be faster and less bureaucratic, based on a personal experience where over planning slowed 
-  down a small project unnecessarily. Ajay was concerned that if we over complicated the workflow, weekly meetings would 
-  become too long and tedious. Savinay suggested a compromise: we would document the main workflow in the development 
-  plan but leave flexibility within GitHub issues for the finer technical details.The resolution involved more than 
-  just compromise it was about understanding each other’s reasoning. We each shared past experiences, explained why 
-  we preferred our approach, and considered potential consequences of both over-planning and under planning. In the 
-  end, we created a workflow that balanced structure and flexibility. This disagreement actually strengthened our 
-  team dynamic because it forced us to communicate openly, respect different perspectives, and make decisions based 
-  on practical experience rather than assumptions.
+  \\We had a few meaningful disagreements while preparing this deliverable, mainly around the level of detail
+  needed in our workflow and how to structure GitHub issues. Some of us preferred a more detailed process to avoid
+  confusion, while others felt that too much structure could slow us down and make meetings less efficient. We resolved
+  this by discussing our previous experiences, listening to each other\'s reasoning, and agreeing on a balanced approach.
+  In the end, we documented the main workflow in the development plan while leaving flexibility for finer technical details
+  within GitHub issues. This helped us create a process that supports both structure and adaptability.
   \end{enumerate}
 
 \section*{Appendix --- Team Charter}
@@ -338,7 +330,7 @@ productive, and memorable for the whole team.
 \subsubsection*{Decision Making} 
 
 The majority of the decisions made by our team have be and will always be discussed collectively so that everyone can contribute their thoughts.  
-We quickly vote to determine the best course of action if we are unable to agree either through discord or 
+We quickly vote to determine the best course of action if we are unable to agree either through Discord or 
 by show of hands in person.  When differences arise, we make sure that everyone listens to one another and 
 shares their point of view.  We seek the TA for assistance or take a brief break if we are still unable to make up our minds.  
 Everyone will feel heard in this way, and we can continue to work efficiently and remain inspired on Proxi.

@@ -66,6 +66,7 @@ section \\
 2025-11-11 & 1.4 & Final formatting, line-width cleanup, and rubric
 alignment for submission. \\
 2025-01-21 & 1.4 & Rev 0, implemented TA Feedback \\
+2026-04-06 & 1.5 & Final docs, implemented TA feedback \\
 \bottomrule
 \end{tabularx}
 
@@ -104,7 +105,7 @@ OutputMode & Output type (VoiceOnly, TextOnly, Both).\\
 Plan & Structured action sequence from BH-Plan.\\
 QA & Quality Assurance (software testing process).\\
 RiskLevel & Safety classification for user actions.\\
-SD & Software-Decision module (e.g., SD-Types, SD-Log).\\
+SD & Software-Decision module (e.g., SD-ToolRegistry, SD-Log).\\
 SRS & System Requirements Specification.\\
 STT & Speech-to-Text (audio input converted to text).\\
 TTS & Text-to-Speech (text output converted to speech).\\
@@ -196,9 +197,19 @@ string & Sequence of characters.\\
 sequence(T) & Ordered list of elements of type T.\\
 tuple(T$_1$,T$_2$, \ldots) & Finite ordered group of typed values.\\
 AudioStream & Representation of sampled voice input.\\
-Intent & Structured record containing type and parameters.\\
-Plan & Record defining tool, parameters, and execution time.\\
-Action & Atomic operation triggered by a plan or intent.\\
+IntentType & Enum \{OpenTarget, LaunchApp, SearchText, SummarizeText,
+TypeText, ClickTarget, Confirm, Cancel, Unknown\} used to classify a
+normalized user command.\\
+ParamSet & Finite mapping from parameter names to String values, such as
+\texttt{path}, \texttt{appId}, \texttt{query}, \texttt{text}, or
+\texttt{target}.\\
+ToolId & Identifier used by SD-ToolRegistry to select a concrete tool or
+MCP-backed capability.\\
+Intent & Record \{type: IntentType, params: ParamSet\} produced by BH-NLU.\\
+Plan & Record \{tool: ToolId, parameters: ParamSet, time: real\} produced
+by BH-Plan.\\
+Action & Record \{tool: ToolId, parameters: ParamSet, riskLevel: RiskLevel,
+isIrreversible: boolean\} checked by BH-Safety.\\
 RiskLevel & Enum \{Low, Medium, High\} for safety checks.\\
 ExecStatus & Enum \{Pending, Success, Failed\} for task outcomes.\\
 \bottomrule
@@ -236,45 +247,45 @@ software decision modules.
 \midrule
 
 \multirow{2}{*}{\textbf{Hardware-Hiding}} &
-\textbf{HH-IO (Audio I/O Adapter)} manages microphone input and audio
+\textbf{M1 -- HH-IO (Audio I/O Adapter)} manages microphone input and audio
 output across different platforms.\\
-& \textbf{HH-Auto (Desktop Automation)} performs basic desktop actions
+& \textbf{M2 -- HH-Auto (Desktop Automation)} performs basic desktop actions
 such as typing, clicking, or launching applications.\\
 \midrule
 
 \multirow{7}{*}{\textbf{Behaviour-Hiding}} &
-\textbf{BH-Input (Voice \& Text Manager)} captures user input,
+\textbf{M3 -- BH-Input (Voice \& Text Manager)} captures user input,
 converts speech to text, and normalizes text commands. Implements
 \textit{FUNC.R.1–R.2}.\\
-& \textbf{BH-NLU (Intent Parser)} interprets text into structured
+& \textbf{M4 -- BH-NLU (Intent Parser)} interprets text into structured
 intents and parameters based on defined command patterns. Implements
 \textit{FUNC.R.3}.\\
-& \textbf{BH-Plan (Task Executor)} determines which agent or tool
+& \textbf{M5 -- BH-Plan (Task Executor)} determines which agent or tool
 should handle a command and coordinates its execution. Implements
 \textit{FUNC.R.4}.\\
-& \textbf{BH-Safety (Confirmation Gate)} validates actions that may
+& \textbf{M6 -- BH-Safety (Confirmation Gate)} validates actions that may
 affect files or system settings and requests confirmation. Implements
 \textit{FUNC.R.9}.\\
-& \textbf{BH-Session (Context Manager)} maintains user session data,
+& \textbf{M7 -- BH-Session (Context Manager)} maintains user session data,
 history, and undo information for continuity. Supports \textit{FUNC.R.4}.\\
-& \textbf{BH-Feedback (Response Manager)} converts textual responses
+& \textbf{M8 -- BH-Feedback (Response Manager)} converts textual responses
 into spoken or visual feedback for the user. Implements
 \textit{FUNC.R.5–R.6}.\\
-& \textbf{BH-UI (Proxi Interface)} presents status updates,
+& \textbf{M9 -- BH-UI (Proxi Interface)} presents status updates,
 confirmations, and results; supports full voice-only interaction.
 Implements \textit{FUNC.R.8}.\\
 \midrule
 
-\multirow{5}{*}{\textbf{Software-Decision}} &
-\textbf{SD-Types (Core Structures)} defines abstract data types for
+\multirow{5}{*}{\textbf{Shared Types / Software-Decision}} &
+\textbf{M10 -- SD-Types (Core Structures)} defines shared type and record definitions for
 Command, Intent, and Plan.\\
-& \textbf{SD-ToolRegistry (Action Map)} maintains the mapping between
+& \textbf{M11 -- SD-ToolRegistry (Action Map)} maintains the mapping between
 recognized intents and available system actions.\\
-& \textbf{SD-Store (Local Storage)} handles persistent storage for user
+& \textbf{M12 -- SD-Store (Local Storage)} handles persistent storage for user
 preferences, session history, and logs.\\
-& \textbf{SD-AIClient (AI Service Client)} provides configuration and
+& \textbf{M13 -- SD-AIClient (AI Service Client)} provides configuration and
 communication for STT and text synthesis services.\\
-& \textbf{SD-Log (Event Logger)} records system actions and feedback
+& \textbf{M14 -- SD-Log (Event Logger)} records system actions and feedback
 events for debugging and validation.\\
 \bottomrule
 \end{tabular}
@@ -386,37 +397,37 @@ playAudio & sound: AudioStream & N/A & PlaybackFailed \\
 \noindent
 \textbf{initAudio}():
 \begin{itemize}
-  \item transition: $\text{micOpen} := \text{false}$ if audio devices exist.
-  \item exception: AudioInitFailed if audio devices cannot be initialized.
+  \item transition: $\text{micOpen} := \text{false}$.
+  \item $exc := \text{AudioInitFailed}$ if audio devices cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{openMic}():
 \begin{itemize}
-  \item transition: $\text{micOpen} := \text{true}$ if micDevice is available.
-  \item exception: MicNotFound if micDevice is missing or busy.
+  \item transition: $\text{micOpen} := \text{true}$.
+  \item $exc := \text{MicNotFound}$ if micDevice is missing or busy.
 \end{itemize}
 
 \noindent
 \textbf{closeMic}():
 \begin{itemize}
-  \item transition: $\text{micOpen} := \text{false}$ if open.
-  \item exception: CloseFailed if device cannot close.
+  \item transition: $\text{micOpen} := \text{false}$.
+  \item $exc := \text{CloseFailed}$ if the device cannot close.
 \end{itemize}
 
 \noindent
 \textbf{recordAudio}(seconds):
 \begin{itemize}
-  \item output: returns an AudioStream captured from micDevice for
+  \item $out := sound$, where sound is an AudioStream captured from micDevice for
   \textit{seconds}.
-  \item exception: RecordFailed if capture fails or $\text{micOpen} = false$.
+  \item $exc := \text{RecordFailed}$ if capture fails or $\text{micOpen} = \text{false}$.
 \end{itemize}
 
 \noindent
 \textbf{playAudio}(sound):
 \begin{itemize}
   \item transition: speakerDevice plays \textit{sound}.
-  \item exception: PlaybackFailed if playback fails.
+  \item $exc := \text{PlaybackFailed}$ if playback fails.
 \end{itemize}
 
 \subsubsection{Local Functions}
@@ -490,14 +501,14 @@ None.
 \begin{itemize}
   \item transition: automation channels to desktopEnv, keyboardDevice, and
   pointingDevice are established.
-  \item exception: AutoInitFailed if automation cannot be initialized.
+  \item $exc := \text{AutoInitFailed}$ if automation cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{moveCursor}(p):
 \begin{itemize}
   \item transition: $\text{pointerPos} := p$.
-  \item exception: ActionError if cursor move fails.
+  \item $exc := \text{ActionError}$ if cursor movement fails.
 \end{itemize}
 
 \noindent
@@ -505,21 +516,21 @@ None.
 \begin{itemize}
   \item transition: a left-click event is emitted on pointingDevice at
   pointerPos.
-  \item exception: ActionError if click event fails.
+  \item $exc := \text{ActionError}$ if the click event fails.
 \end{itemize}
 
 \noindent
 \textbf{typeText}(t):
 \begin{itemize}
   \item transition: keystroke events for t are emitted on keyboardDevice.
-  \item exception: ActionError if key input fails.
+  \item $exc := \text{ActionError}$ if key input fails.
 \end{itemize}
 
 \noindent
 \textbf{openApp}(id):
 \begin{itemize}
   \item transition: desktopEnv launches the application identified by id.
-  \item exception: ActionError if app launch fails.
+  \item $exc := \text{ActionError}$ if app launch fails.
 \end{itemize}
 
 \subsubsection{Local Functions}
@@ -545,6 +556,26 @@ HH-IO, SD-AIClient, SD-Types, SD-Log
 \subsubsection{Exported Constants}
 
 None.
+
+\subsubsection{Exported Types}
+
+\noindent
+InputState = \{\text{Idle}, \text{Listening}, \text{Processing}\}
+
+\noindent
+InputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Mixed}\}
+
+\noindent
+InputError = \{\text{InputInitFailed}, \text{MicUnavailable},
+\text{AlreadyCapturing}, \text{NotCapturing}, \text{NoInputAvailable}\}
+
+\noindent
+InputStatus is a record:
+\begin{itemize}
+  \item state : InputState
+  \item hasText : boolean
+  \item hasError : boolean
+\end{itemize}
 
 \subsubsection{Exported Access Programs}
 
@@ -575,17 +606,6 @@ getStatus & N/A & s: InputStatus & N/A \\
   \item lastError : InputError or null
 \end{itemize}
 
-InputState = \{\text{Idle}, \text{Listening}, \text{Processing}\}
-
-InputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Mixed}\}
-
-InputStatus is a record:
-\begin{itemize}
-  \item state : InputState
-  \item hasText : boolean
-  \item hasError : boolean
-\end{itemize}
-
 \subsubsection{Environment Variables}
 
 \begin{itemize}
@@ -603,63 +623,100 @@ InputStatus is a record:
   \item \textbf{initInput} is called before any other access routine.
 \end{itemize}
 
+\subsubsection{State Invariant}
+
+Let the abstract state of BH-Input be
+\[
+  \sigma = (\text{inputState}, \text{currentMode}, \text{lastText},
+  \text{partialText}, \text{lastError})
+\]
+For every reachable state $\sigma$,
+\[
+  \text{inputState} \in \text{InputState}
+\]
+\[
+  (\text{inputState} = \text{Idle}) \Rightarrow \text{partialText} = ""
+\]
+\[
+  (\text{lastError} = null) \lor (\text{lastError} \in \text{InputError})
+\]
+
 \subsubsection{Access Routine Semantics}
 
 \noindent
 \textbf{initInput}():
 \begin{itemize}
+  \item pre: true.
   \item transition:
   \[
-    \text{inputState}, \text{currentMode}, \text{lastText}, \text{partialText}
-    := \text{Idle}, \text{TextOnly}, "", ""
+    \text{inputState}, \text{currentMode}, \text{lastText}, \text{partialText},
+    \text{lastError}
+    := \text{Idle}, \text{TextOnly}, "", "", null
   \]
-  \item exception: InputInitFailed if dependencies cannot be initialized.
+  \item $exc := \text{InputInitFailed}$ if dependencies cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{startCapture}(mode):
 \begin{itemize}
-  \item transition: if $\text{inputState} = \text{Idle}$ and micStream ready then
+  \item pre: $\text{inputState} = \text{Idle}$.
+  \item transition:
   \[
-    \text{inputState}, \text{currentMode}, \text{partialText}
-    := \text{Listening}, \text{mode}, ""
+    \text{inputState}, \text{currentMode}, \text{partialText}, \text{lastError}
+    := \text{Listening}, \text{mode}, "", null
   \]
-  \item exception: MicUnavailable if device fails, AlreadyCapturing if
-  $\text{inputState} \neq \text{Idle}$.
+  \item $exc := \text{AlreadyCapturing}$ if $\text{inputState} \neq \text{Idle}$.
+  \item $exc := \text{MicUnavailable}$ if the device fails.
 \end{itemize}
 
 \noindent
 \textbf{stopCapture}():
 \begin{itemize}
-  \item transition: if $\text{inputState} \neq \text{Idle}$ then
-  $\text{inputState} := \text{Idle}$.
-  \item exception: NotCapturing if $\text{inputState} = \text{Idle}$.
+  \item pre: $\text{inputState} \neq \text{Idle}$.
+  \item transition:
+  \[
+    \text{inputState}, \text{lastText}, \text{partialText}
+    := \text{Idle}, \text{partialText}, ""
+  \]
+  \item $exc := \text{NotCapturing}$ if $\text{inputState} = \text{Idle}$.
 \end{itemize}
 
 \noindent
 \textbf{getLastText}():
 \begin{itemize}
-  \item output: returns lastText if not empty.
-  \item exception: NoInputAvailable if lastText is empty.
+  \item pre: $\text{lastText} \neq ""$.
+  \item $out := \text{lastText}$.
+  \item $exc := \text{NoInputAvailable}$ if lastText is empty.
 \end{itemize}
 
 \noindent
 \textbf{getStatus}():
 \begin{itemize}
-  \item output: returns a record s with
-  $s.\text{state} = \text{inputState}$,
-  $s.\text{hasText} = (\text{lastText} \neq "")$,
-  $s.\text{hasError} = (\text{lastError} \neq null)$.
+  \item $out := s$, where
+  \[
+    s.\text{state} = \text{inputState} \land
+    s.\text{hasText} = (\text{lastText} \neq "") \land
+    s.\text{hasError} = (\text{lastError} \neq null)
+  \]
 \end{itemize}
 
 \subsubsection{Local Functions}
 
-Let Event = \{\text{StartCmd}, \text{StopCmd}, \text{Chunk}, \text{Error},
-\text{Timeout}\}
+Let
+\[
+  S = \text{InputState}, \quad
+  E = \{\text{StartCmd}, \text{StopCmd}, \text{Chunk}, \text{Error},
+  \text{Timeout}\}, \quad
+  s_0 = \text{Idle}
+\]
+The BH-Input controller is modelled as the finite-state machine
+\[
+  M = (S, E, s_0, \delta)
+\]
+where $\delta = \text{nextState}$.
 
 \noindent
-$\text{nextState} : \text{InputState} \times \text{Event} \rightarrow
-\text{InputState}$
+$\text{nextState} : \text{InputState} \times E \rightarrow \text{InputState}$
 
 \[
   \text{nextState}(s, e) =
@@ -673,11 +730,13 @@ $\text{nextState} : \text{InputState} \times \text{Event} \rightarrow
   \end{cases}
 \]
 
-During execution BH-Input updates
+The transition function is total and deterministic because all remaining pairs
+map to $s$ through the otherwise clause. During execution, BH-Input updates
 \[
   \text{inputState} := \text{nextState}(\text{inputState}, e)
 \]
-for each event e. When transcription ends, partialText moves into lastText.
+for each event $e$, and when transcription ends, $\text{partialText}$ moves
+into $\text{lastText}$.
 
 \section{MIS of BH-NLU (Intent Parser)} \label{mod:BHNlu}
 
@@ -694,6 +753,25 @@ Library.
 SD-Types, SD-Log
 
 \subsection{Syntax}
+
+\subsubsection{Exported Types}
+
+\noindent
+IntentType = \{\text{OpenTarget}, \text{LaunchApp}, \text{SearchText},
+\text{SummarizeText}, \text{TypeText}, \text{ClickTarget},
+\text{Confirm}, \text{Cancel}, \text{Unknown}\}
+
+\noindent
+ParamSet is a finite mapping from parameter names to String values. The keys are
+chosen from the command schema and may include \texttt{path}, \texttt{appId},
+\texttt{query}, \texttt{text}, or \texttt{target}.
+
+\noindent
+Intent is a record:
+\begin{itemize}
+  \item type : IntentType
+  \item params : ParamSet
+\end{itemize}
 
 \subsubsection{Exported Access Programs}
 
@@ -729,12 +807,12 @@ None.
 \noindent
 \textbf{parseText}(text):
 \begin{itemize}
-  \item output: produces an Intent record with fields
+  \item $out := i$, where
   \[
     i.\text{type} = \text{detectCommand}(\text{text}), \quad
     i.\text{params} = \text{extractParams}(\text{text})
   \]
-  \item exception: ParseError if text cannot be matched to any pattern.
+  \item $exc := \text{ParseError}$ if text cannot be matched to any pattern.
 \end{itemize}
 
 \subsubsection{Local Functions}
@@ -772,6 +850,23 @@ BH-NLU, SD-ToolRegistry, SD-Types, SD-Log, HH-Auto
 
 \subsubsection{Exported Constants}
 
+None.
+
+\subsubsection{Exported Types}
+
+\noindent
+ToolId = set of identifiers used by SD-ToolRegistry to name concrete tools or
+MCP-backed capabilities.
+
+\noindent
+Plan is a record:
+\begin{itemize}
+  \item tool : ToolId
+  \item parameters : ParamSet
+  \item time : real
+\end{itemize}
+
+\noindent
 ExecStatus = \{\text{Pending}, \text{Success}, \text{Failed}\}
 
 \subsubsection{Exported Access Programs}
@@ -824,20 +919,20 @@ getLastStatus & N/A & s: ExecStatus & N/A \\
   \[
     \text{currentPlan}, \text{lastStatus} := null, \text{Pending}
   \]
-  \item exception: PlanInitFailed if tool registry cannot be accessed.
+  \item $exc := \text{PlanInitFailed}$ if the tool registry cannot be accessed.
 \end{itemize}
 
 \noindent
 \textbf{planAction}(i):
 \begin{itemize}
-  \item output: generates a Plan record p with:
+  \item $out := p$, where
   \[
     p.\text{tool} = \text{matchTool}(i.\text{type}), \quad
     p.\text{parameters} = i.\text{params}, \quad
     p.\text{time} = \text{now}
   \]
   \item transition: $\text{currentPlan} := p$.
-  \item exception: NoToolFound if matchTool fails.
+  \item $exc := \text{NoToolFound}$ if matchTool fails.
 \end{itemize}
 
 \noindent
@@ -848,21 +943,21 @@ getLastStatus & N/A & s: ExecStatus & N/A \\
     \text{currentPlan}, \text{lastStatus}
     := p, \text{runTool}(p.\text{tool}, p.\text{parameters})
   \]
-  \item output: returns lastStatus.
-  \item exception: ExecError if runTool fails unexpectedly.
+  \item $out := \text{lastStatus}$.
+  \item $exc := \text{ExecError}$ if runTool fails unexpectedly.
 \end{itemize}
 
 \noindent
 \textbf{cancelPlan}():
 \begin{itemize}
   \item transition: $\text{currentPlan}, \text{lastStatus} := null, \text{Failed}$.
-  \item exception: NoPendingPlan if currentPlan = null.
+  \item $exc := \text{NoPendingPlan}$ if currentPlan = null.
 \end{itemize}
 
 \noindent
 \textbf{getLastStatus}():
 \begin{itemize}
-  \item output: returns lastStatus.
+  \item $out := \text{lastStatus}$.
 \end{itemize}
 
 \subsubsection{Planning Logic}
@@ -922,11 +1017,24 @@ BH-UI, SD-Types, SD-Log
 
 \subsubsection{Exported Constants}
 
-RiskLevel = \{\text{Low}, \text{Medium}, \text{High}\}
+None.
+
+\subsubsection{Exported Types}
+
+\noindent RiskLevel = \{\text{Low}, \text{Medium}, \text{High}\}
 
 \noindent SafetyDecision = \{\text{AutoAllow}, \text{AskUser}, \text{Block}\}
 
 \noindent ApprovalResult = \{\text{Approved}, \text{Denied}, \text{Cancelled}\}
+
+\noindent
+Action is a record:
+\begin{itemize}
+  \item tool : ToolId
+  \item parameters : ParamSet
+  \item riskLevel : RiskLevel
+  \item isIrreversible : boolean
+\end{itemize}
 
 \subsubsection{Exported Access Programs}
 
@@ -970,19 +1078,18 @@ confirmAction & a: Action & res: ApprovalResult & UserTimeout \\
 
 \noindent
 \textbf{classifyAction}(a):
-
-\noindent Output:
-\[
-  r := a.\text{riskLevel}
-\]
-\noindent Transition: none.
-
-\vspace{0.2cm}
+\begin{itemize}
+  \item $out := r$, where
+  \[
+    r := a.\text{riskLevel}
+  \]
+  \item transition: none.
+\end{itemize}
 
 \noindent
 \textbf{decidePolicy}(a):
 \begin{itemize}
-  \item output: returns d of type SafetyDecision, where
+  \item $out := d$, where
   \[
     d =
     \begin{cases}
@@ -992,20 +1099,20 @@ confirmAction & a: Action & res: ApprovalResult & UserTimeout \\
       AskUser & \text{if } a.riskLevel = High \land \neg a.isIrreversible
     \end{cases}
   \]
-  \item transition: lastDecision := d.
+  \item transition: $\text{lastDecision} := d$.
 \end{itemize}
 
 \noindent
 \textbf{confirmAction}(a):
 \begin{itemize}
   \item transition: $\text{pendingAction} := a$.
-  \item output:
+  \item $out := res$, where:
   \begin{itemize}
-    \item If decidePolicy(a) = AutoAllow then res = Approved.
-    \item If decidePolicy(a) = Block then res = Denied.
-    \item If decidePolicy(a) = AskUser then BH-UI prompts user.
+    \item if $\text{decidePolicy}(a) = \text{AutoAllow}$, then $res := \text{Approved}$;
+    \item if $\text{decidePolicy}(a) = \text{Block}$, then $res := \text{Denied}$;
+    \item if $\text{decidePolicy}(a) = \text{AskUser}$, then BH-UI prompts the user and returns the resulting approval status.
   \end{itemize}
-  \item exception: UserTimeout if no answer before time limit.
+  \item $exc := \text{UserTimeout}$ if no answer is received before the time limit.
 \end{itemize}
 
 \subsubsection{Risk Policy Table}
@@ -1062,7 +1169,11 @@ HH-IO, SD-AIClient, SD-Types, SD-Log
 
 \subsubsection{Exported Constants}
 
-OutputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Both}\}
+None.
+
+\subsubsection{Exported Types}
+
+\noindent OutputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Both}\}
 
 \noindent FeedbackStatus = \{\text{Idle}, \text{Speaking}, \text{Completed},
 \text{Failed}\}
@@ -1121,14 +1232,14 @@ cancelAll & N/A & N/A & N/A \\
     \text{outputQueue}, \text{lastStatus}, \text{isSpeaking}
     := [], \text{Idle}, \text{false}
   \]
-  \item exception: FeedbackInitFailed if dependencies cannot be initialized.
+  \item $exc := \text{FeedbackInitFailed}$ if dependencies cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{queueMessage}(msg, m):
 \begin{itemize}
-  \item transition: if the queue is not full then append (msg, m) to outputQueue.
-  \item exception: QueueFull if appending would exceed the limit.
+  \item transition: append $(msg, m)$ to outputQueue.
+  \item $exc := \text{QueueFull}$ if appending would exceed the limit.
 \end{itemize}
 
 \noindent
@@ -1136,24 +1247,20 @@ cancelAll & N/A & N/A & N/A \\
 \begin{itemize}
   \item transition: $\text{isSpeaking}, \text{lastStatus} := \text{true},
   \text{Speaking}$.
-  \item transition: if $m = \text{VoiceOnly}$ or $m = \text{Both}$ then
+  \item transition: if $m = \text{VoiceOnly}$ or $m = \text{Both}$, then
   ttsService produces speech for msg and HH-IO plays it on audioOut.
-  \item transition: if $m = \text{TextOnly}$ or $m = \text{Both}$ then
+  \item transition: if $m = \text{TextOnly}$ or $m = \text{Both}$, then
   uiChannel displays msg.
-  \item output:
-  \begin{itemize}
-    \item If both requested outputs succeed, then
-    $\text{isSpeaking}, \text{lastStatus} := \text{false}, \text{Completed}$.
-    \item Otherwise
-    $\text{isSpeaking}, \text{lastStatus} := \text{false}, \text{Failed}$.
-  \end{itemize}
-  \item exception: TtsError if ttsService cannot produce speech.
+  \item $out := \text{lastStatus}$, where successful completion sets
+  $\text{lastStatus} := \text{Completed}$ and failure sets
+  $\text{lastStatus} := \text{Failed}$.
+  \item $exc := \text{TtsError}$ if ttsService cannot produce speech.
 \end{itemize}
 
 \noindent
 \textbf{getLastStatus}():
 \begin{itemize}
-  \item output: returns lastStatus.
+  \item $out := \text{lastStatus}$.
 \end{itemize}
 
 \noindent
@@ -1213,7 +1320,11 @@ BH-Feedback, BH-Safety, BH-Input, SD-Log, SD-Types
 
 \subsubsection{Exported Constants}
 
-UIState = \{\text{Idle}, \text{Listening}, \text{Waiting},
+None.
+
+\subsubsection{Exported Types}
+
+\noindent UIState = \{\text{Idle}, \text{Listening}, \text{Waiting},
 \text{Displaying}, \text{Error}\}
 
 \subsubsection{Exported Access Programs}
@@ -1270,44 +1381,44 @@ clearScreen & N/A & N/A & N/A \\
     \text{uiState}, \text{lastMsg}, \text{lastError}
     := \text{Idle}, "", null
   \]
-  \item exception: UiInitFailed if display cannot be initialized.
+  \item $exc := \text{UiInitFailed}$ if the display cannot be initialized.
 \end{itemize}
 
 \noindent
 \textbf{updateView}(s):
 \begin{itemize}
-  \item transition: $\text{uiState} := s$ and display updates status text and
-  micLED according to s.
-  \item exception: RenderError if update fails.
+  \item transition: $\text{uiState} := s$ and the display updates the status text
+  and micLED according to s.
+  \item $exc := \text{RenderError}$ if the update fails.
 \end{itemize}
 
 \noindent
 \textbf{showMessage}(msg):
 \begin{itemize}
   \item transition: $\text{lastMsg}, \text{uiState} := msg, \text{Displaying}$.
-  \item transition: display renders msg (and BH-Feedback may speak it, depending
-  on OutputMode chosen by the caller).
-  \item exception: RenderError if display fails.
+  \item transition: the display renders msg (and BH-Feedback may speak it,
+  depending on the OutputMode chosen by the caller).
+  \item $exc := \text{RenderError}$ if the display fails.
 \end{itemize}
 
 \noindent
 \textbf{promptUser}(q):
 \begin{itemize}
-  \item transition: $\text{uiState} := \text{Waiting}$ and display renders q.
-  \item output: returns ans as a yes/no value from inputChannel.
-  \item exception: Timeout if no input received in time limit.
+  \item transition: $\text{uiState} := \text{Waiting}$ and the display renders q.
+  \item $out := ans$, where ans is the yes/no value returned from inputChannel.
+  \item $exc := \text{Timeout}$ if no input is received in the time limit.
 \end{itemize}
 
 \noindent
 \textbf{showStatus}(st):
 \begin{itemize}
-  \item transition: display shows latest FeedbackStatus st.
+  \item transition: the display shows the latest FeedbackStatus st.
 \end{itemize}
 
 \noindent
 \textbf{clearScreen}():
 \begin{itemize}
-  \item transition: $\text{uiState}, \text{lastMsg} := \text{Idle}, ""$ and
+  \item transition: $\text{uiState}, \text{lastMsg} := \text{Idle}, ""$ and the
   display clears the visual area.
 \end{itemize}
 
@@ -1441,13 +1552,16 @@ better? (LO\_ProbSolutions)}
 
 Right now, the design assumes relatively simple commands and a
 limited amount of context. The NLU is closer to pattern matching
-than full natural language understanding. The system also depends on
+than full natural language understanding. Our pipeline is also fairly
+sequential, so errors in speech capture or intent parsing can propagate
+forward into planning and execution. The system also depends on
 reliable speech models and may not perform as well in noisy
 environments or for all accents. With more time and resources, we
-would explore more robust language models, better noise handling, and
-wider accessibility testing with real users. We would also add more
-automation around logging and replaying user sessions for regression
-testing, drawing from ideas in my QA work and SFWRENG 3S03 and
+would strengthen context handling between modules, improve recovery
+when one stage of the pipeline fails, and explore more robust language
+models, better noise handling, and wider accessibility testing with real users.
+We would also add more automation around logging and replaying user sessions for
+regression testing, drawing from ideas in my QA work and SFWRENG 3S03 and
 STATS 3Y03 for analyzing failure patterns.
 
 \item \textbf{Give a brief overview of other design solutions you
@@ -1509,10 +1623,12 @@ given unlimited resources, what could you do to make the project
 better? (LO\_ProbSolutions)}
 
 The limitations of our solution is that it is designed for a single desktop
-enviroment and heavlily is reliant on STT and LLM. Hence, offline use cases
+enviroment and heavlily is reliant on STT and LLM. The current design also uses
+a relatively simple interaction loop, so more complex multi-step tasks or longer
+conversations may require repeated clarification from the user. Hence, offline use cases
 and strong privacy guarantees are not well supported. Given unlimited resources,
-we would explore more defined language models, and richer accessibility features
-to target a broader user base.
+we would strengthen local processing, improve context handling across the system,
+and add richer accessibility features to target a broader user base.
 
 \item \textbf{Give a brief overview of other design solutions you
 considered. What are the benefits and tradeoffs of those other
@@ -1573,8 +1689,11 @@ given unlimited resources, what could you do to make the project
 better? (LO\_ProbSolutions)}
 
 The current limitation of our solutions is using off-the-shelf existing AI models
-for our project. Given unlimited time, we would aim to create our own model as
-our use-case is relatively specific and niche. Making API calls for every single
+for our project. Our design also still depends on a chain of separate modules for
+input, interpretation, planning, and safety, so failures in one stage can reduce
+the reliability of the full interaction. Given unlimited time, we would aim to
+improve the coordination between these stages and create stronger fallback behaviour
+before attempting our own model for this specific use-case. Making API calls for every single
 action will quickly get very expensive and will make scaling the application
 challenging over time.
 Our error-handling strategy is also very rudimentary at the moment; it simply
@@ -1658,10 +1777,14 @@ better? (LO\_ProbSolutions)}
 
 In an ideal scenario we would create our own model as there are a specific class
 of llms called large action models (LAMs) which are specifically designed for
-action planning tasks. These models are optimized to understand and execute
+action planning tasks. At the design level, another limitation is that our current
+architecture still keeps context memory, action planning, and safety confirmation
+fairly lightweight, which can make longer or more ambiguous user requests harder
+to handle consistently. These models are optimized to understand and execute
 complex sequences of actions based on user commands. These models are typically
 smaller and more efficient than general-purpose LLMs, making them suitable for
-low latency and better user experience.
+low latency and better user experience. With more resources, we would also build
+stronger local context management and more robust recovery paths for failed plans.
 
 \item \textbf{Give a brief overview of other design solutions you
 considered. What are the benefits and tradeoffs of those other

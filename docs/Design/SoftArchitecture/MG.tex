@@ -5,6 +5,7 @@
 \usepackage{multirow}
 \usepackage{booktabs}
 \usepackage{tabularx}
+\usepackage{longtable}
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{hyperref}
@@ -51,6 +52,7 @@
 2025-11-13 & 1.1 & Finalized the document and created the module hierarchy
                 diagram \\
 2026-01-21 & 1.2 & Rev 0, implemeneted TA feedback \\
+2026-04-06 & 1.3 & Final docs, implemented TA feedback \\
 \bottomrule
 \end{tabularx}
 
@@ -87,7 +89,7 @@ OutputMode & Output type (VoiceOnly, TextOnly, Both).\\
 Plan & Structured action sequence from BH-Plan.\\
 QA & Quality Assurance (software testing process).\\
 RiskLevel & Safety classification for user actions.\\
-SD & Software-Decision module (e.g., SD-Types, SD-Log).\\
+SD & Software-Decision module (e.g., SD-ToolRegistry, SD-Log).\\
 SRS & System Requirements Specification.\\
 STT & Speech-to-Text (audio input converted to text).\\
 TTS & Text-to-Speech (text output converted to speech).\\
@@ -119,7 +121,7 @@ change, because the ``secrets'' that each module hides represent likely future
 changes. Design for change is valuable in SC, where modifications are frequent,
 especially during initial development as the solution space is explored.
 
-Our design follows the rules layed out by \citet{ParnasEtAl1984}, as follows:
+Our design follows the rules laid out by \citet{ParnasEtAl1984}, as follows:
 \begin{itemize}
 \item System details that are likely to change independently should be the
   secrets of separate modules.
@@ -148,6 +150,10 @@ The potential readers of this document are as follows:
   the system in various ways, such as consistency among modules, feasibility
   of the decomposition, and flexibility of the design.
 \end{itemize}
+
+Companion documents for this design include the SRS, the Module Interface
+Specification (MIS), and the V\&V Plan, all available in the public project
+repository at \href{https://github.com/gkpodder/Proxi}{GitHub}.
 
 The rest of the document is organized as follows. Section \ref{SecChange} lists
 the anticipated and unlikely changes of the software requirements. Section
@@ -221,10 +227,10 @@ deployment across devices).
 
 \section{Module Hierarchy} \label{SecMH}
 
-This section provides an overview of the module design. Modules are summarized
-in a hierarchy decomposed by secrets in Table \ref{TblMH}. The modules listed
-below, which are leaves in the hierarchy tree, are the modules that will
-actually be implemented.
+This section provides an overview of the module design. The modules are
+summarized below in a hierarchy decomposed by secrets, and their detailed
+descriptions are provided later in Section \ref{SecMD}. The leaves in this
+hierarchy are the modules that will actually be implemented.
 
 \begin{description}
 
@@ -244,30 +250,29 @@ actually be implemented.
   \textbf{BH-NLU (Intent Parser)} interprets text into structured intents based
   on command patterns.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHPlan}:]
-  \textbf{BH-Plan (Task Planner and Executor)} selects MCP tools and executes
-  user intents.
+  \textbf{BH-Plan (Task Executor)} selects MCP tools and executes user
+  intents.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHSafety}:]
-  \textbf{BH-Safety (Safety Confirmation Gate)} validates risky actions and
-  requests confirmation as needed.
+  \textbf{BH-Safety (Confirmation Gate)} validates risky actions and requests
+  confirmation as needed.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHSession}:]
-  \textbf{BH-Session (Session Context Manager)} stores history, session
-  context, and undo information.
+  \textbf{BH-Session (Context Manager)} stores history, session context, and
+  undo information.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHFeedback}:]
-  \textbf{BH-Feedback (Feedback Output Manager)} outputs responses using TTS or
-  visual text.
+  \textbf{BH-Feedback (Response Manager)} outputs responses using TTS or visual
+  text.
   \item [\refstepcounter{mnum} \mthemnum \label{mBHUI}:]
-  \textbf{BH-UI (User Interface Panel)} displays status, confirmation prompts,
-  and results.
+  \textbf{BH-UI (Proxi Interface)} displays status, confirmation prompts, and
+  results.
 
   % SD
   \item [\refstepcounter{mnum} \mthemnum \label{mSDTypes}:]
-  \textbf{SD-Types (Core Data Types)} defines ADTs for Command, Intent, Plan,
-  and related structures.
+  \textbf{SD-Types (Core Structures)} defines shared type and record definitions
+  for Command, Intent, Plan, and related structures.
   \item [\refstepcounter{mnum} \mthemnum \label{mSDRegistry}:]
-  \textbf{SD-ToolRegistry (Tool Registry)} maps intents to MCP tools and
-  actions.
+  \textbf{SD-ToolRegistry (Action Map)} maps intents to MCP tools and actions.
   \item [\refstepcounter{mnum} \mthemnum \label{mSDStore}:]
-  \textbf{SD-Store (Persistent Store)} manages persistent data such as
+  \textbf{SD-Store (Local Storage)} manages persistent data such as
   preferences, session history, and logs.
   \item [\refstepcounter{mnum} \mthemnum \label{mSDConfig}:]
   \textbf{SD-AIClient (AI Service Client)} provides configuration and API
@@ -401,7 +406,7 @@ The behaviour-hiding modules implement the end-to-end interaction pipeline:
 capture input, interpret intent, plan actions, enforce safety, manage session
 context, and present feedback to the user.
 
-\subsubsection{BH-Input: Voice and Text Manager (\mref{mBHInput})}
+\subsubsection{BH-Input: Voice \& Text Manager (\mref{mBHInput})}
 \begin{description}
 \item[Secrets:] Speech-to-text configuration, text normalization rules, and
 buffering strategies.
@@ -420,7 +425,7 @@ imperfect text into structured intent objects.
 \item[Type Of Module:] Library
 \end{description}
 
-\subsubsection{BH-Plan: Task Planner and Executor (\mref{mBHPlan})}
+\subsubsection{BH-Plan: Task Executor (\mref{mBHPlan})}
 \begin{description}
 \item[Secrets:] Decision-making logic for selecting the correct MCP agent based
 on intent, execution planning, and error handling.
@@ -430,7 +435,7 @@ using MCP tools, and tracks tasks to completion.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{BH-Safety: Safety Confirmation Gate (\mref{mBHSafety})}
+\subsubsection{BH-Safety: Confirmation Gate (\mref{mBHSafety})}
 \begin{description}
 \item[Secrets:] Risk analysis policy table, irreversible detection rules, and
 timeout behaviour.
@@ -440,7 +445,7 @@ prompts the user for confirmation when an action is deemed high risk.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{BH-Session: Session Context Manager (\mref{mBHSession})}
+\subsubsection{BH-Session: Context Manager (\mref{mBHSession})}
 \begin{description}
 \item[Secrets:] Session history table, short-term conversational context for the
 AI model, and previous action history for undo.
@@ -450,7 +455,7 @@ requests and stores short-term model context in memory.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{BH-Feedback: Feedback Output Manager (\mref{mBHFeedback})}
+\subsubsection{BH-Feedback: Response Manager (\mref{mBHFeedback})}
 \begin{description}
 \item[Secrets:] Output action logic, text-to-speech configuration, and message
 delivery monitoring.
@@ -460,7 +465,7 @@ required, and mirrors speech as text feedback.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{BH-UI: User Interface Panel (\mref{mBHUI})}
+\subsubsection{BH-UI: Proxi Interface (\mref{mBHUI})}
 \begin{description}
 \item[Secrets:] View groups, information presentation rules, and prompt timing
 rules.
@@ -469,21 +474,21 @@ rules.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsection{Software Decision Modules (\mref{mSDTypes})-(\mref{mSDLog})}
+\subsection{Shared Type Definitions and Software Decision Modules (\mref{mSDTypes})-(\mref{mSDLog})}
 
-The software-decision modules define shared data representations and system-wide
-services such as tool mapping, persistence, AI service integration, and logging.
+These modules define shared domain representations and system-wide services such
+as tool mapping, persistence, AI service integration, and logging.
 
-\subsubsection{SD-Types: Core Data Types (\mref{mSDTypes})}
+\subsubsection{SD-Types: Core Structures (\mref{mSDTypes})}
 \begin{description}
 \item[Secrets:] Internal representation of commands, actions, risks, policies,
 and tool metadata.
-\item[Services:] Defines shared ADTs used system-wide.
+\item[Services:] Defines the shared type and record definitions used system-wide.
 \item[Implemented By:] \progname{}
-\item[Type Of Module:] Abstract Data Type
+\item[Type Of Module:] Library
 \end{description}
 
-\subsubsection{SD-ToolRegistry: Tool Registry (\mref{mSDRegistry})}
+\subsubsection{SD-ToolRegistry: Action Map (\mref{mSDRegistry})}
 \begin{description}
 \item[Secrets:] Mapping from intent types to MCP tools, agents, and automation
 routines.
@@ -492,7 +497,7 @@ routines.
 \item[Type Of Module:] Abstract Object
 \end{description}
 
-\subsubsection{SD-Store: Persistent Store (\mref{mSDStore})}
+\subsubsection{SD-Store: Local Storage (\mref{mSDStore})}
 \begin{description}
 \item[Secrets:] Persistent storage format and schema for user settings, session
 history, and logs.
@@ -524,18 +529,24 @@ stable routines for transcription and speech synthesis to BH modules.
 
 This section shows traceability tables between the modules and the functional
 requirements plus nonfunctional requirements, and between the modules and the
-anticipated changes. Tables \ref{TblRT}, \ref{TblNFRRT}, \ref{TblNFRRTCont}, and
-\ref{TblACT} collectively provide coverage and change-impact traceability.
+anticipated changes. Table~\ref{TblRT} maps functional requirements to modules,
+Tables~\ref{TblNFRRT} and \ref{TblNFRRTCont} summarize the nonfunctional
+coverage, and Table~\ref{TblACT} links anticipated changes to the modules that
+hide them. These references should be read alongside the detailed module
+descriptions in Section~\ref{SecMD}.
 
-\begin{table}[H]
-\centering
-\caption{Traceability between functional requirements and modules}
-\label{TblRT}
 \renewcommand{\arraystretch}{1.1}
-\begin{tabular}{p{0.32\textwidth} p{0.58\textwidth}}
+\begin{longtable}{p{0.32\textwidth} p{0.58\textwidth}}
+\caption{Traceability between functional requirements and modules}
+\label{TblRT}\\
 \toprule
 \textbf{Requirement (SRS)} & \textbf{Modules}\\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Requirement (SRS)} & \textbf{Modules}\\
+\midrule
+\endhead
 FUNC.R.1 - Accept input via speech and text
   & \mref{mBHInput}, \mref{mHHIO}, \mref{mBHUI}, \mref{mSDConfig} \\
 FUNC.R.2 - Convert speech to text (STT)
@@ -561,18 +572,20 @@ FUNC.R.9 - Confirm privileged/system-level actions
   & \mref{mBHSafety}, \mref{mBHUI}, \mref{mBHPlan},
     \mref{mSDTypes}, \mref{mSDLog}, \mref{mSDStore} \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{longtable}
 
-\begin{table}[H]
-\centering
-\caption{Traceability between nonfunctional requirements and modules}
-\label{TblNFRRT}
 \renewcommand{\arraystretch}{1.1}
-\begin{tabular}{p{0.32\textwidth} p{0.58\textwidth}}
+\begin{longtable}{p{0.32\textwidth} p{0.58\textwidth}}
+\caption{Traceability between nonfunctional requirements and modules}
+\label{TblNFRRT}\\
 \toprule
 \textbf{Nonfunctional Requirement} & \textbf{Modules}\\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Nonfunctional Requirement} & \textbf{Modules}\\
+\midrule
+\endhead
 APP.1--APP.5 (Appearance)
   & \mref{mBHUI}, \mref{mBHFeedback}, \mref{mBHInput}, \mref{mSDConfig},
     \mref{mSDStore} \\
@@ -630,18 +643,20 @@ PRIV-01 (Privacy)
 IMM-01--IMM-02 (Immunity)
   & \mref{mSDConfig}, \mref{mSDLog} \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{longtable}
 
-\begin{table}[H]
-\centering
-\caption{Traceability between nonfunctional requirements and modules continued}
-\label{TblNFRRTCont}
 \renewcommand{\arraystretch}{1.1}
-\begin{tabular}{p{0.32\textwidth} p{0.58\textwidth}}
+\begin{longtable}{p{0.32\textwidth} p{0.58\textwidth}}
+\caption{Traceability between nonfunctional requirements and modules continued}
+\label{TblNFRRTCont}\\
 \toprule
 \textbf{Nonfunctional Requirements Continued} & \textbf{Modules}\\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Nonfunctional Requirements Continued} & \textbf{Modules}\\
+\midrule
+\endhead
 CULR-01--CULR-02 (Cultural)
   & \mref{mBHUI}, \mref{mBHFeedback}, \mref{mBHInput} \\
 LGL-01--LGL-02 (Legal)
@@ -649,22 +664,24 @@ LGL-01--LGL-02 (Legal)
 STDCOMP-01--STDCOMP-02 (Standards compliance)
   & \mref{mBHUI}, \mref{mBHFeedback}, \mref{mSDTypes}, \mref{mSDStore} \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{longtable}
 
 The following table links anticipated changes (ACs) from
 Section~\ref{SecChange} to the modules that hide the corresponding design
 decisions.
 
-\begin{table}[H]
-\centering
-\caption{Traceability between anticipated changes and modules}
-\label{TblACT}
 \renewcommand{\arraystretch}{1.1}
-\begin{tabular}{p{0.32\textwidth} p{0.58\textwidth}}
+\begin{longtable}{p{0.32\textwidth} p{0.58\textwidth}}
+\caption{Traceability between anticipated changes and modules}
+\label{TblACT}\\
 \toprule
 \textbf{Anticipated Change} & \textbf{Modules}\\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Anticipated Change} & \textbf{Modules}\\
+\midrule
+\endhead
 \acref{acHardware} - Hardware platform (microphone, speakers, OS automation)
   & \mref{mHHIO}, \mref{mHHAuto} \\
 \acref{acInput} - Input format / source (voice-only~vs.~mixed voice + text)
@@ -683,40 +700,40 @@ decisions.
 \acref{acStorage} - Logging and storage of history/preferences
   & \mref{mSDStore}, \mref{mSDLog}, \mref{mBHSession} \\
 \bottomrule
-\end{tabular}
-\end{table}
+\end{longtable}
 
-\section{Use Hierarchy Between Modules} \label{SecUse}
+\section{Uses Hierarchy Between Modules} \label{SecUse}
 
 In this section, the uses hierarchy between modules is provided.
 \citet{Parnas1978} said of two programs A and B that A {\em uses} B if correct
 execution of B may be necessary for A to complete the task described in its
 specification. That is, A {\em uses} B if there exist situations in which the
 correct functioning of A depends upon the availability of a correct
-implementation of B. Figure \ref{FigUH} illustrates the use relation between the
-modules. It can be seen that the graph is a directed acyclic graph (DAG). Each
-level of the hierarchy offers a testable and usable subset of the system, and
-modules in the higher level of the hierarchy are essentially simpler because
-they use modules from the lower levels.
+implementation of B. Figure~\ref{FigUH} illustrates the uses relation between
+the modules. The different node shapes distinguish the hardware-hiding,
+behaviour-hiding, and shared type / software-decision modules. The graph is a
+directed acyclic graph (DAG), and each level of the hierarchy offers a testable
+and usable subset of the system.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=1.15\textwidth,trim=50 0 0 0,clip]{UsesHierarchy.pdf}
-\caption{Use hierarchy among modules}
+\includegraphics[width=\textwidth,trim=50 0 0 0,clip]{UsesHierarchy.pdf}
+\caption{Uses hierarchy among modules. Distinct node shapes indicate different module categories.}
 \label{FigUH}
 \end{figure}
 
 \section{User Interfaces}
 
-This section goes over the user interfaces. The UI is designed to have a voice
-first interaction while also having keyboard and mouse input as secondary
-options.
+This section goes over the user interfaces. The UI is designed to support a
+voice-first interaction while also allowing keyboard and mouse input as
+secondary options.
 
 \subsection{Main Desktop Panel}
 
-The primary interface is a desktop window that can be visible while the user
-works in other applications. It can also run in background and will listen to
-user. It gives:
+The primary interface is a desktop window that can remain visible while the
+user works in other applications. It can also run in the background and listen
+to the user. Figure~\ref{FigMainUI} shows a mockup of this interface. The panel
+provides:
 
 \begin{itemize}
   \item A clear indication of whether the program is idle, listening, processing,
@@ -786,26 +803,28 @@ internal modules.
 
 This schedule decomposes the development of Rev 0 into four distinct phases, 
 mapping internal procedures to the module hierarchy and assigning team members 
-based on the Module Guide.
+based on the Module Guide. The identifiers `M1`--`M14` refer to the leaf-module
+ordering established in Section~\ref{SecMH} and are used consistently with the
+MIS hierarchy.
 
 \subsection{Phase 1: Foundations \& Core Data Structures (Weeks 0-3)}
 \textit{Goal: Establish the shared symbolic language, hardware I/O links, and 
 logging infrastructure.}
 
-\begin{tabularx}{\textwidth}{|l|l|l|X|}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{0.16\textwidth}|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.14\textwidth}|>{\raggedright\arraybackslash}X|}
 \hline
 \textbf{Date} & \textbf{Module(s)} & \textbf{Lead(s)} & \textbf{Details} 
 \\ \hline
-Nov 15 - Nov 29  & M13, M14 & Ajay & \textbf{Setup:} Environment configuration and 
+Nov 15 - Nov 29  & M13 (SD-AIClient), M14 (SD-Log) & Ajay & \textbf{Setup:} Environment configuration and 
 implementation of \texttt{log\_event()} for system-wide traceability 
 (FUNC.R.7). \\ \hline
-Nov 30 - Dec 9 & M10 & Gourob & \textbf{Type-Definition:} Coding of global 
-ADTs (\texttt{Command}, \texttt{Intent}, \texttt{Plan}) to ensure type-safety 
+Nov 30 - Dec 9 & M10 (SD-Types) & Gourob & \textbf{Type-Definition:} Coding of shared 
+type and record definitions (\texttt{Command}, \texttt{Intent}, \texttt{Plan}) to ensure type-safety 
 across the pipeline. \\ \hline
-Dec 10 - Dec 19 & M1 & Amanbeer & \textbf{Signal-Capture:} Low-level implementation 
+Dec 10 - Dec 19 & M1 (HH-IO) & Amanbeer & \textbf{Signal-Capture:} Low-level implementation 
 of \texttt{init\_audio()} and \texttt{start\_capture()} using hardware-hiding 
 drivers. \\ \hline
-Dec 20 - Dec 31 & M1 & Amanbeer & \textbf{Feedback-Link:} Implementation 
+Dec 20 - Dec 31 & M1 (HH-IO) & Amanbeer & \textbf{Feedback-Link:} Implementation 
 of \texttt{play\_feedback()} to route synthetic audio to system output devices. 
 \\ \hline
 \end{tabularx}
@@ -814,50 +833,50 @@ of \texttt{play\_feedback()} to route synthetic audio to system output devices.
 \textit{Goal: Transition from raw  to structured user intent and 
 persistent storage.}
 
-\begin{tabularx}{\textwidth}{|l|l|l|X|}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{0.16\textwidth}|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.14\textwidth}|>{\raggedright\arraybackslash}X|}
 \hline
 \textbf{Week} & \textbf{Module(s)} & \textbf{Lead(s)} & \textbf{Details} 
 \\ \hline
-Jan 1 - Jan 9 & M3 & Savinay & \textbf{Stream-to-Text:} Integration of Whisper STT; 
+Jan 1 - Jan 9 & M3 (BH-Input) & Savinay & \textbf{Stream-to-Text:} Integration of Whisper STT; 
 implementation of VAD (Voice Activity Detection) logic. \\ \hline
-Jan 10 - Jan 19 & M3, M4 & Savinay, Gourob & \textbf{Normalization:} Unifying Voice and Text 
+Jan 10 - Jan 19 & M3 (BH-Input), M4 (BH-NLU) & Savinay, Gourob & \textbf{Normalization:} Unifying voice and text 
 inputs into a common \texttt{Command} object via \texttt{get\_input()}. \\ 
 \hline
-Jan 20 - Jan 31 & M4 & Gourob & \textbf{Semantic-Parser:} Development of rules to map natural 
+Jan 20 - Jan 31 & M4 (BH-NLU) & Gourob & \textbf{Semantic-Parser:} Development of rules to map natural 
 language strings to structured \texttt{Intent} objects. \\ \hline
-Feb 1 - Feb 9 & M11, M12 & Ajay & \textbf{Action-Map:} Building the \texttt{SD-ToolRegistry} 
-to link parsed intents to specific system automation tools. \\ \hline
+Feb 1 - Feb 9 & M11 (SD-ToolRegistry), M12 (SD-Store) & Ajay & \textbf{Action-Map:} Building the \texttt{SD-ToolRegistry} 
+and initial \texttt{SD-Store} persistence hooks for mapped intents and saved state. \\ \hline
 \end{tabularx}
 
 
 \subsection{Phase 3: Execution, Automation \& Safety (Weeks 8-11)}
 \textit{Goal: Procedural planning, secure OS use, and session context.}
 
-\begin{tabularx}{\textwidth}{|l|l|l|X|}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{0.16\textwidth}|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.14\textwidth}|>{\raggedright\arraybackslash}X|}
 \hline
 \textbf{Week} & \textbf{Module(s)} & \textbf{Lead(s)} & \textbf{Details} \\ \hline
-Feb 10 - Feb 19 & M5 & Gourob & \textbf{Logic-Sequence:} Implementation of recursive planning 
+Feb 10 - Feb 19 & M5 (BH-Plan) & Gourob & \textbf{Logic-Sequence:} Implementation of recursive planning 
 to decompose intents into atomic \texttt{Action} sequences. \\ \hline
-Feb 20 - Feb 28 & M2 & Amanbeer & \textbf{OS-Abstraction:} Development of keyboard and 
+Feb 20 - Feb 28 & M2 (HH-Auto) & Amanbeer & \textbf{OS-Abstraction:} Development of keyboard and 
 mouse automation wrappers (click, type, launch) for Windows/macOS. \\ \hline
-Mar 1 - Mar 9 & M6 & Savinay & \textbf{Gate-Keeper:} Mandatory implementation of 
+Mar 1 - Mar 9 & M6 (BH-Safety) & Savinay & \textbf{Gate-Keeper:} Mandatory implementation of 
 \texttt{validate\_plan()} to intercept high-risk/irreversible actions 
 (FUNC.R.9). \\ \hline
-Mar 10 - Mar 19 & M7 & Ajay & \textbf{Context-Sync:} Implementing conversational memory to 
-track history and support "undo" operations. \\ \hline
+Mar 10 - Mar 19 & M7 (BH-Session) & Ajay & \textbf{Context-Sync:} Implementing conversational memory to 
+track history and support ``undo'' operations. \\ \hline
 \end{tabularx}
 
 \subsection{Phase 4: Feedback Loop \& Integration (Weeks 12-14)}
 \textit{Goal: Closing the user interaction loop and final V\&V testing.}
 
-\begin{tabularx}{\textwidth}{|l|l|l|X|}
+\begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{0.16\textwidth}|>{\raggedright\arraybackslash}p{0.22\textwidth}|>{\raggedright\arraybackslash}p{0.14\textwidth}|>{\raggedright\arraybackslash}X|}
 \hline
 \textbf{Week} & \textbf{Module(s)} & \textbf{Lead(s)} & \textbf{Details} \\ \hline
-Mar 20 - Mar 30 & M9 & Savinay & \textbf{View-Render:} Finalizing the Desktop Panel; rendering 
+Mar 20 - Mar 30 & M9 (BH-UI) & Savinay & \textbf{View-Render:} Finalizing the Desktop Panel; rendering 
 transcript overlays and real-time status indicators. \\ \hline
-Mar 31 - Apr 9 & M8 & Amanbeer & \textbf{Voice-Synth:} Integration of TTS to convert system 
+Mar 31 - Apr 9 & M8 (BH-Feedback) & Amanbeer & \textbf{Voice-Synth:} Integration of TTS to convert system 
 responses into spoken audio via the M1 interface. \\ \hline
-Apr 10 - Apr 19 & All & Full Team & \textbf{V\&V:} Execution of the Confidence Protocol; 
+Apr 10 - Apr 19 & All modules & Full Team & \textbf{V\&V:} Execution of the Confidence Protocol; 
 testing latency (SAL.R.1) and safety-interception reliability. \\ \hline
 \end{tabularx}
 
