@@ -565,6 +565,10 @@ InputState = \{\text{Idle}, \text{Listening}, \text{Processing}\}
 InputMode = \{\text{VoiceOnly}, \text{TextOnly}, \text{Mixed}\}
 
 \noindent
+InputError = \{\text{InputInitFailed}, \text{MicUnavailable},
+\text{AlreadyCapturing}, \text{NotCapturing}, \text{NoInputAvailable}\}
+
+\noindent
 InputStatus is a record:
 \begin{itemize}
   \item state : InputState
@@ -618,15 +622,35 @@ getStatus & N/A & s: InputStatus & N/A \\
   \item \textbf{initInput} is called before any other access routine.
 \end{itemize}
 
+\subsubsection{State Invariant}
+
+Let the abstract state of BH-Input be
+\[
+  \sigma = (\text{inputState}, \text{currentMode}, \text{lastText},
+  \text{partialText}, \text{lastError})
+\]
+For every reachable state $\sigma$,
+\[
+  \text{inputState} \in \text{InputState}
+\]
+\[
+  (\text{inputState} = \text{Idle}) \Rightarrow \text{partialText} = ""
+\]
+\[
+  (\text{lastError} = null) \lor (\text{lastError} \in \text{InputError})
+\]
+
 \subsubsection{Access Routine Semantics}
 
 \noindent
 \textbf{initInput}():
 \begin{itemize}
+  \item pre: true.
   \item transition:
   \[
-    \text{inputState}, \text{currentMode}, \text{lastText}, \text{partialText}
-    := \text{Idle}, \text{TextOnly}, "", ""
+    \text{inputState}, \text{currentMode}, \text{lastText}, \text{partialText},
+    \text{lastError}
+    := \text{Idle}, \text{TextOnly}, "", "", null
   \]
   \item $exc := \text{InputInitFailed}$ if dependencies cannot be initialized.
 \end{itemize}
@@ -634,25 +658,32 @@ getStatus & N/A & s: InputStatus & N/A \\
 \noindent
 \textbf{startCapture}(mode):
 \begin{itemize}
+  \item pre: $\text{inputState} = \text{Idle}$.
   \item transition:
   \[
-    \text{inputState}, \text{currentMode}, \text{partialText}
-    := \text{Listening}, \text{mode}, ""
+    \text{inputState}, \text{currentMode}, \text{partialText}, \text{lastError}
+    := \text{Listening}, \text{mode}, "", null
   \]
-  \item $exc := \text{MicUnavailable}$ if the device fails.
   \item $exc := \text{AlreadyCapturing}$ if $\text{inputState} \neq \text{Idle}$.
+  \item $exc := \text{MicUnavailable}$ if the device fails.
 \end{itemize}
 
 \noindent
 \textbf{stopCapture}():
 \begin{itemize}
-  \item transition: $\text{inputState} := \text{Idle}$.
+  \item pre: $\text{inputState} \neq \text{Idle}$.
+  \item transition:
+  \[
+    \text{inputState}, \text{lastText}, \text{partialText}
+    := \text{Idle}, \text{partialText}, ""
+  \]
   \item $exc := \text{NotCapturing}$ if $\text{inputState} = \text{Idle}$.
 \end{itemize}
 
 \noindent
 \textbf{getLastText}():
 \begin{itemize}
+  \item pre: $\text{lastText} \neq ""$.
   \item $out := \text{lastText}$.
   \item $exc := \text{NoInputAvailable}$ if lastText is empty.
 \end{itemize}
@@ -661,19 +692,30 @@ getStatus & N/A & s: InputStatus & N/A \\
 \textbf{getStatus}():
 \begin{itemize}
   \item $out := s$, where
-  $s.\text{state} = \text{inputState}$,
-  $s.\text{hasText} = (\text{lastText} \neq "")$,
-  $s.\text{hasError} = (\text{lastError} \neq null)$.
+  \[
+    s.\text{state} = \text{inputState} \land
+    s.\text{hasText} = (\text{lastText} \neq "") \land
+    s.\text{hasError} = (\text{lastError} \neq null)
+  \]
 \end{itemize}
 
 \subsubsection{Local Functions}
 
-Let Event = \{\text{StartCmd}, \text{StopCmd}, \text{Chunk}, \text{Error},
-\text{Timeout}\}
+Let
+\[
+  S = \text{InputState}, \quad
+  E = \{\text{StartCmd}, \text{StopCmd}, \text{Chunk}, \text{Error},
+  \text{Timeout}\}, \quad
+  s_0 = \text{Idle}
+\]
+The BH-Input controller is modelled as the finite-state machine
+\[
+  M = (S, E, s_0, \delta)
+\]
+where $\delta = \text{nextState}$.
 
 \noindent
-$\text{nextState} : \text{InputState} \times \text{Event} \rightarrow
-\text{InputState}$
+$\text{nextState} : \text{InputState} \times E \rightarrow \text{InputState}$
 
 \[
   \text{nextState}(s, e) =
@@ -687,11 +729,13 @@ $\text{nextState} : \text{InputState} \times \text{Event} \rightarrow
   \end{cases}
 \]
 
-During execution BH-Input updates
+The transition function is total and deterministic because all remaining pairs
+map to $s$ through the otherwise clause. During execution, BH-Input updates
 \[
   \text{inputState} := \text{nextState}(\text{inputState}, e)
 \]
-for each event e. When transcription ends, partialText moves into lastText.
+for each event $e$, and when transcription ends, $\text{partialText}$ moves
+into $\text{lastText}$.
 
 \section{MIS of BH-NLU (Intent Parser)} \label{mod:BHNlu}
 
