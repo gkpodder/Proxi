@@ -28,6 +28,7 @@ def main() -> None:
     read = sub.add_parser("read", help="Read emails", allow_abbrev=False)
     read.add_argument("--max-results", type=int, default=10, help="Max emails")
     read.add_argument("--query", default="", help="Gmail search query")
+    read.add_argument("--message-id", default="", help="Fetch specific Gmail message by internal ID")
 
     send = sub.add_parser("send", help="Send email", allow_abbrev=False)
     send.add_argument("--to", required=True, help="Recipient email")
@@ -47,7 +48,7 @@ def main() -> None:
         tools = GmailTools()
 
         if args.cmd == "read":
-            result = asyncio.run(tools.read_emails(args.max_results, args.query))
+            result = asyncio.run(tools.read_emails(args.max_results, args.query, args.message_id))
         elif args.cmd == "send":
             result = asyncio.run(
                 tools.send_email(args.to, args.subject, args.body, args.cc, args.bcc)

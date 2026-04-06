@@ -1,5 +1,7 @@
 import { createServer } from "node:http";
 import { createReadStream, existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -455,6 +457,36 @@ async function updateLlmConfig(provider, model) {
   };
 }
 
+function audioExtensionForMimeType(mimeType) {
+  const normalized = String(mimeType || "").trim().toLowerCase();
+  if (normalized.includes("webm")) return ".webm";
+  if (normalized.includes("wav")) return ".wav";
+  if (normalized.includes("mpeg") || normalized.includes("mp3")) return ".mp3";
+  if (normalized.includes("mp4") || normalized.includes("m4a")) return ".m4a";
+  if (normalized.includes("ogg")) return ".ogg";
+  return ".webm";
+}
+
+async function transcribeAudio(audioBase64, mimeType) {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "proxi-audio-"));
+  const audioPath = path.join(tempDir, `voice-input${audioExtensionForMimeType(mimeType)}`);
+
+  try {
+    const audioBuffer = Buffer.from(String(audioBase64 || ""), "base64");
+    await writeFile(audioPath, audioBuffer);
+
+    const raw = await runPython(["-m", "proxi.audio_transcription", "--file", audioPath]);
+    const payload = JSON.parse(raw || "{}");
+    if (!payload?.ok) {
+      throw new Error(payload?.error || "OpenAI transcription failed");
+    }
+
+    return payload;
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 async function getCronCapabilities() {
   try {
     const payload = await gatewayGet("/v1/cron-capabilities");
@@ -713,6 +745,25 @@ const server = createServer(async (req, res) => {
 
       const payload = await gatewayPost(`/v1/sessions/${encodeURIComponent(sessionId)}/clear-history`, {});
       sendJson(res, 200, { ok: true, ...payload });
+    } catch (error) {
+      sendError(res, error);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/transcribe" && method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const audioBase64 = String(body?.audioBase64 || "").trim();
+      const mimeType = String(body?.mimeType || "audio/webm").trim();
+
+      if (!audioBase64) {
+        sendJson(res, 400, { error: "audioBase64 is required" });
+        return;
+      }
+
+      const transcription = await transcribeAudio(audioBase64, mimeType);
+      sendJson(res, 200, transcription);
     } catch (error) {
       sendError(res, error);
     }

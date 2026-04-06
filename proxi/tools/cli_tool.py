@@ -464,7 +464,8 @@ class ReadEmailsTool(CLITool):
             name="read_emails",
             description=(
                 "Read emails from Gmail. Use max_results (default 10) and optional "
-                "query. If the result contains an error field, report it and ask "
+                "query. You can also pass message_id to fetch one known Gmail "
+                "message ID directly. If the result contains an error field, report it and ask "
                 "follow-up only if needed."
             ),
             parameters_schema={
@@ -477,6 +478,10 @@ class ReadEmailsTool(CLITool):
                     "query": {
                         "type": "string",
                         "description": "Optional Gmail search query",
+                    },
+                    "message_id": {
+                        "type": "string",
+                        "description": "Optional Gmail internal message ID for direct fetch",
                     },
                 },
                 "required": [],

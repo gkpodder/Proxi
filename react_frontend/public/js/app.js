@@ -22,6 +22,99 @@ function App() {
   const [formUi, setFormUi] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [wakeListening, setWakeListening] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    try {
+      return window.localStorage.getItem("proxi.voiceEnabled") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [voiceSilenceSeconds, setVoiceSilenceSeconds] = useState(() => {
+    try {
+      const raw = Number.parseInt(window.localStorage.getItem("proxi.voiceSilenceSeconds") || "2", 10);
+      if (Number.isFinite(raw)) return Math.max(1, Math.min(5, raw));
+    } catch {
+      // ignore storage errors
+    }
+    return 2;
+  });
+  const [voiceAutoSendAfterSilence, setVoiceAutoSendAfterSilence] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem("proxi.voiceAutoSendAfterSilence");
+      if (stored == null) return true;
+      return stored === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [voiceBeepEnabled, setVoiceBeepEnabled] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem("proxi.voiceBeepEnabled");
+      if (stored == null) return true;
+      return stored === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem("proxi.ttsEnabled");
+      if (stored == null) return false;
+      return stored === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [ttsVoiceName, setTtsVoiceName] = useState(() => {
+    try {
+      return window.localStorage.getItem("proxi.ttsVoiceName") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [ttsVoiceUri, setTtsVoiceUri] = useState(() => {
+    try {
+      return window.localStorage.getItem("proxi.ttsVoiceUri") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [ttsRate, setTtsRate] = useState(() => {
+    try {
+      const raw = Number.parseFloat(window.localStorage.getItem("proxi.ttsRate") || "1");
+      if (Number.isFinite(raw)) return Math.max(0.5, Math.min(2, raw));
+    } catch {
+      // ignore storage errors
+    }
+    return 1;
+  });
+  const [ttsVoices, setTtsVoices] = useState([]);
+  const ttsVoicesForDisplay = useMemo(() => {
+    const voices = Array.isArray(ttsVoices) ? [...ttsVoices] : [];
+
+    const scoreVoice = (voice) => {
+      const name = String(voice?.name || "").toLowerCase();
+      const lang = String(voice?.lang || "").toLowerCase();
+      let score = 0;
+
+      if (voice?.localService) score += 2;
+      if (name.includes("natural") || name.includes("neural") || name.includes("online") || name.includes("premium")) {
+        score += 8;
+      }
+      if (name.includes("microsoft")) score += 3;
+      if (lang.startsWith("en")) score += 2;
+      if (lang.startsWith("en-us") || lang.startsWith("en-gb")) score += 1;
+
+      return score;
+    };
+
+    return voices.sort((left, right) => {
+      const scoreDiff = scoreVoice(right) - scoreVoice(left);
+      if (scoreDiff !== 0) return scoreDiff;
+      return String(left?.name || "").localeCompare(String(right?.name || ""));
+    });
+  }, [ttsVoices]);
   const [darkMode, setDarkMode] = useState(true);
   const [apiKeys, setApiKeys] = useState([]);
   const [keysLoading, setKeysLoading] = useState(false);
@@ -96,6 +189,34 @@ function App() {
   const wsRef = useRef(null);
   const chatRef = useRef(null);
   const recognizerRef = useRef(null);
+  const wakeRecognizerRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const openAiTranscribeRef = useRef(false);
+  const voiceModeRef = useRef("browser");
+  const voiceBaseInputRef = useRef("");
+  const voiceSessionActiveRef = useRef(false);
+  const voiceDiscardActiveRef = useRef(false);
+  const wakeListenerRunningRef = useRef(false);
+  const wakePermissionCheckedRef = useRef(false);
+  const wakeRestartTimerRef = useRef(null);
+  const voiceSilenceTimerRef = useRef(null);
+  const voiceHeardSpeechRef = useRef(false);
+  const pendingAutoSendRef = useRef(false);
+  const inputValueRef = useRef("");
+  const voiceAudioContextRef = useRef(null);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  const canInteractRef = useRef(canInteract);
+  const isPromptActiveRef = useRef(isPromptActive);
+  const hasSelectedAgentRef = useRef(hasSelectedAgent);
+  const llmProviderRef = useRef(llmProvider);
+  const voiceAutoSendAfterSilenceRef = useRef(voiceAutoSendAfterSilence);
+  const voiceBeepEnabledRef = useRef(voiceBeepEnabled);
+  const ttsEnabledRef = useRef(ttsEnabled);
+  const ttsVoiceNameRef = useRef(ttsVoiceName);
+  const ttsVoiceUriRef = useRef(ttsVoiceUri);
+  const ttsRateRef = useRef(ttsRate);
   const pendingMcpActivityRef = useRef({});
   const activeToolRef = useRef(null);
 
@@ -163,6 +284,176 @@ function App() {
     loadWebhooks();
     loadLlmConfig();
   }, [settingsOpen]);
+
+  useEffect(() => {
+    loadLlmConfig();
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.voiceEnabled", voiceEnabled ? "true" : "false");
+    } catch {
+      // ignore storage errors
+    }
+  }, [voiceEnabled]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.voiceSilenceSeconds", String(voiceSilenceSeconds));
+    } catch {
+      // ignore storage errors
+    }
+  }, [voiceSilenceSeconds]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.voiceAutoSendAfterSilence", voiceAutoSendAfterSilence ? "true" : "false");
+    } catch {
+      // ignore storage errors
+    }
+  }, [voiceAutoSendAfterSilence]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.voiceBeepEnabled", voiceBeepEnabled ? "true" : "false");
+    } catch {
+      // ignore storage errors
+    }
+  }, [voiceBeepEnabled]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.ttsEnabled", ttsEnabled ? "true" : "false");
+    } catch {
+      // ignore storage errors
+    }
+
+    if (!ttsEnabled && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  }, [ttsEnabled]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.ttsVoiceName", ttsVoiceName);
+    } catch {
+      // ignore storage errors
+    }
+  }, [ttsVoiceName]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.ttsVoiceUri", ttsVoiceUri);
+    } catch {
+      // ignore storage errors
+    }
+  }, [ttsVoiceUri]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("proxi.ttsRate", String(ttsRate));
+    } catch {
+      // ignore storage errors
+    }
+  }, [ttsRate]);
+
+  useEffect(() => {
+    inputValueRef.current = input;
+  }, [input]);
+
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+    canInteractRef.current = canInteract;
+    isPromptActiveRef.current = isPromptActive;
+    hasSelectedAgentRef.current = hasSelectedAgent;
+    llmProviderRef.current = llmProvider;
+    voiceAutoSendAfterSilenceRef.current = voiceAutoSendAfterSilence;
+    voiceBeepEnabledRef.current = voiceBeepEnabled;
+    ttsEnabledRef.current = ttsEnabled;
+    ttsVoiceNameRef.current = ttsVoiceName;
+    ttsVoiceUriRef.current = ttsVoiceUri;
+    ttsRateRef.current = ttsRate;
+  }, [voiceEnabled, canInteract, isPromptActive, hasSelectedAgent, llmProvider, voiceAutoSendAfterSilence, voiceBeepEnabled, ttsEnabled, ttsVoiceName, ttsVoiceUri, ttsRate]);
+
+  useEffect(() => {
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices() || [];
+      setTtsVoices(voices);
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged === loadVoices) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (ttsVoiceName) return;
+    const firstVoice = Array.isArray(ttsVoices) && ttsVoices.length > 0 ? ttsVoices[0] : null;
+    if (firstVoice?.name) {
+      setTtsVoiceName(firstVoice.name);
+    }
+  }, [ttsVoiceName, ttsVoices]);
+
+  useEffect(() => {
+    if (ttsVoiceUri || !Array.isArray(ttsVoices) || ttsVoices.length === 0) return;
+
+    const voiceFromName = String(ttsVoiceName || "").trim()
+      ? ttsVoices.find((voice) => voice.name === String(ttsVoiceName || "").trim())
+      : null;
+
+    const fallbackVoice = voiceFromName || ttsVoices[0] || null;
+    if (fallbackVoice?.voiceURI) {
+      setTtsVoiceUri(fallbackVoice.voiceURI);
+      if (!ttsVoiceName && fallbackVoice.name) {
+        setTtsVoiceName(fallbackVoice.name);
+      }
+    }
+  }, [ttsVoiceUri, ttsVoiceName, ttsVoices]);
+
+  useEffect(() => {
+    if (!voiceEnabled || !canInteract || isPromptActive) {
+      stopWakeWordListener();
+      if (!voiceEnabled && (voiceSessionActiveRef.current || isListening)) {
+        voiceDiscardActiveRef.current = true;
+        stopActiveVoiceInput();
+      }
+      return;
+    }
+
+    startWakeWordListener();
+
+    return () => {
+      stopWakeWordListener();
+    };
+  }, [voiceEnabled, canInteract, isPromptActive, llmProvider]);
+
+  useEffect(() => {
+    if (!voiceEnabled) {
+      wakePermissionCheckedRef.current = false;
+      return;
+    }
+
+    if (wakePermissionCheckedRef.current) return;
+    wakePermissionCheckedRef.current = true;
+
+    (async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) return;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (error) {
+        setVoiceEnabled(false);
+        addSystem(`Voice wake-word disabled: ${String(error)}`);
+      }
+    })();
+  }, [voiceEnabled]);
 
   useEffect(() => {
     const activeAgentId = String(bootInfo?.agentId || "").trim();
@@ -809,7 +1100,10 @@ function App() {
 
   function commitStream() {
     setStreaming((prev) => {
-      if (prev) addAssistant(prev);
+      if (prev) {
+        addAssistant(prev);
+        speakAssistantResponse(prev);
+      }
       return "";
     });
   }
@@ -955,7 +1249,10 @@ function App() {
         addSystem("Gateway ready.");
         break;
       case "boot_complete":
-        setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
+        setBootInfo({
+          agentId: msg.agentId,
+          sessionId: String(msg.fullSessionId || msg.sessionId || ""),
+        });
         setSelectedAgentId(String(msg.agentId || ""));
         setAgentFeedback("");
         setBootstrapInput(null);
@@ -1218,6 +1515,17 @@ function App() {
     }
     if (!task) return;
 
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    pendingAutoSendRef.current = false;
+    voiceDiscardActiveRef.current = true;
+    voiceBaseInputRef.current = "";
+    if (voiceSessionActiveRef.current || isListening) {
+      stopActiveVoiceInput();
+    }
+
     runSlashCommand(task, { echo: true });
   }
 
@@ -1229,6 +1537,10 @@ function App() {
     if (!hasSelectedAgent) {
       addSystem("Select an agent first.");
       return;
+    }
+
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
 
     send({ type: "abort" });
@@ -1244,6 +1556,652 @@ function App() {
     }
   }
 
+  function normalizeTranscript(text) {
+    return String(text || "").replace(/\s+/g, " ").trim();
+  }
+
+  function stripWakeWord(text) {
+    const normalized = normalizeTranscript(text);
+    const match = normalized.match(/(?:^|\s)hey\s+(?:proxi|proix|proxy|procksie)\b\s*(.*)$/i);
+    if (!match) return "";
+    return normalizeTranscript(match[1] || "");
+  }
+
+  function scheduleWakeListenerRestart() {
+    if (!voiceEnabledRef.current || !canInteractRef.current || isPromptActiveRef.current || voiceSessionActiveRef.current) {
+      return;
+    }
+
+    if (wakeRestartTimerRef.current) {
+      clearTimeout(wakeRestartTimerRef.current);
+    }
+
+    wakeRestartTimerRef.current = setTimeout(() => {
+      wakeRestartTimerRef.current = null;
+      startWakeWordListener();
+    }, 250);
+  }
+
+  function stopWakeWordListener() {
+    if (wakeRestartTimerRef.current) {
+      clearTimeout(wakeRestartTimerRef.current);
+      wakeRestartTimerRef.current = null;
+    }
+
+    wakeListenerRunningRef.current = false;
+    setWakeListening(false);
+
+    const wakeRecognizer = wakeRecognizerRef.current;
+    if (wakeRecognizer) {
+      try {
+        wakeRecognizer.abort?.();
+        wakeRecognizer.stop();
+      } catch {
+        // ignore stop errors
+      }
+    }
+  }
+
+  function clearVoiceSilenceTimer() {
+    if (voiceSilenceTimerRef.current) {
+      clearTimeout(voiceSilenceTimerRef.current);
+      voiceSilenceTimerRef.current = null;
+    }
+  }
+
+  function playVoiceBeep() {
+    if (!voiceBeepEnabledRef.current) return;
+    if (!window.AudioContext && !window.webkitAudioContext) return;
+
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!voiceAudioContextRef.current) {
+        voiceAudioContextRef.current = new AudioCtx();
+      }
+
+      const context = voiceAudioContextRef.current;
+      if (context.state === "suspended") {
+        context.resume().catch(() => {});
+      }
+
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, context.currentTime);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.06, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.18);
+
+      oscillator.onended = () => {
+        if (context.state === "closed") {
+          voiceAudioContextRef.current = null;
+        }
+      };
+    } catch {
+      // ignore beep failures
+    }
+  }
+
+  function playVoiceDoneBeep() {
+    if (!voiceBeepEnabledRef.current) return;
+    if (!window.AudioContext && !window.webkitAudioContext) return;
+
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!voiceAudioContextRef.current) {
+        voiceAudioContextRef.current = new AudioCtx();
+      }
+
+      const context = voiceAudioContextRef.current;
+      if (context.state === "suspended") {
+        context.resume().catch(() => {});
+      }
+
+      const firstOsc = context.createOscillator();
+      const secondOsc = context.createOscillator();
+      const gain = context.createGain();
+
+      firstOsc.type = "triangle";
+      secondOsc.type = "triangle";
+      firstOsc.frequency.setValueAtTime(660, context.currentTime);
+      secondOsc.frequency.setValueAtTime(880, context.currentTime + 0.12);
+
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.04, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.04, context.currentTime + 0.14);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24);
+
+      firstOsc.connect(gain);
+      secondOsc.connect(gain);
+      gain.connect(context.destination);
+      firstOsc.start();
+      firstOsc.stop(context.currentTime + 0.11);
+      secondOsc.start(context.currentTime + 0.12);
+      secondOsc.stop(context.currentTime + 0.25);
+
+      secondOsc.onended = () => {
+        if (context.state === "closed") {
+          voiceAudioContextRef.current = null;
+        }
+      };
+    } catch {
+      // ignore beep failures
+    }
+  }
+
+  function getLiveTtsVoices() {
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return [];
+    const voices = window.speechSynthesis.getVoices?.();
+    return Array.isArray(voices) ? voices : [];
+  }
+
+  function pickTtsVoice(voices) {
+    const selectedVoiceUri = String(ttsVoiceUriRef.current || "").trim();
+    const selectedVoiceName = String(ttsVoiceNameRef.current || "").trim();
+
+    const scoreVoice = (voice) => {
+      const name = String(voice?.name || "").toLowerCase();
+      const lang = String(voice?.lang || "").toLowerCase();
+      let score = 0;
+
+      if (voice?.localService) score += 2;
+      if (name.includes("natural") || name.includes("neural") || name.includes("online") || name.includes("premium")) {
+        score += 8;
+      }
+      if (name.includes("microsoft")) score += 3;
+      if (lang.startsWith("en")) score += 2;
+      if (lang.startsWith("en-us") || lang.startsWith("en-gb")) score += 1;
+
+      return score;
+    };
+
+    return (
+      voices.find((voice) => voice.voiceURI === selectedVoiceUri) ||
+      voices.find((voice) => voice.name === selectedVoiceName) ||
+      voices.reduce((bestVoice, voice) => {
+        if (!bestVoice) return voice;
+        return scoreVoice(voice) > scoreVoice(bestVoice) ? voice : bestVoice;
+      }, null) ||
+      null
+    );
+  }
+
+  function sanitizeTextForTts(rawText) {
+    let text = String(rawText || "");
+    if (!text) return "";
+
+    // Drop markdown code blocks/inline code and hyperlink targets.
+    text = text.replace(/```[\s\S]*?```/g, " ");
+    text = text.replace(/`[^`]*`/g, " ");
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|www\.[^)\s]+)\)/gi, "$1");
+
+    // Drop raw links so TTS does not read noisy URLs aloud.
+    text = text.replace(/<https?:\/\/[^>]+>/gi, " ");
+    text = text.replace(/https?:\/\/\S+/gi, " ");
+    text = text.replace(/\bwww\.\S+/gi, " ");
+
+    // Remove common markdown artifacts that sound awkward when spoken.
+    text = text.replace(/(^|\n)\s*[-*+]\s+/g, "$1");
+    text = text.replace(/[~*_#|]+/g, " ");
+
+    return text.replace(/\s+/g, " ").trim();
+  }
+
+  function speakAssistantResponse(text, options = {}) {
+    if (!ttsEnabledRef.current && !options.force) return;
+    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+
+    const spokenText = sanitizeTextForTts(text);
+    if (!spokenText) return;
+
+    try {
+      const voices = getLiveTtsVoices();
+      if (voices.length === 0 && (options.attempts || 0) < 6) {
+        window.speechSynthesis.getVoices();
+        window.setTimeout(() => {
+          speakAssistantResponse(text, {
+            ...options,
+            attempts: (options.attempts || 0) + 1,
+          });
+        }, 120);
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(spokenText);
+      const selectedVoice = pickTtsVoice(voices);
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang || "en-US";
+      }
+
+      utterance.rate = Number.isFinite(ttsRateRef.current) ? ttsRateRef.current : 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      // ignore speech synthesis failures
+    }
+  }
+
+  function queueVoiceSilenceAutoStop() {
+    clearVoiceSilenceTimer();
+    if (!voiceSessionActiveRef.current) return;
+    if (!voiceHeardSpeechRef.current) return;
+
+    const delayMs = Math.max(1, Number(voiceSilenceSeconds || 2)) * 1000;
+    voiceSilenceTimerRef.current = setTimeout(() => {
+      voiceSilenceTimerRef.current = null;
+      if (!voiceSessionActiveRef.current) return;
+      pendingAutoSendRef.current = Boolean(voiceAutoSendAfterSilenceRef.current);
+      voiceDiscardActiveRef.current = false;
+      stopActiveVoiceInput();
+    }, delayMs);
+  }
+
+  function testSelectedTtsVoice() {
+    speakAssistantResponse("This is Proxi testing the currently selected voice.", {
+      force: true,
+      attempts: 0,
+    });
+  }
+
+  function sendTask(task) {
+    addUser(task);
+    setInput("");
+    inputValueRef.current = "";
+    setStatusLabel("Running...");
+    setStreaming("");
+    send({ type: "start", task });
+  }
+
+  function flushPendingVoiceAutoSend() {
+    if (!pendingAutoSendRef.current) return;
+    pendingAutoSendRef.current = false;
+
+    const task = String(inputValueRef.current || "").trim();
+    if (!task) return;
+    if (isPromptActiveRef.current || !hasSelectedAgentRef.current) return;
+    sendTask(task);
+  }
+
+  function ensureWakeRecognizer() {
+    if (!SpeechRecognition) return null;
+
+    if (!wakeRecognizerRef.current) {
+      wakeRecognizerRef.current = new SpeechRecognition();
+      wakeRecognizerRef.current.continuous = false;
+      wakeRecognizerRef.current.interimResults = true;
+      wakeRecognizerRef.current.lang = "en-US";
+
+      wakeRecognizerRef.current.onstart = () => {
+        wakeListenerRunningRef.current = true;
+        setWakeListening(true);
+      };
+
+      wakeRecognizerRef.current.onresult = (evt) => {
+        if (!voiceEnabledRef.current || voiceSessionActiveRef.current) return;
+
+        for (let i = evt.resultIndex; i < evt.results.length; i++) {
+          const candidate = normalizeTranscript(evt.results[i]?.[0]?.transcript || "");
+          if (!candidate || !/hey\s+(?:proxi|proix|proxy|procksie)\b/i.test(candidate)) continue;
+
+          const command = stripWakeWord(candidate);
+          voiceSessionActiveRef.current = true;
+          voiceDiscardActiveRef.current = false;
+          stopWakeWordListener();
+          beginVoiceCapture(command);
+          break;
+        }
+      };
+
+      wakeRecognizerRef.current.onerror = (evt) => {
+        wakeListenerRunningRef.current = false;
+        setWakeListening(false);
+        if (voiceEnabledRef.current && !voiceSessionActiveRef.current) {
+          const err = String(evt?.error || "").toLowerCase();
+          if (err !== "not-allowed" && err !== "service-not-allowed") {
+            scheduleWakeListenerRestart();
+          }
+        }
+      };
+
+      wakeRecognizerRef.current.onend = () => {
+        wakeListenerRunningRef.current = false;
+        setWakeListening(false);
+        if (voiceEnabledRef.current && canInteractRef.current && !isPromptActiveRef.current && !voiceSessionActiveRef.current) {
+          scheduleWakeListenerRestart();
+        }
+      };
+    }
+
+    return wakeRecognizerRef.current;
+  }
+
+  function startWakeWordListener() {
+    if (!voiceEnabledRef.current || !canInteractRef.current || isPromptActiveRef.current || voiceSessionActiveRef.current) {
+      return;
+    }
+
+    const wakeRecognizer = ensureWakeRecognizer();
+    if (!wakeRecognizer || wakeListenerRunningRef.current) {
+      return;
+    }
+
+    try {
+      wakeRecognizer.start();
+      wakeListenerRunningRef.current = true;
+      setWakeListening(true);
+    } catch {
+      wakeListenerRunningRef.current = false;
+      setWakeListening(false);
+      scheduleWakeListenerRestart();
+    }
+  }
+
+  function finishVoiceSession() {
+    const hadActiveSession = voiceSessionActiveRef.current || isListening;
+    clearVoiceSilenceTimer();
+    voiceHeardSpeechRef.current = false;
+    voiceSessionActiveRef.current = false;
+    voiceDiscardActiveRef.current = false;
+    if (hadActiveSession) {
+      playVoiceDoneBeep();
+    }
+    if (voiceEnabledRef.current && canInteractRef.current && !isPromptActiveRef.current) {
+      startWakeWordListener();
+    }
+    setTimeout(() => {
+      flushPendingVoiceAutoSend();
+    }, 0);
+  }
+
+  function clearOpenAiVoiceState() {
+    const stream = mediaStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+
+    mediaRecorderRef.current = null;
+    mediaStreamRef.current = null;
+    audioChunksRef.current = [];
+  }
+
+  function composeVoiceInput(transcript) {
+    const base = String(voiceBaseInputRef.current || "").trim();
+    const spoken = String(transcript || "").trim();
+    if (!base) return spoken;
+    if (!spoken) return base;
+    return `${base} ${spoken}`;
+  }
+
+  function applyVoiceTranscript(transcript) {
+    const normalized = normalizeTranscript(transcript);
+    setInput(composeVoiceInput(normalized));
+    if (normalized) {
+      voiceHeardSpeechRef.current = true;
+      queueVoiceSilenceAutoStop();
+    }
+  }
+
+  function beginVoiceCapture(initialTranscript = "") {
+    const normalizedInitial = normalizeTranscript(initialTranscript);
+    const provider = String(llmProviderRef.current || "").trim().toLowerCase();
+
+    voiceHeardSpeechRef.current = false;
+    voiceSessionActiveRef.current = true;
+    pendingAutoSendRef.current = false;
+    voiceDiscardActiveRef.current = false;
+    voiceBaseInputRef.current = String(inputValueRef.current || "");
+
+    if (normalizedInitial) {
+      applyVoiceTranscript(normalizedInitial);
+    }
+
+    if (provider === "openai") {
+      startOpenAiVoiceInput(normalizedInitial);
+      return;
+    }
+
+    startBrowserVoiceInput(normalizedInitial);
+  }
+
+  function readSpeechRecognitionTranscript(evt) {
+    const parts = [];
+    for (let i = 0; i < evt.results.length; i++) {
+      const result = evt.results[i];
+      const transcript = String(result?.[0]?.transcript || "").trim();
+      if (transcript) {
+        parts.push(transcript);
+      }
+    }
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  function attachSpeechRecognitionHandlers() {
+    if (!SpeechRecognition || recognizerRef.current) return recognizerRef.current;
+
+    recognizerRef.current = new SpeechRecognition();
+    recognizerRef.current.continuous = false;
+    recognizerRef.current.interimResults = true;
+    recognizerRef.current.lang = "en-US";
+
+    recognizerRef.current.onstart = () => {
+      setIsListening(true);
+      playVoiceBeep();
+    };
+    recognizerRef.current.onresult = (evt) => {
+      const transcript = readSpeechRecognitionTranscript(evt);
+      if (!voiceSessionActiveRef.current) return;
+      applyVoiceTranscript(transcript);
+    };
+    recognizerRef.current.onerror = (evt) => {
+      addError(`Speech error: ${evt.error}`);
+      setIsListening(false);
+      if (voiceSessionActiveRef.current) {
+        voiceSessionActiveRef.current = false;
+        finishVoiceSession();
+      }
+    };
+    recognizerRef.current.onend = () => {
+      if (voiceModeRef.current === "openai" && mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        return;
+      }
+      setIsListening(false);
+      if (voiceSessionActiveRef.current) {
+        finishVoiceSession();
+      }
+    };
+
+    return recognizerRef.current;
+  }
+
+  function startBrowserVoiceInput(initialTranscript = "") {
+    if (!SpeechRecognition) {
+      alert("Speech Recognition not supported in this browser.");
+      voiceSessionActiveRef.current = false;
+      finishVoiceSession();
+      return;
+    }
+
+    voiceModeRef.current = "browser";
+    voiceHeardSpeechRef.current = false;
+    voiceSessionActiveRef.current = true;
+    voiceDiscardActiveRef.current = false;
+    voiceBaseInputRef.current = String(inputValueRef.current || "");
+
+    const normalizedInitial = normalizeTranscript(initialTranscript);
+    if (normalizedInitial) {
+      applyVoiceTranscript(normalizedInitial);
+    }
+
+    const recognizer = attachSpeechRecognitionHandlers();
+    if (!recognizer) {
+      voiceSessionActiveRef.current = false;
+      finishVoiceSession();
+      return;
+    }
+
+    try {
+      recognizer.start();
+    } catch {
+      voiceSessionActiveRef.current = false;
+      finishVoiceSession();
+    }
+  }
+
+  function stopBrowserVoiceInput() {
+    clearVoiceSilenceTimer();
+    recognizerRef.current?.stop();
+    setIsListening(false);
+  }
+
+  function stopOpenAiVoiceInput() {
+    clearVoiceSilenceTimer();
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      openAiTranscribeRef.current = !voiceDiscardActiveRef.current;
+      recorder.stop();
+    }
+
+    recognizerRef.current?.stop();
+  }
+
+  function stopActiveVoiceInput() {
+    if (voiceModeRef.current === "openai") {
+      stopOpenAiVoiceInput();
+      return;
+    }
+
+    stopBrowserVoiceInput();
+  }
+
+  async function blobToBase64(blob) {
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = "";
+
+    for (let index = 0; index < bytes.length; index += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+    }
+
+    return window.btoa(binary);
+  }
+
+  async function transcribeOpenAiAudio(blob, mimeType) {
+    const audioBase64 = await blobToBase64(blob);
+    const response = await fetch("/api/transcribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audioBase64, mimeType }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "Failed to transcribe voice input");
+    }
+    return String(payload?.text || "").trim();
+  }
+
+  async function startOpenAiVoiceInput(initialTranscript = "") {
+    if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
+      addError("OpenAI voice input is not supported in this browser.");
+      voiceSessionActiveRef.current = false;
+      finishVoiceSession();
+      return;
+    }
+
+    const preferredMimeTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+    const mimeType =
+      preferredMimeTypes.find((candidate) => window.MediaRecorder.isTypeSupported?.(candidate)) ||
+      "audio/webm";
+
+    try {
+      voiceModeRef.current = "openai";
+      voiceHeardSpeechRef.current = false;
+      voiceSessionActiveRef.current = true;
+      voiceDiscardActiveRef.current = false;
+      voiceBaseInputRef.current = String(inputValueRef.current || "");
+      const normalizedInitial = normalizeTranscript(initialTranscript);
+      if (normalizedInitial) {
+        applyVoiceTranscript(normalizedInitial);
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType });
+
+      openAiTranscribeRef.current = true;
+      audioChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+
+      recorder.onstart = () => {
+        setIsListening(true);
+        playVoiceBeep();
+      };
+      recorder.ondataavailable = (evt) => {
+        if (evt.data && evt.data.size > 0) {
+          audioChunksRef.current.push(evt.data);
+        }
+      };
+      recorder.onerror = (evt) => {
+        addError(`Voice recording error: ${evt.error?.message || evt.error || "unknown"}`);
+        openAiTranscribeRef.current = false;
+        clearOpenAiVoiceState();
+        setIsListening(false);
+        voiceSessionActiveRef.current = false;
+        finishVoiceSession();
+      };
+      recorder.onstop = async () => {
+        const shouldTranscribe = openAiTranscribeRef.current;
+        openAiTranscribeRef.current = false;
+        setIsListening(false);
+
+        const chunks = audioChunksRef.current.slice();
+        clearOpenAiVoiceState();
+
+        if (!shouldTranscribe || chunks.length === 0) {
+          finishVoiceSession();
+          return;
+        }
+
+        try {
+          const transcript = await transcribeOpenAiAudio(new Blob(chunks, { type: mimeType }), mimeType);
+          if (transcript) {
+            applyVoiceTranscript(transcript);
+          }
+        } catch (error) {
+          addError(`OpenAI voice input failed: ${String(error)}`);
+        }
+
+        finishVoiceSession();
+      };
+
+      if (SpeechRecognition) {
+        const recognizer = attachSpeechRecognitionHandlers();
+        if (recognizer) {
+          recognizer.start();
+        }
+      }
+
+      recorder.start();
+    } catch (error) {
+      clearOpenAiVoiceState();
+      setIsListening(false);
+      voiceSessionActiveRef.current = false;
+      finishVoiceSession();
+      addError(`Unable to start OpenAI voice input: ${String(error)}`);
+    }
+  }
+
   function onMicClick() {
     if (isPromptActive) {
       addSystem("Complete the current prompt first.");
@@ -1253,40 +2211,15 @@ function App() {
       addSystem("Select an agent first.");
       return;
     }
-    if (!SpeechRecognition) {
-      alert("Speech Recognition not supported in this browser.");
+
+    if (isListening || voiceSessionActiveRef.current) {
+      stopActiveVoiceInput();
       return;
     }
 
-    if (isListening) {
-      recognizerRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-
-    if (!recognizerRef.current) {
-      recognizerRef.current = new SpeechRecognition();
-      recognizerRef.current.continuous = false;
-      recognizerRef.current.interimResults = true;
-      recognizerRef.current.lang = "en-US";
-
-      recognizerRef.current.onstart = () => setIsListening(true);
-      recognizerRef.current.onresult = (evt) => {
-        for (let i = evt.resultIndex; i < evt.results.length; i++) {
-          const transcript = evt.results[i][0].transcript;
-          if (evt.results[i].isFinal) {
-            setInput((prev) => prev + (prev ? " " : "") + transcript);
-          }
-        }
-      };
-      recognizerRef.current.onerror = (evt) => {
-        addError(`Speech error: ${evt.error}`);
-        setIsListening(false);
-      };
-      recognizerRef.current.onend = () => setIsListening(false);
-    }
-
-    recognizerRef.current.start();
+    voiceDiscardActiveRef.current = false;
+    stopWakeWordListener();
+    beginVoiceCapture();
   }
 
   const connectionText = useMemo(() => {
@@ -1323,6 +2256,9 @@ function App() {
           <div className="headerStatus">
             <span className={`statusDot ${socketState}`}></span>
             {connectionText} - {statusLabel}
+          </div>
+          <div className={`headerStatus ${voiceEnabled ? "voiceOn" : "voiceOff"}`} title={voiceEnabled ? "Wake-word listening is enabled" : "Wake-word listening is disabled"}>
+            {voiceEnabled ? (isListening ? "Voice active" : "Voice ready") : "Voice off"}
           </div>
         </div>
       </div>
@@ -1415,6 +2351,24 @@ function App() {
         runCompactCommand={runCompactCommand}
         runReasoningEffortCommand={runReasoningEffortCommand}
         clearSessionHistory={clearSessionHistory}
+        voiceEnabled={voiceEnabled}
+        setVoiceEnabled={setVoiceEnabled}
+        voiceSilenceSeconds={voiceSilenceSeconds}
+        setVoiceSilenceSeconds={setVoiceSilenceSeconds}
+        voiceAutoSendAfterSilence={voiceAutoSendAfterSilence}
+        setVoiceAutoSendAfterSilence={setVoiceAutoSendAfterSilence}
+        voiceBeepEnabled={voiceBeepEnabled}
+        setVoiceBeepEnabled={setVoiceBeepEnabled}
+        ttsEnabled={ttsEnabled}
+        setTtsEnabled={setTtsEnabled}
+        ttsVoices={ttsVoicesForDisplay}
+        ttsVoiceName={ttsVoiceName}
+        setTtsVoiceName={setTtsVoiceName}
+        ttsVoiceUri={ttsVoiceUri}
+        setTtsVoiceUri={setTtsVoiceUri}
+        ttsRate={ttsRate}
+        setTtsRate={setTtsRate}
+        testTtsVoice={testSelectedTtsVoice}
         webhooks={webhooks}
         webhookLoading={webhookLoading}
         webhookSaving={webhookSaving}

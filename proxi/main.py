@@ -23,6 +23,7 @@ def main() -> None:
 
     sub.add_parser("frontend", help="Start React frontend (requires gateway)")
     sub.add_parser("discord", help="Start Discord relay (requires gateway)")
+    sub.add_parser("setup", help="Install Node deps and initialize API key DB")
 
     # run: capture all remaining tokens and forward to cli/main.py
     run_p = sub.add_parser("run", help="Run a one-shot agent task")
@@ -44,6 +45,8 @@ def main() -> None:
         _cmd_frontend()
     elif args.command == "discord":
         _cmd_discord()
+    elif args.command == "setup":
+        _cmd_setup()
     elif args.command == "run":
         _cmd_run(args)
     elif args.command == "keys":
@@ -139,6 +142,11 @@ def _cmd_frontend() -> None:
 def _cmd_discord() -> None:
     from proxi.discord_relay_launcher import main as discord_main
     discord_main()
+
+
+def _cmd_setup() -> None:
+    from scripts.setup_launcher import main as setup_main
+    setup_main()
 
 
 def _cmd_run(args: argparse.Namespace) -> None:
