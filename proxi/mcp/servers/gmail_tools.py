@@ -86,11 +86,23 @@ class GmailTools:
         self.service = build("gmail", "v1", credentials=creds)
         logger.info("gmail_authenticated")
 
-    async def read_emails(self, max_results: int = 10, query: str = "") -> dict[str, Any]:
+    async def read_emails(
+        self,
+        max_results: int = 10,
+        query: str = "",
+        message_id: str = "",
+    ) -> dict[str, Any]:
         """Read emails from Gmail inbox."""
         try:
             if not self.service:
                 return {"error": "Gmail service not initialized"}
+
+            direct_id = str(message_id or "").strip()
+            if direct_id:
+                email = await self.get_email(direct_id)
+                if "error" in email:
+                    return {"error": email["error"], "emails": [], "count": 0}
+                return {"emails": [email], "count": 1}
 
             search_query = query if query else "is:inbox"
 

@@ -22,6 +22,10 @@
       onAbort,
     } = props;
 
+    const sessionLabel = bootInfo?.sessionId
+      ? String(bootInfo.sessionId).split("/").pop() || String(bootInfo.sessionId)
+      : "";
+
     return (
       <div className={`mainPanels ${activityCollapsed ? "activityCollapsed" : ""}`}>
         <div className="panel panelLeft">
@@ -60,7 +64,7 @@
               {bootInfo && (
                 <div className="bootInfo">
                   Agent: <strong>{bootInfo.agentId}</strong> - Session:{" "}
-                  <strong>{bootInfo.sessionId.slice(0, 8)}</strong>
+                  <strong>{sessionLabel}</strong>
                 </div>
               )}
               <div className="inputRow">

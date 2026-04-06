@@ -1733,11 +1733,32 @@ function App() {
     );
   }
 
+  function sanitizeTextForTts(rawText) {
+    let text = String(rawText || "");
+    if (!text) return "";
+
+    // Drop markdown code blocks/inline code and hyperlink targets.
+    text = text.replace(/```[\s\S]*?```/g, " ");
+    text = text.replace(/`[^`]*`/g, " ");
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|www\.[^)\s]+)\)/gi, "$1");
+
+    // Drop raw links so TTS does not read noisy URLs aloud.
+    text = text.replace(/<https?:\/\/[^>]+>/gi, " ");
+    text = text.replace(/https?:\/\/\S+/gi, " ");
+    text = text.replace(/\bwww\.\S+/gi, " ");
+
+    // Remove common markdown artifacts that sound awkward when spoken.
+    text = text.replace(/(^|\n)\s*[-*+]\s+/g, "$1");
+    text = text.replace(/[~*_#|]+/g, " ");
+
+    return text.replace(/\s+/g, " ").trim();
+  }
+
   function speakAssistantResponse(text, options = {}) {
     if (!ttsEnabledRef.current && !options.force) return;
     if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
 
-    const spokenText = String(text || "").trim();
+    const spokenText = sanitizeTextForTts(text);
     if (!spokenText) return;
 
     try {

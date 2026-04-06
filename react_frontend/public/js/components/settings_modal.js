@@ -129,7 +129,6 @@
       integrations: false,
       cron: false,
       webhooks: false,
-      llm: false,
       voice: false,
     });
     const [compactHint, setCompactHint] = useState("");
@@ -150,7 +149,6 @@
         { key: "integrations", label: "Integrations" },
         { key: "cron", label: "Cron Jobs" },
         { key: "webhooks", label: "Webhooks" },
-        { key: "llm", label: "LLM Provider" },
         { key: "voice", label: "Voice" },
       ],
       []
@@ -1016,65 +1014,6 @@
                     Clear Form
                   </button>
                   <button onClick={() => loadWebhooks()} disabled={webhookLoading || webhookSaving}>
-                    Refresh
-                  </button>
-                </div>
-              </Section>
-
-              <Section
-                sectionKey="llm"
-                title="LLM Provider"
-                openSections={openSections}
-                toggleSection={toggleSection}
-                sectionRefs={sectionRefs}
-              >
-                <div className="settingsHint">Choose the provider and model used for all new turns.</div>
-                <div className="profileGrid">
-                  <label className="profileField">
-                    <span>Provider</span>
-                    <select
-                      className="profileSelect"
-                      value={llmProvider}
-                      disabled={llmLoading || llmSaving}
-                      onChange={(e) => changeLlmProvider(e.target.value)}
-                    >
-                      {(llmProviders || []).map((provider) => (
-                        <option key={provider} value={provider}>
-                          {provider}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="profileField">
-                    <span>Model</span>
-                    <select
-                      className="profileSelect"
-                      value={llmModel}
-                      disabled={llmLoading || llmSaving}
-                      onChange={(e) => setLlmModel(e.target.value)}
-                    >
-                      {((llmModelsByProvider && llmModelsByProvider[llmProvider]) || []).map((modelName) => (
-                        <option key={modelName} value={modelName}>
-                          {modelName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {llmFeedback && <div className="formHint">{llmFeedback}</div>}
-                <div className="formActions">
-                  <button
-                    className="primaryBtn"
-                    onClick={saveLlmConfig}
-                    disabled={
-                      llmLoading ||
-                      llmSaving ||
-                      ((llmProvider === bootInfo?.llm_provider) && (llmModel === bootInfo?.llm_model))
-                    }
-                  >
-                    {((llmProvider !== bootInfo?.llm_provider) || (llmModel !== bootInfo?.llm_model)) ? "Switch LLM Provider" : "LLM Provider Selected"}
-                  </button>
-                  <button onClick={() => loadLlmConfig()} disabled={llmLoading || llmSaving}>
                     Refresh
                   </button>
                 </div>
