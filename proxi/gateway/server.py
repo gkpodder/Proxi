@@ -872,7 +872,10 @@ async def stream_session(session_id: str, subscriber: str = Query(default="sse")
     await sse.send_event({
         "type": "boot_complete",
         "agentId": agent_id,
-        "sessionId": session_id,
+        # Keep `sessionId` as session name for TUI compatibility.
+        "sessionId": session_name,
+        # Expose full session id for clients that call session-scoped endpoints directly.
+        "fullSessionId": session_id,
     })
 
     async def event_generator():

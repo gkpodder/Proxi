@@ -955,7 +955,10 @@ function App() {
         addSystem("Gateway ready.");
         break;
       case "boot_complete":
-        setBootInfo({ agentId: msg.agentId, sessionId: msg.sessionId });
+        setBootInfo({
+          agentId: msg.agentId,
+          sessionId: String(msg.fullSessionId || msg.sessionId || ""),
+        });
         setSelectedAgentId(String(msg.agentId || ""));
         setAgentFeedback("");
         setBootstrapInput(null);
