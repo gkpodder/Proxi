@@ -196,9 +196,19 @@ string & Sequence of characters.\\
 sequence(T) & Ordered list of elements of type T.\\
 tuple(T$_1$,T$_2$, \ldots) & Finite ordered group of typed values.\\
 AudioStream & Representation of sampled voice input.\\
-Intent & Structured record containing type and parameters.\\
-Plan & Record defining tool, parameters, and execution time.\\
-Action & Atomic operation triggered by a plan or intent.\\
+IntentType & Enum \{OpenTarget, LaunchApp, SearchText, SummarizeText,
+TypeText, ClickTarget, Confirm, Cancel, Unknown\} used to classify a
+normalized user command.\\
+ParamSet & Finite mapping from parameter names to String values, such as
+\texttt{path}, \texttt{appId}, \texttt{query}, \texttt{text}, or
+\texttt{target}.\\
+ToolId & Identifier used by SD-ToolRegistry to select a concrete tool or
+MCP-backed capability.\\
+Intent & Record \{type: IntentType, params: ParamSet\} produced by BH-NLU.\\
+Plan & Record \{tool: ToolId, parameters: ParamSet, time: real\} produced
+by BH-Plan.\\
+Action & Record \{tool: ToolId, parameters: ParamSet, riskLevel: RiskLevel,
+isIrreversible: boolean\} checked by BH-Safety.\\
 RiskLevel & Enum \{Low, Medium, High\} for safety checks.\\
 ExecStatus & Enum \{Pending, Success, Failed\} for task outcomes.\\
 \bottomrule
@@ -699,6 +709,25 @@ SD-Types, SD-Log
 
 \subsection{Syntax}
 
+\subsubsection{Exported Types}
+
+\noindent
+IntentType = \{\text{OpenTarget}, \text{LaunchApp}, \text{SearchText},
+\text{SummarizeText}, \text{TypeText}, \text{ClickTarget},
+\text{Confirm}, \text{Cancel}, \text{Unknown}\}
+
+\noindent
+ParamSet is a finite mapping from parameter names to String values. The keys are
+chosen from the command schema and may include \texttt{path}, \texttt{appId},
+\texttt{query}, \texttt{text}, or \texttt{target}.
+
+\noindent
+Intent is a record:
+\begin{itemize}
+  \item type : IntentType
+  \item params : ParamSet
+\end{itemize}
+
 \subsubsection{Exported Access Programs}
 
 \begin{center}
@@ -779,6 +808,18 @@ BH-NLU, SD-ToolRegistry, SD-Types, SD-Log, HH-Auto
 None.
 
 \subsubsection{Exported Types}
+
+\noindent
+ToolId = set of identifiers used by SD-ToolRegistry to name concrete tools or
+MCP-backed capabilities.
+
+\noindent
+Plan is a record:
+\begin{itemize}
+  \item tool : ToolId
+  \item parameters : ParamSet
+  \item time : real
+\end{itemize}
 
 \noindent
 ExecStatus = \{\text{Pending}, \text{Success}, \text{Failed}\}
@@ -940,6 +981,15 @@ None.
 \noindent SafetyDecision = \{\text{AutoAllow}, \text{AskUser}, \text{Block}\}
 
 \noindent ApprovalResult = \{\text{Approved}, \text{Denied}, \text{Cancelled}\}
+
+\noindent
+Action is a record:
+\begin{itemize}
+  \item tool : ToolId
+  \item parameters : ParamSet
+  \item riskLevel : RiskLevel
+  \item isIrreversible : boolean
+\end{itemize}
 
 \subsubsection{Exported Access Programs}
 
