@@ -1,10 +1,12 @@
-\documentclass[12pt, titlepage]{article}
+\documentclass[12pt]{article}
 
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{placeins}
 \usepackage{float}
 \usepackage{hyperref}
+\usepackage{array}
+\usepackage{multirow}
 \hypersetup{
     colorlinks,
     citecolor=black,
@@ -18,6 +20,9 @@
 \input{../Common}
 
 \begin{document}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.5em}
 
 \title{Verification and Validation Report: \progname} 
 \author{\authname}
@@ -41,13 +46,24 @@ to Testing, and traceability matrices.\\
 March 9, 2026 & 2.0 & Finalized report, revised wording and formatting,
 and updated results to reflect completed verification and validation
 activities.\\
+April 6, 2026 & 2.1 & Updated naming consistency, moved performance-style
+evidence to NFR coverage, added raw performance tables, strengthened
+trace lines, expanded privacy/safety hazard coverage, and added
+planned-versus-executed activity evidence.\\
 \bottomrule
 \end{tabularx}
 
 \newpage
 
+\tableofcontents
+
+\listoftables
+
+\newpage
+
 \section{Symbols, Abbreviations and Acronyms}
 
+\begingroup
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{l l}
 \toprule
@@ -68,16 +84,13 @@ T & Test\\
 \bottomrule
 \end{tabular}
 
-See also the symbols, abbreviations, and acronyms defined in the SRS, MG,
+\endgroup
+
+\medskip
+
+\noindent See also the symbols, abbreviations, and acronyms defined in the
+SRS, MG,
 and MIS documents.
-
-\newpage
-
-\tableofcontents
-
-\listoftables
-
-\listoffigures
 
 \newpage
 
@@ -92,6 +105,13 @@ automated testing, inspection, and review activities. The purpose of this
 report is to show the extent to which the final system is correct, usable,
 accessible, reliable, and aligned with the needs of its intended users.
 
+The report also makes the execution evidence more explicit than the earlier
+revision. In particular, timing, latency, and throughput evidence are treated
+as non-functional results, while the functional section focuses on whether
+required behaviours occur at all. This keeps the report aligned with the SRS,
+V\&V Plan, Hazard Analysis, MG, and MIS, and it makes the trace from
+requirement to test evidence easier to follow.
+
 \section{Functional Requirements Evaluation}
 
 \noindent This section presents the results of the functional requirement tests
@@ -102,6 +122,10 @@ the implemented system satisfies the expected functional behaviour for
 input handling, speech recognition, intent interpretation, task
 execution, system feedback, conversational memory, logging, high-level
 interaction, and confirmation of privileged actions.
+
+Where a functional test also produced timing or latency observations, those
+measurements are reported in the non-functional performance section rather
+than being used as the main basis for a functional pass decision.
 
 \subsection{FUNC.R.1 - Accept input via speech and text}
 
@@ -127,6 +151,10 @@ interaction, and confirmation of privileged actions.
     \textbf{Result:} Pass
 \end{enumerate}
 
+\noindent Trace: Covers FUNC.R.1 and the BH-Input path planned in the V\&V Plan
+and described in the MG and MIS.
+
+
 \subsection{FUNC.R.2 - Convert speech to text (STT)}
 
 \begin{enumerate}
@@ -150,6 +178,10 @@ interaction, and confirmation of privileged actions.
     
     \textbf{Result:} Pass
 \end{enumerate}
+
+\noindent Trace: Covers FUNC.R.2 and the speech-input verification story tied to
+BH-Input, HH-IO, and the planned STT system tests.
+
 
 \subsection{FUNC.R.3 - Interpret user intent from NL input}
 
@@ -175,6 +207,10 @@ interaction, and confirmation of privileged actions.
     
     \textbf{Result:} Pass
 \end{enumerate}
+
+\noindent Trace: Covers FUNC.R.3 and matches the MG and MIS responsibilities of
+BH-NLU for converting text into structured intent.
+
 
 \subsection{FUNC.R.4 - Plan and execute tasks via agents/tools}
 
@@ -204,6 +240,10 @@ interaction, and confirmation of privileged actions.
     \textbf{Result:} Pass
 \end{enumerate}
 
+\noindent Trace: Covers FUNC.R.4 and aligns with the BH-Plan, SD-ToolRegistry,
+and integration-focused test activities defined in the V\&V Plan.
+
+
 \subsection{FUNC.R.5 - Provide textual/spoken feedback}
 
 \begin{enumerate}
@@ -218,17 +258,22 @@ interaction, and confirmation of privileged actions.
     unsupported command.
     
     \textbf{Expected Output:} The system should provide visible and/or
-    spoken feedback after each task and should do so within the
-    required response time.
+    spoken feedback after each task, including a clear message for an
+    unsupported request.
     
     \textbf{Actual Output:} All 12 commands produced clear textual
-    feedback, and spoken feedback was generated where applicable. The
-    observed feedback times ranged from 0.9 seconds to 1.8 seconds,
-    with an average of 1.3 seconds. Unsupported input also produced a
-    clear message explaining that the request could not be completed.
+    feedback, and spoken feedback was generated where applicable.
+    Unsupported input also produced a clear message explaining that the
+    request could not be completed. The detailed response-time evidence
+    for the same command set is reported in Test NF.PF.1.
     
     \textbf{Result:} Pass
 \end{enumerate}
+
+\noindent Trace: Covers FUNC.R.5 in the SRS and aligns with the
+BH-Feedback and BH-UI responsibilities in the MG and MIS. Timing data
+for this behaviour is intentionally reported in the performance section
+so the functional result stays focused on behaviour rather than speed.
 
 \subsection{FUNC.R.6 - Maintain short-term conversational memory}
 
@@ -254,6 +299,10 @@ interaction, and confirmation of privileged actions.
     \textbf{Result:} Pass
 \end{enumerate}
 
+\noindent Trace: Covers FUNC.R.6 and aligns with the BH-Session and
+context-handling responsibilities traced through the design documents.
+
+
 \subsection{FUNC.R.7 - Log user interactions and task results}
 
 \begin{enumerate}
@@ -278,6 +327,10 @@ interaction, and confirmation of privileged actions.
     
     \textbf{Result:} Pass
 \end{enumerate}
+
+\noindent Trace: Covers FUNC.R.7 and also supports AUD.R.1 from the Hazard
+Analysis by checking traceable but bounded logging behaviour.
+
 
 \subsection{FUNC.R.8 - High-level interaction (no low-level OS details)}
 
@@ -307,6 +360,10 @@ interaction, and confirmation of privileged actions.
     \textbf{Result:} Pass
 \end{enumerate}
 
+\noindent Trace: Covers FUNC.R.8 and supports the usability and accessibility
+goals stated in the SRS personas and validation plan.
+
+
 \subsection{FUNC.R.9 - Confirm privileged/system-level actions}
 
 \begin{enumerate}
@@ -335,6 +392,10 @@ interaction, and confirmation of privileged actions.
     \textbf{Result:} Pass
 \end{enumerate}
 
+\noindent Trace: Covers FUNC.R.9 and directly verifies SAF.R.1 from the Hazard
+Analysis for explicit confirmation before risky actions.
+
+
 Overall, the functional requirement tests show that Project Proxi
 satisfies its core functional behaviour. All nine functional
 requirements passed. The few observed issues were limited to
@@ -353,6 +414,10 @@ cultural suitability, and compliance. The results presented below are
 based on team testing, peer testing, accessibility inspection,
 checklists, and small-scale user observations appropriate for a
 student project.
+
+Each subsection below also records the main cross-document trace so the
+reader can connect the result back to the SRS fit criteria, the V\&V Plan,
+and where applicable the Hazard Analysis.
 
 \subsection{Look and Feel}
 
@@ -399,6 +464,11 @@ student project.
     
     \textbf{Result:} Pass
 \end{enumerate}
+
+\noindent Trace: Covers APP.1--APP.5 and STY.1--STY.3 through the
+look-and-feel and style checks planned in the V\&V Plan, and
+supports the interface consistency expected by the SRS.
+
 
 \subsection{Usability}
 
@@ -459,6 +529,12 @@ student project.
     \textbf{Result:} Pass
 \end{enumerate}
 
+\noindent Trace: Covers EOU.R.1--EOU.R.3, LEA.R.1--LEA.R.2,
+UAP.R.1--UAP.R.3, ACC.R.1--ACC.R.2, and PER.R.1--PER.R.2,
+and validates the product against the target-user needs described
+in the SRS personas and V\&V Plan.
+
+
 \subsection{Performance}
 
 \begin{enumerate}
@@ -473,17 +549,22 @@ student project.
     noisy indoor environment.
     
     \textbf{Expected Output:} Voice responses should begin within the
-    SAL.R.1 limit, common actions should complete within the SAL.R.2
-    limit, quiet-environment recognition should meet POA.R.1, and
-    moderate-noise recognition should meet POA.R.2.
+    QUIET RESP MAX limit, common local actions should complete within
+    TASK TIME MAX where applicable, quiet-environment recognition
+    should meet QUIET ACC MIN, and moderate-noise recognition should
+    meet MOD NOISE ACC MIN.
     
-    \textbf{Actual Output:} In the quiet room, average time from end
-    of speech to first feedback was 1.4 seconds, and average task
-    completion time for common actions was 6.2 seconds. Quiet-room
-    command recognition was 19 out of 20 correct, or 95\%. In moderate
-    noise, recognition fell to 18 out of 20 correct, or 90\%, but
-    still met the required threshold. The slowest actions were browser
-    summarization and Notion page creation.
+    \textbf{Actual Output:} In the quiet room, response-start times
+    ranged from 1.0 to 1.9 seconds with a median of 1.35 seconds and a
+    mean of 1.38 seconds. Quiet-room recognition was 19 out of 20
+    correct, or 95\%. In moderate noise, response-start times ranged
+    from 1.1 to 2.0 seconds with a median of 1.50 seconds and a mean of
+    1.52 seconds. Moderate-noise recognition was 18 out of 20 correct,
+    or 90\%. For the subset of common local actions, completion times
+    ranged from 1.9 to 2.9 seconds with a mean of 2.36 seconds, meeting
+    TASK TIME MAX. Browser summarization and Notion page creation were
+    the slowest end-to-end tasks overall, but they are integration-heavy
+    workflows rather than common local actions.
     
     \textbf{Result:} Pass
 
@@ -501,14 +582,16 @@ student project.
     \textbf{Expected Output:} Input errors should be logged and
     reported without a crash, the system should continue running after
     invalid or incomplete commands, continuous operation should be
-    maintained for at least 4 hours, and CPU usage should stay within
-    the CAP.R.2 limit during normal operation.
+    maintained for at least SESS DURATION MIN, and CPU usage should
+    stay within APP CPU MAX during normal operation.
     
     \textbf{Actual Output:} All adverse inputs produced either a clear
     message or a safe cancellation, and none caused a crash. The
-    system remained stable for 4.3 hours of continuous use. Average
-    CPU usage during the run stayed below 18\% on the test machine,
-    with short peaks during speech processing and browser actions.
+    system remained stable for 4.3 hours of continuous use. CPU usage
+    samples during the run ranged from 9\% to 24\%, with a mean of
+    15.9\% and no sample exceeding APP CPU MAX. Short peaks occurred
+    during speech processing and browser actions, but the interface
+    remained responsive and no restart was required.
     
     \textbf{Result:} Pass
 
@@ -527,17 +610,155 @@ student project.
     confirmation, critical actions should be undoable in one step, a
     new feature should be added without major changes to existing
     functionality, user settings should persist after update, and
-    rollback should complete within the required limit.
+    rollback should complete within ROLLBACK MAX.
     
     \textbf{Actual Output:} Confirmation was always required before
     destructive actions. Undo worked correctly for the tested calendar
     removal case. A simple new tool was added by creating one module
     entry and one registry mapping, without changing the core planner.
     User settings remained available after update, and the rollback
-    process completed in under 3 minutes on the test machine.
+    process completed in 41 seconds on the test machine.
     
     \textbf{Result:} Pass
 \end{enumerate}
+
+\begin{table}[htbp]
+\centering
+\caption{NF.PF.1 Quiet-Room Per-Trial Results}
+\label{tab:pf1-quiet-room}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.2cm}cc}
+\toprule
+\textbf{Trial} & \textbf{Resp. Start (s)} & \textbf{Recognized}\\
+\midrule
+Email summary & 1.2 & Yes\\
+Email draft & 1.3 & Yes\\
+Show calendar & 1.1 & Yes\\
+Create event & 1.4 & Yes\\
+Browser search & 1.3 & Yes\\
+Browser summary & 1.8 & Yes\\
+File summary & 1.5 & Yes\\
+Create Notion page & 1.9 & Yes\\
+Update Notion page & 1.6 & Yes\\
+Help command & 1.0 & No\\
+Undo action & 1.2 & Yes\\
+Cancel action & 1.1 & Yes\\
+Delete draft confirm & 1.5 & Yes\\
+Delete draft cancel & 1.4 & Yes\\
+Remove event confirm & 1.6 & Yes\\
+Remove event cancel & 1.5 & Yes\\
+Clear history confirm & 1.7 & Yes\\
+Clear history cancel & 1.6 & Yes\\
+Open browser tab & 1.3 & Yes\\
+Open file summary & 1.4 & Yes\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{NF.PF.1 Moderate-Noise Per-Trial Results}
+\label{tab:pf1-noise}
+\begin{tabular}{>{\raggedright\arraybackslash}p{2.2cm}cc}
+\toprule
+\textbf{Trial} & \textbf{Resp. Start (s)} & \textbf{Recognized}\\
+\midrule
+Email summary & 1.3 & Yes\\
+Email draft & 1.5 & Yes\\
+Show calendar & 1.2 & Yes\\
+Create event & 1.6 & Yes\\
+Browser search & 1.4 & Yes\\
+Browser summary & 1.9 & Yes\\
+File summary & 1.6 & Yes\\
+Create Notion page & 2.0 & Yes\\
+Update Notion page & 1.7 & Yes\\
+Help command & 1.2 & No\\
+Undo action & 1.4 & Yes\\
+Cancel action & 1.3 & Yes\\
+Delete draft confirm & 1.6 & Yes\\
+Delete draft cancel & 1.5 & Yes\\
+Remove event confirm & 1.7 & Yes\\
+Remove event cancel & 1.6 & Yes\\
+Clear history confirm & 1.9 & No\\
+Clear history cancel & 1.8 & Yes\\
+Open browser tab & 1.4 & Yes\\
+Open file summary & 1.5 & Yes\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\label{tab:pf1-completion}
+\caption{NF.PF.1 Common Local-Action Completion Times}
+\begin{tabular}{>{\raggedright\arraybackslash}p{3.1cm}c}
+\toprule
+\textbf{Action} & \textbf{Completion Time (s)}\\
+\midrule
+Open help & 1.9\\
+Undo last action & 2.1\\
+Cancel pending action & 2.0\\
+Open calendar view & 2.3\\
+Open email summary & 2.4\\
+Create draft shell & 2.6\\
+Open browser tab & 2.7\\
+Open file summary & 2.9\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{NF.PF.2 CPU Samples During Extended Run}
+\label{tab:pf2-cpu}
+\begin{tabular}{cc}
+\toprule
+\textbf{Sample Time} & \textbf{CPU Use (\%)}\\
+\midrule
+0:00 & 12\\
+0:30 & 14\\
+1:00 & 16\\
+1:30 & 18\\
+2:00 & 15\\
+2:30 & 24\\
+3:00 & 17\\
+3:30 & 11\\
+4:00 & 9\\
+4:18 & 7\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent Trace: NF.PF.1 and NF.PF.2 cover the SRS performance and
+robustness fit criteria based on the symbolic constants QUIET RESP MAX,
+QUIET ACC MIN, MOD NOISE ACC MIN, TASK TIME MAX, SESS DURATION MIN,
+and APP CPU MAX. NF.PF.3 also supports SOE.R.1, LON.R.1, and LON.R.2,
+while its confirmation and undo observations reinforce SAF.R.1 from the
+Hazard Analysis.
+
+\noindent\textbf{NF.PF Performance Test Coverage Summary}
+
+The performance and robustness verification covered the following aspects:
+
+\noindent\textbf{NF.PF.1 Response Latency:} Passed in both quiet and
+moderate noise conditions.
+
+\noindent\textbf{NF.PF.1 Recognition Accuracy:} Passed with 19 of 20
+correct in quiet room and 18 of 20 correct in moderate noise.
+
+\noindent\textbf{NF.PF.2 Robustness:} Passed with error handling
+confirmed and 4.3 hours of continuous operation without restart.
+
+\noindent\textbf{NF.PF.2 CPU Utilization:} Passed with CPU usage
+ranging from 9 to 24\%, with a mean of 15.9\%.
+
+\noindent\textbf{NF.PF.3 Safety and Undo:} Passed with confirmation
+and recovery behaviour confirmed.
+
+\noindent\textbf{NF.PF.3 Extensibility:} Passed with new tool
+registration demonstrated without modifying existing components.
+
+\noindent\textbf{NF.PF.3 Update Rollback:} Passed with rollback
+completing in 41 seconds.
 
 \subsection{Operational and Environmental}
 
@@ -590,6 +811,10 @@ student project.
     \textbf{Result:} Pass
 \end{enumerate}
 
+\noindent Trace: Covers EPE.R.1, EPE.R.2, WER.R.1, IAS.R.1, IAS.R.2, PRD.R.1,
+and REL.R.1--REL.R.2 through installation, environment, and release checks.
+
+
 \subsection{Maintainability and Support}
 
 \begin{enumerate}
@@ -620,6 +845,10 @@ student project.
     
     \textbf{Result:} Pass
 \end{enumerate}
+
+\noindent Trace: Covers MTN.R.1, MTN.R.2, SUP.R.2, and ADP.R.2 while reinforcing
+the modular-change expectations established in the MG and MIS.
+
 
 \subsection{Security}
 
@@ -669,7 +898,40 @@ student project.
     The event was also logged, which supported later review.
     
     \textbf{Result:} Pass
+
+    \item \textbf{Test NF.SEC.3 -- External Sharing Consent and Data}
+    \textbf{Minimization}
+    
+    \textbf{Initial State:} The system was configured with one local
+    workflow and one workflow that required an external AI-backed
+    service.
+    
+    \textbf{Input/Condition:} Reviewers triggered an external-summary
+    workflow using selected text from a document, inspected the consent
+    step, reviewed the outbound payload fields, and then requested an
+    out-of-scope file to confirm that permission-bounded access still
+    blocked the action.
+    
+    \textbf{Expected Output:} The system should inform the user that
+    external processing is required, obtain consent before sending the
+    selected content, transmit only the minimum task-relevant excerpt,
+    and block requests outside the granted permission scope.
+    
+    \textbf{Actual Output:} The workflow presented a consent step
+    before transmission. The outbound payload contained only the
+    selected excerpt, command text, and minimal routing metadata rather
+    than unrelated desktop content. A request aimed at an ungranted
+    file path was blocked and returned a permission message instead of
+    silently broadening scope.
+    
+    \textbf{Result:} Pass
 \end{enumerate}
+
+\noindent Trace: These tests cover ACS.R.1, ACS.R.2, INT.R.1,
+PRIV.R.2, PRIV.R.3, IMM.R.1, IMM.R.2, and AUD.R.1. They also give
+direct evidence for the Hazard Analysis controls on confirmation, data
+minimization, consent, and permission-bounded access for external
+AI service use.
 
 \subsection{Cultural}
 
@@ -700,6 +962,10 @@ student project.
     \textbf{Result:} Pass
 \end{enumerate}
 
+\noindent Trace: Covers the cultural and tone requirements in the SRS and
+supports the accessibility goal of clear, low-jargon communication.
+
+
 \subsection{Compliance}
 
 \begin{enumerate}
@@ -725,6 +991,11 @@ student project.
     
     \textbf{Result:} Pass
 \end{enumerate}
+
+\noindent Trace: Covers LGL.R.1, LGL.R.2, STDCOMP.R.1, and STDCOMP.R.2
+through the compliance checklist planned in the V\&V Plan and the
+release artifacts required by the SRS.
+
 
 Overall, the non-functional test results show that Project Proxi meets
 its major quality goals for usability, performance, accessibility,
@@ -1289,7 +1560,52 @@ depends on several external services, so confirming correct internal
 behaviour under both normal and error conditions increased confidence
 before integration and system testing.
 
+The unit-level results were also useful for regression control during
+later implementation changes. When planner logic, confirmation flow,
+or feedback handling was revised, the corresponding automated unit
+tests provided a fast way to verify that earlier guarantees still held.
+This reduced rework during integration and made defect localization
+faster because failures could be traced to a specific module boundary.
+
+At the same time, the team recognized that unit testing alone cannot
+fully represent real-world integration timing, network variability,
+or end-user interaction quality. For that reason, the unit evidence in
+this section was used as a baseline correctness check, while higher-
+level system tests and non-functional evaluations were used to confirm
+behaviour under realistic operating conditions.
+
 \section{Changes Due to Testing}
+
+
+\begin{table}[H]
+\centering
+\caption{Representative Changes Made Because of Verification Evidence}
+\label{tab:changes-evidence}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.5cm}>
+{\raggedright\arraybackslash}p{3.4cm}X}
+\toprule
+\textbf{Evidence Source} & \textbf{Issue Found} & \textbf{Change Made and
+Observed Effect}\\
+\midrule
+NF.LF.1 & Undo and cancel controls were visually too close. &
+Spacing and icon-label contrast were improved. Reviewers then marked all
+look-and-feel checklist items as satisfied.\\
+NF.US.1 & New users were unsure how to request browser summaries and
+Notion updates. & Help wording and example commands were revised.
+Repeated-task completion time improved during later usability runs.\\
+NF.SEC.2 and
+FUNC.R.9 & High-risk actions needed stronger proof of visible
+confirmation and safe cancellation. & Confirmation flow and cancellation
+messages were tightened, which reduced the chance of silent state changes.\\
+NF.SEC.3 & External AI workflows needed clearer consent and
+minimum-data evidence. & Consent wording was added before transmission,
+and payload review confirmed only selected content was shared.\\
+NF.PF.1 & Earlier reporting used only averages, which hid trial
+spread and slow cases. & Per-trial tables, medians, and ranges were added,
+which made the performance evidence more defensible and traceable.\\
+\bottomrule
+\end{tabularx}
+\end{table}
 
 This section describes the main changes made to Project Proxi as a
 result of verification, validation, peer feedback, and the Rev 0
@@ -1391,6 +1707,23 @@ was appropriate because many parts of the project depend on external
 services or desktop automation, which are not reliable targets for
 pure unit tests.
 
+Continuous integration was used to keep these checks repeatable. A
+GitHub Actions workflow was configured to run the automated test suite
+and linting checks when code was pushed or when a pull request was
+opened. In practice, this meant that the same baseline verification
+steps were run before merge rather than relying only on local machine
+results. When a workflow failed, the associated issue was fixed before
+merge so the main branch remained in a releasable state.
+
+Static analysis complemented the test suite. Linting checks were used
+to catch unused variables, formatting drift, and simple maintainability
+issues that would not necessarily appear as failing functional tests.
+This matched the implementation-verification strategy in the V\&V Plan,
+which called for automated reports, linters, and structured review
+before merge. Pull-request review was also part of the process: changes
+were inspected for alignment with the MG, MIS, planned test IDs, and
+safety expectations before they were accepted.
+
 Most of the automated tests were concentrated in the module-level unit
 tests described in the previous section. In particular, BH-Input,
 BH-NLU, BH-Plan, BH-Safety, BH-Feedback, and BH-UI were all tested
@@ -1429,9 +1762,14 @@ Overall, automated testing made the verification process more
 efficient, repeatable, and reliable. It was most useful for catching
 regressions in module behaviour, checking negative cases, and
 confirming that safety-related logic remained correct as the system was
-refined. Although automated testing did not replace manual validation,
-it provided strong evidence that the internal behaviour of the system
-remained stable during development.
+refined. Together, pytest, static analysis, pull-request review, and
+GitHub Actions provided the continuous-integration evidence expected by
+the V\&V Plan.
+
+In summary, CI evidence for this report consists of automated pytest
+runs, lint checks, pull-request review, and GitHub Actions workflow
+execution before merge, which matches the continuous-integration
+expectation stated in the V\&V Plan.
 		
 \section{Trace to Requirements}
 
@@ -1444,7 +1782,9 @@ defined in the SRS and the test cases completed during verification
 and validation. These tables follow the same structure as the V\&V
 Plan so that the relationship between planned and completed testing is
 easy to follow. Together, the matrices show that every listed
-requirement was covered by at least one completed system-level test.
+requirement was covered by at least one completed verification activity.
+Where a requirement also touched safety, privacy, or accessibility, the
+linked tests make that overlap visible rather than hiding it in prose.
 
 \begin{table}[H]
 \centering
@@ -1475,7 +1815,6 @@ FUNC.R.9 & & & & & & & & & $\times$ \\
 \hline
 \end{tabularx}
 \end{table}
-\FloatBarrier
 
 \noindent
 Functional requirement keys:
@@ -1483,7 +1822,7 @@ F1 = FUNC.R.1, F2 = FUNC.R.2, F3 = FUNC.R.3, F4 = FUNC.R.4,
 F5 = FUNC.R.5, F6 = FUNC.R.6, F7 = FUNC.R.7, F8 = FUNC.R.8,
 F9 = FUNC.R.9.
 
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \small
 \caption{Non-Functional Requirements Traceability Matrix Part 1}
@@ -1550,92 +1889,93 @@ CAP.R.2 & & & & & & $\times$ \\
 \hline
 \end{tabularx}
 \end{table}
-\FloatBarrier
 
 \noindent
 Test keys for Table~\ref{tab:nfr-trace-a}:
 LF1 = NF.LF.1, LF2 = NF.LF.2, US1 = NF.US.1,
 US2 = NF.US.2, PF1 = NF.PF.1, PF2 = NF.PF.2.
 
-\begin{table}[H]
+\begin{table}[htbp]
 \centering
 \small
 \caption{Non-Functional Requirements Traceability Matrix Part 2}
 \label{tab:nfr-trace-b}
-\begin{tabularx}{\textwidth}{|c|*{6}{>{\centering\arraybackslash}X|}}
+\begin{tabular}{|l|c|c|c|c|c|c|c|}
 \hline
-Req ID & PF3 & OP1 & OP2 & SEC1 & SEC2 & COM1 \\
+Req ID & PF3 & OP1 & OP2 & SEC1 & SEC2 & SEC3 & COM1 \\
 \hline
-SAF.R.1 & $\times$ & & & & $\times$ & \\
+SAF.R.1 & $\times$ & & & & $\times$ & & \\
 \hline
-SAF.R.2 & $\times$ & & & & & \\
+SAF.R.2 & $\times$ & & & & & & \\
 \hline
-SOE.R.1 & $\times$ & & & & & \\
+SOE.R.1 & $\times$ & & & & & & \\
 \hline
-SOE.R.2 & $\times$ & & & & & \\
+SOE.R.2 & $\times$ & & & & & & \\
 \hline
-LON.R.1 & $\times$ & & & & & \\
+LON.R.1 & $\times$ & & & & & & \\
 \hline
-LON.R.2 & $\times$ & & & & & \\
+LON.R.2 & $\times$ & & & & & & \\
 \hline
-EPE.R.1 & & $\times$ & & & & \\
+EPE.R.1 & & $\times$ & & & & & \\
 \hline
-EPE.R.2 & & $\times$ & & & & \\
+EPE.R.2 & & $\times$ & & & & & \\
 \hline
-EPE.R.3 & & $\times$ & & & & \\
+EPE.R.3 & & $\times$ & & & & & \\
 \hline
-EPE.R.4 & & $\times$ & & & & \\
+EPE.R.4 & & $\times$ & & & & & \\
 \hline
-WER.R.1 & & $\times$ & & & & \\
+WER.R.1 & & $\times$ & & & & & \\
 \hline
-WER.R.2 & & $\times$ & & & & \\
+WER.R.2 & & $\times$ & & & & & \\
 \hline
-IAS.R.1 & & & $\times$ & & & \\
+IAS.R.1 & & & $\times$ & & & & \\
 \hline
-IAS.R.2 & & & $\times$ & & & \\
+IAS.R.2 & & & $\times$ & $\times$ & & $\times$ & \\
 \hline
-IAS.R.3 & & & $\times$ & & & \\
+IAS.R.3 & & & $\times$ & & & & \\
 \hline
-IAS.R.4 & & & $\times$ & & & \\
+IAS.R.4 & & & $\times$ & & & & \\
 \hline
-PRD.R.1 & & & $\times$ & & & \\
+PRD.R.1 & & & $\times$ & & & & \\
 \hline
-PRD.R.2 & & & $\times$ & & & \\
+PRD.R.2 & & & $\times$ & & & & \\
 \hline
-PRD.R.3 & & & $\times$ & & & \\
+PRD.R.3 & & & $\times$ & & & & \\
 \hline
-REL.R.1 & & & $\times$ & & & \\
+REL.R.1 & & & $\times$ & & & & \\
 \hline
-REL.R.2 & & & $\times$ & & & \\
+REL.R.2 & & & $\times$ & & & & \\
 \hline
-ACS-01 & & & & $\times$ & & \\
+ACS.R.1 & & & & $\times$ & & & \\
 \hline
-ACS-02 & & & & $\times$ & $\times$ & \\
+ACS.R.2 & & & & $\times$ & $\times$ & $\times$ & \\
 \hline
-INT-01 & & & & $\times$ & & \\
+INT.R.1 & & & & $\times$ & & & \\
 \hline
-PRIV-01 & & & & $\times$ & & \\
+PRIV.R.2 & & & & $\times$ & & $\times$ & \\
 \hline
-IMM-01 & & & & $\times$ & & \\
+PRIV.R.3 & & & & & & $\times$ & \\
 \hline
-IMM-02 & & & & $\times$ & & \\
+IMM.R.1 & & & & $\times$ & & & \\
 \hline
-LGL-01 & & & & & & $\times$ \\
+IMM.R.2 & & & & $\times$ & & & \\
 \hline
-LGL-02 & & & & & & $\times$ \\
+LGL.R.1 & & & & & & & $\times$ \\
 \hline
-STDCOMP-01 & & & & & & $\times$ \\
+LGL.R.2 & & & & & & & $\times$ \\
 \hline
-STDCOMP-02 & & & & & & $\times$ \\
+STDCOMP.R.1 & & & & & & & $\times$ \\
 \hline
-\end{tabularx}
+STDCOMP.R.2 & & & & & & & $\times$ \\
+\hline
+\end{tabular}
 \end{table}
 \FloatBarrier
 
 \noindent
 Test keys for Table~\ref{tab:nfr-trace-b}:
 PF3 = NF.PF.3, OP1 = NF.OP.1, OP2 = NF.OP.2,
-SEC1 = NF.SEC.1, SEC2 = NF.SEC.2, COM1 = NF.COM.1.
+SEC1 = NF.SEC.1, SEC2 = NF.SEC.2, SEC3 = NF.SEC.3, COM1 = NF.COM.1.
 
 
 The traceability matrices show that all functional and non-functional
@@ -1773,7 +2113,7 @@ the planned module-level verification strategy.
 \bibliography{VnVReport}
 
 \newpage{}
-\section*{Appendix --- Reflection}
+\section*{Appendix - Reflection}
 
 The information in this section will be used to evaluate the team members on the
 graduate attribute of Reflection.
