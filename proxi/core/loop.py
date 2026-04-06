@@ -20,6 +20,18 @@ from proxi.tools.registry import ToolRegistry
 
 logger = get_logger(__name__)
 
+_MEMORY_NUDGE = (
+    "[MEMORY NUDGE] Briefly reflect on recent activity: "
+    "are there reusable workflows worth saving as a skill? "
+    "Any user preferences worth updating? "
+    "Use save_skill or update_user_model if yes — otherwise continue without comment."
+)
+
+_SKILL_HINT = (
+    "[SKILL HINT] This turn involved many tool calls — if the workflow is reusable, "
+    "consider calling save_skill before responding."
+)
+
 # Tools that are blocked while plan_mode is active.
 # manage_plan is intentionally omitted — that's how the agent writes the plan.
 _PLAN_MODE_WRITE_BLOCKED_TOOLS: frozenset[str] = frozenset({
@@ -206,6 +218,20 @@ class AgentLoop:
                                         }
                                     )
 
+                        # Inject memory nudge (transient — not persisted to history)
+                        _nudge_interval = int(os.getenv("PROXI_MEMORY_NUDGE_INTERVAL", "10"))
+                        _mem_nudge_injected = False
+                        if (
+                            _nudge_interval > 0
+                            and state.current_turn > 0
+                            and state.current_turn % _nudge_interval == 0
+                            and self.tool_registry.has_tool("save_skill")
+                        ):
+                            state.history.append(
+                                Message(role="user", content=_MEMORY_NUDGE)
+                            )
+                            _mem_nudge_injected = True
+
                         # REASON → DECIDE
                         turn.status = TurnStatus.DECIDING
                         decide_start_ns = now_ns()
@@ -230,6 +256,10 @@ class AgentLoop:
                                 }
                             )
                         decide_ms = elapsed_ms(decide_start_ns)
+
+                        # Remove transient nudge so it is not in history going forward
+                        if _mem_nudge_injected and state.history and state.history[-1].content == _MEMORY_NUDGE:
+                            state.history.pop()
 
                         # Token accounting:
                         # - total_tokens tracks spend (input + output)
@@ -455,6 +485,26 @@ class AgentLoop:
                                     )
                                 )
 
+                        # Inject skill hint if many tool calls were made this turn (transient)
+                        _skill_hint_threshold = int(
+                            os.getenv("PROXI_MEMORY_SKILL_HINT_THRESHOLD", "6")
+                        )
+                        _skill_hint_injected = False
+                        if (
+                            decision.type == DecisionType.TOOL_CALL
+                            and self.tool_registry.has_tool("save_skill")
+                        ):
+                            _turn_tool_calls = sum(
+                                len(m.tool_calls or [])
+                                for m in state.history
+                                if m.role == "assistant" and m.tool_calls
+                            )
+                            if _turn_tool_calls >= _skill_hint_threshold:
+                                state.history.append(
+                                    Message(role="user", content=_SKILL_HINT)
+                                )
+                                _skill_hint_injected = True
+
                         # REFLECT
                         turn.status = TurnStatus.REFLECTING
                         reflect_start_ns = now_ns()
@@ -464,6 +514,10 @@ class AgentLoop:
                             turn.reflection = reflection
                             self.logger.debug(
                                 "reflection", turn=state.current_turn, reflection=reflection)
+
+                        # Remove transient skill hint
+                        if _skill_hint_injected and state.history and state.history[-1].content == _SKILL_HINT:
+                            state.history.pop()
 
                         turn.status = TurnStatus.COMPLETED
 

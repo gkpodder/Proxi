@@ -12,6 +12,7 @@ from proxi.agents.summarizer import SummarizerAgent
 from proxi.core.loop import AgentLoop
 from proxi.llm.anthropic import AnthropicClient
 from proxi.llm.openai import OpenAIClient
+from proxi.llm.vllm import VLLMClient
 from proxi.mcp.adapters import MCPAdapter
 from proxi.mcp.client import MCPClient
 from proxi.observability.logging import get_logger, init_log_manager
@@ -26,22 +27,22 @@ from proxi.workspace import WorkspaceManager
 logger = get_logger(__name__)
 
 
-DEFAULT_MCP_CONFIG: dict[str, Any] = {
-    "mcpServers": {
-        "proxi": {
-            "command": "uv",
-            "args": ["run", "--", "python", "-m", "proxi.mcp.servers.server"],
-            "description": "Default local Proxi MCP server",
-        }
+DEFAULT_INTEGRATIONS_CONFIG: dict[str, Any] = {
+    "integrations": {
+        "gmail": {"type": "cli", "defer_loading": True, "always_load": ["read_emails"]},
+        "google_calendar": {"type": "cli", "defer_loading": True, "always_load": ["calendar_list_events"]},
+        "spotify": {"type": "cli", "defer_loading": True, "always_load": []},
+        "notion": {"type": "cli", "defer_loading": True, "always_load": []},
+        "obsidian": {"type": "cli", "defer_loading": True, "always_load": []},
+        "weather": {"type": "cli", "defer_loading": False, "always_load": ["get_weather"]},
     },
-    "imports": [],
 }
 
 
 def create_llm_client(
     provider: str = "openai",
     model: str | None = None,
-) -> OpenAIClient | AnthropicClient:
+) -> OpenAIClient | AnthropicClient | VLLMClient:
     """Create an LLM client based on provider."""
     if provider.lower() == "anthropic":
         api_key = get_key_value("ANTHROPIC_API_KEY")
@@ -50,6 +51,14 @@ def create_llm_client(
         return AnthropicClient(
             api_key=api_key,
             model=(model or "claude-3-5-sonnet-20241022"),
+        )
+    elif provider.lower() == "vllm":
+        base_url = get_key_value("VLLM_BASE_URL") or "http://localhost:8000/v1"
+        api_key = get_key_value("VLLM_API_KEY")  # optional — vLLM may run without auth
+        return VLLMClient(
+            api_key=api_key or None,
+            base_url=base_url,
+            model=(model or "local"),
         )
     else:
         api_key = get_key_value("OPENAI_API_KEY")
@@ -83,7 +92,7 @@ def setup_tools(working_directory: Path | None = None) -> ToolRegistry:
     return registry
 
 
-def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentManager:
+def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient | VLLMClient) -> SubAgentManager:
     """Set up the sub-agent registry and manager."""
     registry = SubAgentRegistry()
 
@@ -95,125 +104,162 @@ def setup_sub_agents(llm_client: OpenAIClient | AnthropicClient) -> SubAgentMana
     return manager
 
 
-def auto_load_cli_tools(tool_registry: ToolRegistry) -> None:
-    """Load CLI tools from config/mcp.json cliTools section into the tool registry."""
+def build_cli_tool_lists(
+    *,
+    config: dict[str, Any] | None = None,
+    enabled_integration_names: set[str] | None = None,
+    db_path: str | Path | None = None,
+) -> tuple[list[Any], list[Any]]:
+    """Build live and deferred CLI tool instances from integrations.json + key store.
+
+    Integration-backed tools are omitted when the integration is disabled in the key
+    store, missing from config, or not of type ``cli``. Core tools (no
+    ``integration_name``) follow each class's ``defer_loading`` flag.
+    """
+    from proxi.security.key_store import get_enabled_integrations
     from proxi.tools.cli_tool import CLI_TOOLS
 
-    config = load_mcp_config()
-    cli_config = config.get("cliTools", {})
-    defer_by_default = cli_config.get("defer_loading", True)
-    always_load = set(cli_config.get("always_load", []))
+    if config is None:
+        config = load_integrations_config()
+    integrations = config.get("integrations", {})
+    if enabled_integration_names is None:
+        enabled_integration_names = set(get_enabled_integrations(db_path))
+
+    live: list[Any] = []
+    deferred: list[Any] = []
+
     for tool_class in CLI_TOOLS:
-        tool = tool_class()
-        if not defer_by_default or tool.name in always_load:
-            tool_registry.register(tool)
+        tool = tool_class()  # type: ignore[call-arg]
+        integration_name = getattr(tool_class, "integration_name", None)
+
+        if integration_name is None:
+            if tool.defer_loading:
+                deferred.append(tool)
+                logger.info("cli_tool_deferred", tool=tool.name)
+            else:
+                live.append(tool)
+                logger.info("cli_tool_registered", tool=tool.name)
+            continue
+
+        if integration_name not in integrations:
+            logger.info(
+                "cli_tool_skipped_no_config",
+                tool=tool.name,
+                integration=integration_name,
+            )
+            continue
+
+        if integration_name not in enabled_integration_names:
+            logger.info(
+                "cli_tool_skipped_disabled",
+                tool=tool.name,
+                integration=integration_name,
+            )
+            continue
+
+        int_cfg = integrations[integration_name]
+        if int_cfg.get("type", "cli") != "cli":
+            logger.info(
+                "cli_tool_skipped_wrong_type",
+                tool=tool.name,
+                integration=integration_name,
+            )
+            continue
+
+        defer = bool(int_cfg.get("defer_loading", True))
+        int_always = set(int_cfg.get("always_load", []))
+        if not defer or tool.name in int_always:
+            live.append(tool)
             logger.info("cli_tool_registered", tool=tool.name)
         else:
-            tool_registry.register_deferred(tool)
+            deferred.append(tool)
             logger.info("cli_tool_deferred", tool=tool.name)
+
+    return live, deferred
+
+
+def auto_load_cli_tools(
+    tool_registry: ToolRegistry, db_path: str | Path | None = None
+) -> None:
+    """Load CLI tools from config/integrations.json into the tool registry."""
+    live, deferred = build_cli_tool_lists(db_path=db_path)
+    for tool in live:
+        tool_registry.register(tool)
+    for tool in deferred:
+        tool_registry.register_deferred(tool)
 
 
 async def auto_load_mcp_servers(tool_registry: ToolRegistry) -> list[MCPAdapter]:
-    """Auto-load only enabled MCP servers from DB and MCP config.
+    """Auto-load MCP-type integrations from config/integrations.json.
 
     Returns list of loaded adapters for cleanup.
     """
-    from proxi.security.key_store import get_enabled_mcps
+    from proxi.security.key_store import get_enabled_integrations
 
-    config = load_mcp_config()
-    mcp_servers = config.get("mcpServers", {})
-    enabled_mcp_names = get_enabled_mcps()
+    config = load_integrations_config()
+    integrations = config.get("integrations", {})
+    enabled_names = get_enabled_integrations()
     loaded_adapters = []
-    
-    for server_name in mcp_servers:
-        # Skip MCPs not in enabled list
-        if server_name not in enabled_mcp_names:
-            logger.info("mcp_server_skipped_not_enabled", server=server_name)
+
+    for integration_name, entry in integrations.items():
+        if entry.get("type") != "mcp":
+            continue
+        if integration_name not in enabled_names:
+            logger.info("mcp_integration_skipped_not_enabled", integration=integration_name)
             continue
 
-        defer_server = bool(mcp_servers[server_name].get("defer_loading", False))
-        always_load: set[str] = set(mcp_servers[server_name].get("always_load", []))
+        command = entry.get("command")
+        args = entry.get("args", [])
+        defer_server = bool(entry.get("defer_loading", False))
+        always_load: set[str] = set(entry.get("always_load", []))
+
+        if not command:
+            logger.error("mcp_integration_invalid_config", integration=integration_name)
+            continue
 
         try:
-            logger.info("auto_loading_mcp_server", server=server_name)
-            adapter = await setup_mcp_from_config(server_name)
-            if adapter:
-                mcp_tools = await adapter.get_tools()
-                for tool in mcp_tools:
-                    # MCPToolAdapter.mcp_tool_name is the original unprefixed name
-                    unprefixed = getattr(tool, "mcp_tool_name", tool.name)
-                    if defer_server and unprefixed not in always_load:
-                        tool_registry.register_deferred(tool)
-                        logger.info("mcp_tool_deferred", server=server_name, tool=tool.name)
-                    else:
-                        tool_registry.register(tool)
-                        logger.info("mcp_tool_registered", server=server_name, tool=tool.name)
-                loaded_adapters.append(adapter)
+            logger.info("auto_loading_mcp_integration", integration=integration_name)
+            full_command = [command] + args
+            mcp_client = MCPClient(server_command=full_command)
+            adapter = MCPAdapter(mcp_client)
+            await adapter.initialize()
+            mcp_tools = await adapter.get_tools()
+            for tool in mcp_tools:
+                unprefixed = getattr(tool, "mcp_tool_name", tool.name)
+                if defer_server and unprefixed not in always_load:
+                    tool_registry.register_deferred(tool)
+                    logger.info("mcp_tool_deferred", integration=integration_name, tool=tool.name)
+                else:
+                    tool_registry.register(tool)
+                    logger.info("mcp_tool_registered", integration=integration_name, tool=tool.name)
+            loaded_adapters.append(adapter)
         except Exception as e:
-            logger.warning("auto_load_mcp_server_error", server=server_name, error=str(e))
-    
+            logger.warning("auto_load_mcp_integration_error", integration=integration_name, error=str(e))
+
     return loaded_adapters
 
 
-def load_mcp_config() -> dict[str, Any]:
-    """Load MCP configuration from config/mcp.json.
+def load_integrations_config() -> dict[str, Any]:
+    """Load integration configuration from config/integrations.json.
 
-    Falls back to a built-in default when the file is absent, so MCP auto-load
+    Falls back to a built-in default when the file is absent, so auto-load
     behavior remains stable without requiring a repo-level config file.
     """
-    config_path = Path("config/mcp.json")
+    config_path = Path("config/integrations.json")
     if config_path.exists():
         try:
             with open(config_path) as f:
                 return json.load(f)
         except Exception as e:
-            logger.warning("mcp_config_load_error", error=str(e))
-    logger.info("mcp_config_missing_using_defaults", path=str(config_path))
-    return deepcopy(DEFAULT_MCP_CONFIG)
-
-
-async def setup_mcp_from_config(server_name: str) -> MCPAdapter | None:
-    """Set up MCP adapter from MCP configuration."""
-    config = load_mcp_config()
-    mcp_servers = config.get("mcpServers", {})
-    
-    if server_name not in mcp_servers:
-        logger.warning("mcp_server_not_found_in_config", server=server_name)
-        return None
-    
-    server_config = mcp_servers[server_name]
-    command = server_config.get("command")
-    args = server_config.get("args", [])
-    
-    if not command:
-        logger.error("mcp_server_invalid_config", server=server_name)
-        return None
-    
-    # Build full command
-    full_command = [command] + args
-    
-    mcp_client = MCPClient(server_command=full_command)
-    adapter = MCPAdapter(mcp_client)
-    
-    try:
-        await adapter.initialize()
-        logger.info("mcp_server_initialized_from_config", server=server_name)
-        return adapter
-    except Exception as e:
-        logger.error("mcp_setup_error", server=server_name, error=str(e), exc_info=True)
-        return None
+            logger.warning("integrations_config_load_error", error=str(e))
+    logger.info("integrations_config_missing_using_defaults", path=str(config_path))
+    return deepcopy(DEFAULT_INTEGRATIONS_CONFIG)
 
 
 async def setup_mcp(mcp_server: str | None = None) -> MCPAdapter | None:
-    """Set up MCP adapter if MCP server is specified."""
+    """Set up an ad-hoc MCP adapter from a server command string."""
     if not mcp_server:
         return None
-
-    # Check if it's an MCP config server shortcut (e.g., "proxi")
-    config = load_mcp_config()
-    mcp_servers = config.get("mcpServers", {})
-    if mcp_server in mcp_servers:
-        return await setup_mcp_from_config(mcp_server)
 
     # Parse MCP server command
     # Format: "command:arg1:arg2" or just "command"
@@ -234,7 +280,6 @@ async def setup_mcp(mcp_server: str | None = None) -> MCPAdapter | None:
 
     try:
         await adapter.initialize()
-        # Load MCP tools into tool registry
         return adapter
     except Exception as e:
         logger.error("mcp_setup_error", error=str(e), exc_info=True)
@@ -403,10 +448,9 @@ async def main():
         # Attach working dir to workspace config so tools and prompts can reference it
         workspace_config.curr_working_dir = str(working_dir)
 
-        # Set up MCP adapters (auto-load by default from MCP config)
+        # Set up MCP adapters (auto-load MCP-type integrations from integrations config)
         if not args.no_mcp:
-            # Auto-load all configured MCP servers from MCP config
-            logger.info("auto_loading_mcp_servers")
+            logger.info("auto_loading_mcp_integrations")
             mcp_adapters = await auto_load_mcp_servers(tool_registry)
 
         # Set up explicit MCP server if specified

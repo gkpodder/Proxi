@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
@@ -14,6 +15,131 @@ from proxi.gateway.lanes.budget import BudgetExceeded, LaneBudget
 from proxi.observability.logging import get_logger
 
 logger = get_logger(__name__)
+
+_SUMMARIZER_PROMPT = """\
+Summarize the following conversation in ~200 words. Focus on:
+- What the user asked for
+- What was accomplished (key actions, files changed, decisions made)
+- Any errors and how they were resolved
+- Useful facts for future reference
+
+Also output a JSON array of 3-5 topic tags on the last line prefixed with TAGS:
+Example last line: TAGS: ["docker", "deployment", "debugging"]
+
+Conversation:
+{transcript}
+"""
+
+
+_CHEAP_MODELS: dict[str, str] = {
+    "anthropic": "claude-haiku-4-5-20251001",
+    "openai": "gpt-4o-mini",
+}
+
+
+def _build_summarizer_client(llm_client: Any) -> Any:
+    """Return a cheap LLM client for session summarization.
+
+    Priority:
+    1. ``PROXI_MEMORY_SUMMARIZER_MODEL`` env var (explicit override).
+    2. Cheapest model for the detected provider (anthropic → Haiku, openai → gpt-4o-mini).
+    3. Fall back to *llm_client* itself (covers vllm / unknown providers).
+    """
+    env_model = os.environ.get("PROXI_MEMORY_SUMMARIZER_MODEL", "").strip()
+    cls_name = type(llm_client).__name__  # "AnthropicClient" | "OpenAIClient" | other
+
+    if "Anthropic" in cls_name:
+        provider = "anthropic"
+    elif "OpenAI" in cls_name:
+        provider = "openai"
+    else:
+        # Unknown provider (vllm, custom) — reuse the existing client as-is.
+        return llm_client
+
+    target_model = env_model or _CHEAP_MODELS[provider]
+
+    # If the current client is already using the target model, reuse it.
+    current_model = getattr(llm_client, "model", None)
+    if current_model == target_model:
+        return llm_client
+
+    try:
+        from proxi.cli.main import create_llm_client
+        return create_llm_client(provider=provider, model=target_model)
+    except Exception:
+        # API key missing or other setup error — fall back to the main client.
+        return llm_client
+
+
+async def _summarize_session(
+    agent_id: str,
+    session_id: str,
+    history: list[Any],
+    memory_manager: Any,
+    llm_client: Any,
+) -> None:
+    """Background task: summarize a completed session and store in episodic memory."""
+    # Only summarize sessions with meaningful content (at least 3 user turns)
+    user_msgs = [m for m in history if getattr(m, "role", None) == "user"]
+    if len(user_msgs) < 3:
+        return
+
+    # Build a compact transcript (skip large tool results)
+    lines: list[str] = []
+    for msg in history:
+        role = getattr(msg, "role", "")
+        content = getattr(msg, "content", None) or ""
+        if role in ("user", "assistant") and content:
+            lines.append(f"{role.upper()}: {content[:500]}")
+        elif role == "tool" and content:
+            lines.append(f"TOOL RESULT: {content[:200]}")
+    transcript = "\n".join(lines)[:6000]  # keep within cheap model's context
+
+    prompt = _SUMMARIZER_PROMPT.format(transcript=transcript)
+    try:
+        summarizer_client = _build_summarizer_client(llm_client)
+        from proxi.core.state import Message as _Message
+        resp = await summarizer_client.generate(
+            messages=[_Message(role="user", content=prompt)],
+        )
+        raw = ""
+        if hasattr(resp, "content"):
+            raw = resp.content or ""
+        elif isinstance(resp, dict):
+            raw = resp.get("content", "") or ""
+        elif isinstance(resp, str):
+            raw = resp
+
+        # Extract tags from last line
+        import json as _json
+        tags: list[str] = []
+        summary_lines = raw.strip().splitlines()
+        if summary_lines and summary_lines[-1].startswith("TAGS:"):
+            tag_str = summary_lines[-1][5:].strip()
+            try:
+                tags = _json.loads(tag_str)
+            except Exception:
+                tags = []
+            summary_lines = summary_lines[:-1]
+        summary = "\n".join(summary_lines).strip()
+
+        from proxi.memory.schema import EpisodeSummary
+        episode = EpisodeSummary(
+            agent_id=agent_id,
+            session_id=session_id,
+            summary=summary,
+            full_text=transcript,
+            tags=tags,
+        )
+        await memory_manager.save_episode(episode)
+        logger.info(
+            "session_summarized",
+            agent_id=agent_id,
+            session_id=session_id,
+            tags=tags,
+        )
+    except Exception as exc:
+        logger.warning("session_summarization_failed", error=str(exc))
 
 
 def _should_emit_inbound_turn_header(event: GatewayEvent) -> bool:
@@ -29,20 +155,27 @@ def _should_emit_inbound_turn_header(event: GatewayEvent) -> bool:
 
 
 class _SseEmitter:
-    """Bridge emitter that forwards messages to an ``HttpSseReplyChannel``."""
+    """Bridge emitter that forwards messages to all attached ``HttpSseReplyChannel`` instances."""
 
-    def __init__(self, channel: Any, *, tui_abortable: bool = False) -> None:
-        self._channel = channel
+    def __init__(self, channels: dict[str, Any], *, tui_abortable: bool = False, source_id: str = "", source_type: str = "") -> None:
+        self._channels = channels
         self._tui_abortable = tui_abortable
+        self._source_id = source_id
+        self._source_type = source_type
 
     def emit(self, msg: dict[str, Any]) -> None:
-        try:
-            payload = dict(msg)
-            if payload.get("type") == "status_update":
-                payload["tui_abortable"] = self._tui_abortable
-            self._channel._queue.put_nowait(payload)
-        except Exception:
-            pass
+        payload = dict(msg)
+        if payload.get("type") == "status_update":
+            payload["tui_abortable"] = self._tui_abortable
+        if self._source_id:
+            payload.setdefault("source_id", self._source_id)
+        if self._source_type:
+            payload.setdefault("source_type", self._source_type)
+        for channel in self._channels.values():
+            try:
+                channel._queue.put_nowait(payload)
+            except Exception:
+                pass
 
 
 @dataclass
@@ -62,8 +195,8 @@ class AgentLane:
     _create_loop: Any = field(default=None, repr=False)  # factory callback
     _seq: int = field(default=0, repr=False)  # tie-breaker for priority queue
 
-    # Active SSE channel for this lane (set by stream endpoint)
-    _sse_channel: Any = field(default=None, repr=False)
+    # Active SSE subscribers for this lane (set by stream endpoint, keyed by subscriber_id)
+    _sse_channels: dict[str, Any] = field(default_factory=dict, repr=False)
     _form_bridge: Any = field(default=None, repr=False)
     _running_task: asyncio.Task[str | None] | None = field(
         default=None, repr=False)
@@ -107,18 +240,15 @@ class AgentLane:
                 self.queue.task_done()
             except asyncio.QueueEmpty:
                 break
-        if self._sse_channel is not None:
-            try:
-                await self._sse_channel.send_event(
-                    {
-                        "type": "status_update",
-                        "label": "Aborted",
-                        "status": "done",
-                        "tui_abortable": self._dispatch_tui_abortable,
-                    }
-                )
-            except Exception:
-                pass
+        if self._sse_channels:
+            await self._broadcast_sse(
+                {
+                    "type": "status_update",
+                    "label": "Aborted",
+                    "status": "done",
+                    "tui_abortable": self._dispatch_tui_abortable,
+                }
+            )
 
     def try_resolve_pending_form_with_text(self, text: str) -> bool:
         """If the agent is blocked on ``ask_user_question``, map chat text to answers."""
@@ -137,22 +267,41 @@ class AgentLane:
                 # type: ignore[attr-defined]
                 await bridge.inject_answer(form_answer)
 
-    def attach_sse(self, channel: Any, form_bridge: Any = None) -> None:
-        """Attach an SSE channel (and optional form bridge) to this lane."""
-        self._sse_channel = channel
-        self._form_bridge = form_bridge
+    def attach_sse(self, channel: Any, subscriber_id: str = "sse", form_bridge: Any = None) -> None:
+        """Attach an SSE channel for a named subscriber (e.g. 'tui', 'react')."""
+        self._sse_channels[subscriber_id] = channel
+        # TUI owns the form bridge; other subscribers don't override it.
+        if subscriber_id == "tui" or self._form_bridge is None:
+            self._form_bridge = form_bridge
 
-    def detach_sse(self, channel: Any | None = None) -> None:
-        """Detach SSE channel if it is still the active attachment.
+    def detach_sse(self, channel: Any | None = None, subscriber_id: str | None = None) -> None:
+        """Detach an SSE channel if it is still the active attachment for its subscriber.
 
         ``stream_session`` can reconnect quickly: an older stream's ``finally``
         may run after a newer stream already attached. In that case, ignore the
         stale detach so we do not drop live output for subsequent prompts.
         """
-        if channel is not None and self._sse_channel is not channel:
-            return
-        self._sse_channel = None
-        self._form_bridge = None
+        if subscriber_id is not None:
+            if self._sse_channels.get(subscriber_id) is not channel:
+                return
+            self._sse_channels.pop(subscriber_id, None)
+        elif channel is not None:
+            # Fallback: remove any subscriber whose channel matches
+            to_remove = [k for k, v in self._sse_channels.items() if v is channel]
+            for k in to_remove:
+                self._sse_channels.pop(k)
+        else:
+            self._sse_channels.clear()
+        if not self._sse_channels:
+            self._form_bridge = None
+
+    async def _broadcast_sse(self, event_dict: dict[str, Any]) -> None:
+        """Send an SSE event to all attached subscribers."""
+        for channel in list(self._sse_channels.values()):
+            try:
+                await channel.send_event(event_dict)
+            except Exception:
+                pass
 
     @property
     def queue_depth(self) -> int:
@@ -218,6 +367,38 @@ class AgentLane:
             from proxi.tools.call_tool_tool import CallToolTool
             reg.register(CallToolTool(reg))
 
+    def sync_cli_tools(
+        self,
+        live_tools: Sequence[Any],
+        deferred_tools: Sequence[Any] = (),
+    ) -> None:
+        """Replace CLI-backed integration tools on an existing loop."""
+        if self._loop is None:
+            return
+        from proxi.tools.call_tool_tool import CallToolTool
+        from proxi.tools.cli_tool import cli_integration_tool_names
+
+        reg = self._loop.tool_registry
+        cli_names = cli_integration_tool_names()
+        deferred_touched = False
+        for name in cli_names:
+            if reg._tools.pop(name, None) is not None:
+                pass
+            if reg._deferred_tools.pop(name, None) is not None:
+                deferred_touched = True
+        if deferred_touched:
+            reg._rebuild_deferred_index()
+        reg._schema_injected -= cli_names
+
+        for tool in live_tools:
+            reg.register(tool)
+        for tool in deferred_tools:
+            reg.register_deferred(tool)
+
+        reg._tools.pop("call_tool", None)
+        if reg.has_deferred_tools():
+            reg.register(CallToolTool(reg))
+
     def _sync_state_if_history_cleared(self) -> None:
         """Align memory with disk when history.jsonl is empty (e.g. /clear raced ahead of _state reset)."""
         try:
@@ -257,6 +438,13 @@ class AgentLane:
                 elif event.reply_channel and not response:
                     logger.warning("lane_reply_skipped_no_response",
                                    session=self.session_id, source=event.source_type)
+                if event.broadcast_reply_channels and response:
+                    for brc in event.broadcast_reply_channels:
+                        try:
+                            await brc.send(response)
+                        except Exception:
+                            logger.warning("broadcast_reply_failed",
+                                           session=self.session_id, dest=brc.destination)
             except asyncio.CancelledError:
                 logger.info("lane_dispatch_aborted", session=self.session_id)
             except BudgetExceeded as exc:
@@ -299,24 +487,21 @@ class AgentLane:
                     session=self.session_id,
                     event_id=event.event_id,
                 )
-                if self._sse_channel is not None:
-                    try:
-                        await self._sse_channel.send_event(
-                            {
-                                "type": "text_stream",
-                                "content": "[Error: request failed in lane dispatch]",
-                            }
-                        )
-                        await self._sse_channel.send_event(
-                            {
-                                "type": "status_update",
-                                "label": "Failed",
-                                "status": "done",
-                                "tui_abortable": self._dispatch_tui_abortable,
-                            }
-                        )
-                    except Exception:
-                        pass
+                if self._sse_channels:
+                    await self._broadcast_sse(
+                        {
+                            "type": "text_stream",
+                            "content": "[Error: request failed in lane dispatch]",
+                        }
+                    )
+                    await self._broadcast_sse(
+                        {
+                            "type": "status_update",
+                            "label": "Failed",
+                            "status": "done",
+                            "tui_abortable": self._dispatch_tui_abortable,
+                        }
+                    )
                 elif event.reply_channel:
                     try:
                         await event.reply_channel.send("Sorry, something went wrong processing your request.")
@@ -337,10 +522,11 @@ class AgentLane:
         tui_abortable = event.source_id == "tui"
         self._dispatch_tui_abortable = tui_abortable
 
-        # Attach SSE emitter + form bridge when an SSE listener is connected
-        if self._sse_channel is not None:
+        # Attach SSE emitter + form bridge when at least one SSE subscriber is connected
+        if self._sse_channels:
             self._loop.emitter = _SseEmitter(
-                self._sse_channel, tui_abortable=tui_abortable
+                dict(self._sse_channels), tui_abortable=tui_abortable,
+                source_id=event.source_id, source_type=event.source_type,
             )
             if self._form_bridge is not None:
                 self._loop.form_bridge = self._form_bridge
@@ -355,17 +541,14 @@ class AgentLane:
         # Handle /compact [focus] as a lane-level command — never sent to the loop.
         if text.lower().startswith("/compact"):
             focus = text[len("/compact"):].strip() or None
-            if self._sse_channel is not None:
-                try:
-                    await self._sse_channel.send_event({
-                        "type": "status_update",
-                        "label": "Compacting",
-                        "status": "running",
-                        # Compaction is lane-level maintenance; do not show Esc-abort affordance.
-                        "tui_abortable": False,
-                    })
-                except Exception:
-                    pass
+            if self._sse_channels:
+                await self._broadcast_sse({
+                    "type": "status_update",
+                    "label": "Compacting",
+                    "status": "running",
+                    # Compaction is lane-level maintenance; do not show Esc-abort affordance.
+                    "tui_abortable": False,
+                })
             try:
                 if self._loop is not None and self._loop.compactor is not None and self._state is not None:
                     result = await self._loop.compactor.force_compact(
@@ -376,46 +559,40 @@ class AgentLane:
                     if result.compaction_triggered:
                         self.budget.tokens_used = 0  # reset; real count updates after next API call
                     focus_note = f' Focus: "{focus}"' if focus else ""
-                    if self._sse_channel is not None:
-                        try:
-                            if result.compaction_triggered:
-                                content = (
-                                    f"Context compacted.{focus_note} "
-                                    f"~{result.original_tokens} → ~{result.compacted_token_estimate} tokens."
-                                )
-                            else:
-                                history_len = len(
-                                    self._state.history) if self._state else 0
-                                content = (
-                                    f"Nothing to compact — history is too short ({history_len} messages). "
-                                    "Have a longer conversation and try again."
-                                )
-                            await self._sse_channel.send_event({
-                                "type": "text_stream",
-                                "content": content,
-                            })
-                            await self._sse_channel.send_event({
-                                "type": "status_update",
-                                "label": "Compacted",
-                                "status": "done",
-                                "tui_abortable": False,
-                            })
-                        except Exception:
-                            pass
-                elif self._sse_channel is not None:
-                    try:
-                        await self._sse_channel.send_event({
+                    if self._sse_channels:
+                        if result.compaction_triggered:
+                            content = (
+                                f"Context compacted.{focus_note} "
+                                f"~{result.original_tokens} → ~{result.compacted_token_estimate} tokens."
+                            )
+                        else:
+                            history_len = len(
+                                self._state.history) if self._state else 0
+                            content = (
+                                f"Nothing to compact — history is too short ({history_len} messages). "
+                                "Have a longer conversation and try again."
+                            )
+                        await self._broadcast_sse({
                             "type": "text_stream",
-                            "content": "Compaction unavailable for this session.",
+                            "content": content,
                         })
-                        await self._sse_channel.send_event({
+                        await self._broadcast_sse({
                             "type": "status_update",
                             "label": "Compacted",
                             "status": "done",
                             "tui_abortable": False,
                         })
-                    except Exception:
-                        pass
+                elif self._sse_channels:
+                    await self._broadcast_sse({
+                        "type": "text_stream",
+                        "content": "Compaction unavailable for this session.",
+                    })
+                    await self._broadcast_sse({
+                        "type": "status_update",
+                        "label": "Compacted",
+                        "status": "done",
+                        "tui_abortable": False,
+                    })
             except Exception as exc:
                 logger.exception(
                     "lane_compaction_failed",
@@ -423,20 +600,17 @@ class AgentLane:
                     event_id=event.event_id,
                     error=str(exc),
                 )
-                if self._sse_channel is not None:
-                    try:
-                        await self._sse_channel.send_event({
-                            "type": "text_stream",
-                            "content": "Compaction failed. I left your session history unchanged.",
-                        })
-                        await self._sse_channel.send_event({
-                            "type": "status_update",
-                            "label": "Compaction failed",
-                            "status": "done",
-                            "tui_abortable": False,
-                        })
-                    except Exception:
-                        pass
+                if self._sse_channels:
+                    await self._broadcast_sse({
+                        "type": "text_stream",
+                        "content": "Compaction failed. I left your session history unchanged.",
+                    })
+                    await self._broadcast_sse({
+                        "type": "status_update",
+                        "label": "Compaction failed",
+                        "status": "done",
+                        "tui_abortable": False,
+                    })
             return None
 
         # Handle /reasoning-effort <level> as a lane-level command — never sent to the loop.
@@ -524,32 +698,23 @@ class AgentLane:
                     f"User goal: {goal}"
                 )
                 text = plan_instruction
-                if self._sse_channel is not None:
-                    try:
-                        await self._sse_channel.send_event({
-                            "type": "status_update",
-                            "label": "Planning",
-                            "status": "running",
-                            "tui_abortable": True,
-                        })
-                    except Exception:
-                        pass
+                if self._sse_channels:
+                    await self._broadcast_sse({
+                        "type": "status_update",
+                        "label": "Planning",
+                        "status": "running",
+                        "tui_abortable": True,
+                    })
 
-        if (
-            self._sse_channel is not None
-            and _should_emit_inbound_turn_header(event)
-        ):
-            try:
-                await self._sse_channel.send_event(
-                    {
-                        "type": "inbound_turn",
-                        "source_type": event.source_type,
-                        "source_id": event.source_id,
-                        "prompt": text,
-                    }
-                )
-            except Exception:
-                pass
+        if self._sse_channels and _should_emit_inbound_turn_header(event):
+            await self._broadcast_sse(
+                {
+                    "type": "inbound_turn",
+                    "source_type": event.source_type,
+                    "source_id": event.source_id,
+                    "prompt": text,
+                }
+            )
 
         # Compute effective reasoning effort for this dispatch:
         #   1. Plan mode (active or entering) always uses "medium".
@@ -589,13 +754,13 @@ class AgentLane:
         self.budget.record_turn(context_tokens=last_turn_tokens)
 
         # If in plan mode and plan file has content, emit plan_ready before Done.
-        if result_state.plan_mode and result_state.workspace and self._sse_channel is not None:
+        if result_state.plan_mode and result_state.workspace and self._sse_channels:
             try:
                 _ppath = result_state.workspace.active_plan_path or result_state.workspace.plan_path
                 plan_path = Path(_ppath)
                 if plan_path.exists() and plan_path.stat().st_size > 0:
                     plan_content = plan_path.read_text(encoding="utf-8")
-                    await self._sse_channel.send_event({
+                    await self._broadcast_sse({
                         "type": "plan_ready",
                         "content": plan_content,
                         # Session plan.md path (typically sessions/<session_id>/plan.md)
@@ -606,19 +771,37 @@ class AgentLane:
             except Exception:
                 pass
 
-        # Signal completion on the SSE channel
-        if self._sse_channel is not None:
-            try:
-                await self._sse_channel.send_event(
-                    {
-                        "type": "status_update",
-                        "label": "Done",
-                        "status": "done",
-                        "tui_abortable": tui_abortable,
-                    }
-                )
-            except Exception:
-                pass
+        # Signal completion on all SSE subscribers
+        if self._sse_channels:
+            await self._broadcast_sse(
+                {
+                    "type": "status_update",
+                    "label": "Done",
+                    "status": "done",
+                    "tui_abortable": tui_abortable,
+                }
+            )
+
+        # Fire-and-forget post-session summarization into episodic memory
+        try:
+            from proxi.gateway import server as _srv
+            _mm = getattr(_srv, "memory_manager", None)
+            if _mm is not None and self._loop is not None:
+                _ws = result_state.workspace
+                _agent_id = _ws.agent_id if _ws else "unknown"
+                _session_id = _ws.session_id if _ws else self.session_id
+                if _mm.is_enabled(_agent_id):
+                    asyncio.ensure_future(
+                        _summarize_session(
+                            agent_id=_agent_id,
+                            session_id=_session_id,
+                            history=list(result_state.history),
+                            memory_manager=_mm,
+                            llm_client=self._loop.llm_client,
+                        )
+                    )
+        except Exception:
+            pass  # never block the dispatch path
 
         last_msg = (
             result_state.history[-1]

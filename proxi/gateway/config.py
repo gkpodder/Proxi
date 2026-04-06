@@ -19,6 +19,7 @@ class AgentConfig:
     soul_path: Path
     default_session: str = "main"
     working_dir: Path | None = None
+    memory_enabled: bool = True
 
 
 @dataclass
@@ -64,11 +65,16 @@ class GatewayConfig:
         agents: dict[str, AgentConfig] = {}
         for aid, cfg in (raw.get("agents") or {}).items():
             raw_wd = cfg.get("working_dir")
+            memory_cfg = cfg.get("memory", {})
+            memory_enabled = bool(
+                (memory_cfg.get("enabled", True) if isinstance(memory_cfg, dict) else True)
+            )
             agents[aid] = AgentConfig(
                 agent_id=aid,
                 soul_path=(workspace_root / cfg["soul"]).resolve(),
                 default_session=cfg.get("default_session", "main"),
                 working_dir=Path(raw_wd).expanduser().resolve() if raw_wd else None,
+                memory_enabled=memory_enabled,
             )
 
         sources: dict[str, SourceConfig] = {}

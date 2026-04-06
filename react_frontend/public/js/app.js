@@ -30,10 +30,10 @@ function App() {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyValue, setNewKeyValue] = useState("");
   const [keyFeedback, setKeyFeedback] = useState("");
-  const [mcps, setMcps] = useState([]);
-  const [mcpsLoading, setMcpsLoading] = useState(false);
-  const [mcpsSaving, setMcpsSaving] = useState(false);
-  const [mcpFeedback, setMcpFeedback] = useState("");
+  const [integrations, setIntegrations] = useState([]);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [integrationsSaving, setIntegrationsSaving] = useState(false);
+  const [integrationFeedback, setIntegrationFeedback] = useState("");
   const [cronJobs, setCronJobs] = useState([]);
   const [cronLoading, setCronLoading] = useState(false);
   const [cronSaving, setCronSaving] = useState(false);
@@ -63,6 +63,9 @@ function App() {
   const [llmLoading, setLlmLoading] = useState(false);
   const [llmSaving, setLlmSaving] = useState(false);
   const [llmFeedback, setLlmFeedback] = useState("");
+  const [generaFeedback, setGeneraFeedback] = useState("");
+  const [generaBusy, setGeneraBusy] = useState(false);
+  const [generaReasoningEffort, setGeneraReasoningEffort] = useState("minimal");
   const [cronDraft, setCronDraft] = useState({
     sourceId: "",
     schedule: "",
@@ -153,7 +156,7 @@ function App() {
     if (!settingsOpen) return;
     loadAgents();
     loadApiKeys();
-    loadMcps();
+    loadIntegrations();
     loadCronCapabilities();
     loadCronJobs();
     loadUserProfile();
@@ -394,40 +397,40 @@ function App() {
     }
   }
 
-  async function loadMcps() {
-    setMcpsLoading(true);
-    setMcpFeedback("");
+  async function loadIntegrations() {
+    setIntegrationsLoading(true);
+    setIntegrationFeedback("");
     try {
-      const response = await fetch("/api/mcps");
+      const response = await fetch("/api/integrations");
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Failed to load MCPs");
-      setMcps(Array.isArray(payload.mcps) ? payload.mcps : []);
+      if (!response.ok) throw new Error(payload.error || "Failed to load integrations");
+      setIntegrations(Array.isArray(payload.integrations) ? payload.integrations : []);
     } catch (error) {
-      setMcpFeedback(`Error: ${String(error)}`);
+      setIntegrationFeedback(`Error: ${String(error)}`);
     } finally {
-      setMcpsLoading(false);
+      setIntegrationsLoading(false);
     }
   }
 
-  async function toggleMcp(mcpName, enabled) {
-    setMcpsSaving(true);
-    setMcpFeedback("");
+  async function toggleIntegration(integrationName, enabled) {
+    setIntegrationsSaving(true);
+    setIntegrationFeedback("");
     try {
-      const response = await fetch(`/api/mcps/${encodeURIComponent(mcpName)}`, {
+      const response = await fetch(`/api/integrations/${encodeURIComponent(integrationName)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled: !enabled }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Failed to update MCP");
+      if (!response.ok) throw new Error(payload.error || "Failed to update integration");
 
       const action = !enabled ? "enabled" : "disabled";
-      setMcpFeedback(`${mcpName} has been ${action}. Restart the agent for changes to take effect.`);
-      await loadMcps();
+      setIntegrationFeedback(`${integrationName} has been ${action}. Restart the agent for changes to take effect.`);
+      await loadIntegrations();
     } catch (error) {
-      setMcpFeedback(`Error: ${String(error)}`);
+      setIntegrationFeedback(`Error: ${String(error)}`);
     } finally {
-      setMcpsSaving(false);
+      setIntegrationsSaving(false);
     }
   }
 
@@ -820,6 +823,98 @@ function App() {
     ws.send(JSON.stringify(payload));
   }
 
+  function runSlashCommand(rawCommand, options = {}) {
+    const { echo = false, successMessage = "" } = options;
+    const command = String(rawCommand || "").trim();
+    if (!command) return false;
+    if (isPromptActive) {
+      setGeneraFeedback("Complete the current prompt first.");
+      addSystem("Complete the current prompt first.");
+      return false;
+    }
+    if (!hasSelectedAgent) {
+      setGeneraFeedback("Select an agent first.");
+      addSystem("Select an agent first.");
+      return false;
+    }
+
+    if (echo) addUser(command);
+    setInput("");
+    setStatusLabel("Running...");
+    setStreaming("");
+    send({ type: "start", task: command });
+    if (successMessage) setGeneraFeedback(successMessage);
+    return true;
+  }
+
+  async function clearSessionHistory() {
+    if (isPromptActive) {
+      setGeneraFeedback("Complete the current prompt first.");
+      addSystem("Complete the current prompt first.");
+      return;
+    }
+    if (!hasSelectedAgent) {
+      setGeneraFeedback("Select an agent first.");
+      addSystem("Select an agent first.");
+      return;
+    }
+
+    const sessionId = String(bootInfo?.sessionId || "").trim();
+    if (!sessionId) {
+      setGeneraFeedback("Error: active session id is unavailable.");
+      return;
+    }
+
+    setGeneraBusy(true);
+    setGeneraFeedback("");
+    try {
+      // Match TUI behavior: clear UI immediately, then clear persisted session history.
+      setMessages([]);
+      setActivityItems([]);
+      setStreaming("");
+      setInput("");
+      setBootstrapInput(null);
+      setFormUi(null);
+      setStatusLabel("Idle");
+
+      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/clear-history`, {
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Failed to clear session history");
+
+      setGeneraFeedback("Session cleared (UI and persisted history).");
+      addSystem("Session cleared.");
+    } catch (error) {
+      setGeneraFeedback(`Error: ${String(error)}`);
+    } finally {
+      setGeneraBusy(false);
+    }
+  }
+
+  function runCompactCommand(focusHint) {
+    const hint = String(focusHint || "").trim();
+    const command = hint ? `/compact ${hint}` : "/compact";
+    const ok = runSlashCommand(command, {
+      echo: true,
+      successMessage: hint
+        ? `Running /compact with focus hint: ${hint}`
+        : "Running /compact.",
+    });
+    if (ok) setGeneraFeedback((prev) => prev || "Compaction requested.");
+  }
+
+  function runReasoningEffortCommand(level) {
+    const normalized = String(level || "").trim().toLowerCase();
+    const valid = ["minimal", "low", "medium", "high"];
+    const resolved = valid.includes(normalized) ? normalized : "minimal";
+    const ok = runSlashCommand(`/reasoning-effort ${resolved}`, {
+      echo: true,
+      successMessage: `Reasoning effort set to ${resolved}.`,
+    });
+    if (ok) setGeneraReasoningEffort(resolved);
+  }
+
   function onSwitchAgent() {
     switchAgentToSelected();
   }
@@ -1123,11 +1218,7 @@ function App() {
     }
     if (!task) return;
 
-    addUser(task);
-    setInput("");
-    setStatusLabel("Running...");
-    setStreaming("");
-    send({ type: "start", task });
+    runSlashCommand(task, { echo: true });
   }
 
   function onAbort() {
@@ -1287,12 +1378,12 @@ function App() {
         setNewKeyValue={setNewKeyValue}
         saveKey={saveKey}
         loadApiKeys={loadApiKeys}
-        mcpsLoading={mcpsLoading}
-        mcpsSaving={mcpsSaving}
-        mcpFeedback={mcpFeedback}
-        mcps={mcps}
-        toggleMcp={toggleMcp}
-        loadMcps={loadMcps}
+        integrationsLoading={integrationsLoading}
+        integrationsSaving={integrationsSaving}
+        integrationFeedback={integrationFeedback}
+        integrations={integrations}
+        toggleIntegration={toggleIntegration}
+        loadIntegrations={loadIntegrations}
         cronJobs={cronJobs}
         cronLoading={cronLoading}
         cronSaving={cronSaving}
@@ -1318,6 +1409,12 @@ function App() {
         setLlmModel={setLlmModel}
         saveLlmConfig={saveLlmConfig}
         loadLlmConfig={loadLlmConfig}
+        generaFeedback={generaFeedback}
+        generaBusy={generaBusy}
+        generaReasoningEffort={generaReasoningEffort}
+        runCompactCommand={runCompactCommand}
+        runReasoningEffortCommand={runReasoningEffortCommand}
+        clearSessionHistory={clearSessionHistory}
         webhooks={webhooks}
         webhookLoading={webhookLoading}
         webhookSaving={webhookSaving}

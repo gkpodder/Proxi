@@ -343,3 +343,5 @@ config/google_token.json
 test_coding/
 CLAUDE.md
 */node_modules/
+config/mcp.json
+config/spotify_token.json

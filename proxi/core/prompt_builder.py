@@ -103,9 +103,11 @@ class PromptBuilder:
         global_path = Path(workspace.global_system_prompt_path)
         soul_path = Path(workspace.soul_path)
         db_path = resolve_db_path()
+        user_md_path = Path(workspace.workspace_root) / "memory" / "USER.md"
         global_mtime = global_path.stat().st_mtime_ns if global_path.exists() else 0
         soul_mtime = soul_path.stat().st_mtime_ns if soul_path.exists() else 0
         db_mtime = db_path.stat().st_mtime_ns if db_path.exists() else 0
+        user_md_mtime = user_md_path.stat().st_mtime_ns if user_md_path.exists() else 0
         tools_shape = [
             {
                 "name": tool.name,
@@ -126,6 +128,7 @@ class PromptBuilder:
             "soul_mtime_ns": soul_mtime,
             "db_path": str(db_path),
             "db_mtime_ns": db_mtime,
+            "user_md_mtime_ns": user_md_mtime,
             "tools": tools_shape,
             "deferred_tool_count": deferred_tool_count,
             "deferred_stubs": deferred_stubs,
@@ -164,12 +167,15 @@ class PromptBuilder:
             live_tools_line = f"LIVE TOOLS (call directly): {names}"
 
         user_profile_text = self._build_user_profile_context()
+        user_model_text = self._build_user_model_context(workspace)
 
         parts = []
         if global_text:
             parts.append(global_text.strip())
         if soul_text:
             parts.append("YOUR IDENTITY:\n" + soul_text.strip())
+        if user_model_text:
+            parts.append(user_model_text)
         if live_tools_line:
             parts.append(live_tools_line)
         if user_profile_text:
@@ -195,14 +201,35 @@ class PromptBuilder:
                 "- Do NOT call unrelated live tools (mcp_read_emails, etc.) before call_tool.\n"
                 "- Do NOT use read/list tools to perform write/send actions.\n\n"
                 "Examples:\n"
-                "- List Obsidian notes → call_tool('mcp_obsidian_list_notes', {})\n"
-                "- Create Obsidian note → call_tool('mcp_obsidian_create_note', {\"note_path\": \"Jokes/Funny.md\", \"content\": \"...\"})\n"
-                "- Send email → call_tool('mcp_send_email', {\"to\": \"...\", \"subject\": \"...\", \"body\": \"...\"})\n"
-                "- Create calendar event → call_tool('mcp_calendar_create_event', {\"summary\": \"...\", \"start\": \"...\", \"end\": \"...\"})\n"
-                "- Create Notion page → call_tool('mcp_notion_create_page', {\"title\": \"...\", \"content\": \"...\"})"
+                "- List Obsidian notes → call_tool('obsidian_list_notes', {})\n"
+                "- Create Obsidian note → call_tool('obsidian_create_note', {\"note_path\": \"Jokes/Funny.md\", \"content\": \"...\"})\n"
+                "- Send email → call_tool('send_email', {\"to\": \"...\", \"subject\": \"...\", \"body\": \"...\"})\n"
+                "- Create calendar event → call_tool('calendar_create_event', {\"summary\": \"...\", \"start_time\": \"...\", \"end_time\": \"...\", \"timezone\": \"America/Toronto\", \"attendees\": []})\n"
+                "- Create Notion page → call_tool('notion_create_page', {\"title\": \"...\", \"content\": \"...\"})"
             )
 
         return "\n\n".join(parts).strip()
+
+    def _build_user_model_context(self, workspace) -> str:
+        """Read USER.md from the memory directory and return formatted context."""
+        try:
+            workspace_root = Path(workspace.workspace_root)
+            user_md = workspace_root / "memory" / "USER.md"
+            if not user_md.exists():
+                return ""
+            content = user_md.read_text(encoding="utf-8").strip()
+            if not content:
+                return ""
+            # Only inject if there's actual content beyond the section headers
+            non_empty = any(
+                line.strip() and not line.startswith("##")
+                for line in content.splitlines()
+            )
+            if not non_empty:
+                return ""
+            return "USER MODEL (learned preferences and conventions):\n" + content
+        except Exception:
+            return ""
 
     def _build_user_profile_context(self) -> str:
         """Render user profile context for system prompt when configured."""

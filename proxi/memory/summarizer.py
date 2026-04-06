@@ -1,7 +1,6 @@
 """Memory summarizer for condensing conversation history."""
 
 from proxi.core.state import Message
-from proxi.memory.short_term import ShortTermMemory
 
 
 class Summarizer:

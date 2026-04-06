@@ -4,6 +4,14 @@ import TextInput from "ink-text-input";
 import { theme } from "../theme.js";
 import type { UserInputRequiredBootstrap } from "../protocol.js";
 
+function providerDisplayTitle(id: string): string {
+  const labels: Record<string, string> = {
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+  };
+  return labels[id] ?? id;
+}
+
 type Props = {
   spec: UserInputRequiredBootstrap;
   onSubmit: (value: string | boolean | number) => void;
@@ -30,8 +38,13 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
 
   useEffect(() => {
     setTextValue("");
-    setSelectIndex(0);
-  }, [spec.prompt, spec.method, spec.ui]);
+    let next = 0;
+    if (spec.method === "select" && spec.options?.length && spec.preferredOption) {
+      const idx = spec.options.indexOf(spec.preferredOption);
+      if (idx >= 0) next = idx;
+    }
+    setSelectIndex(next);
+  }, [spec.prompt, spec.method, spec.ui, spec.options, spec.preferredOption]);
 
   useInput((input, key) => {
     if (key.escape) {
@@ -133,6 +146,62 @@ export function HitlForm({ spec, onSubmit, onCancel }: Props) {
 
           <Text color={theme.mist} dimColor>
             Enter — apply · ↑↓ select · Esc — cancel
+          </Text>
+        </Box>
+      );
+    }
+    if (spec.ui === "provider") {
+      const lines = (spec.prompt ?? "").split("\n");
+      return (
+        <Box
+          paddingX={1}
+          paddingY={0}
+          flexDirection="column"
+          flexShrink={0}
+          gap={0}
+          borderStyle="round"
+          borderColor={theme.purpleDim}
+        >
+          <Box marginBottom={1}>
+            <Text color={theme.peach} bold>
+              ◆ LLM provider
+            </Text>
+            <Text color={theme.purpleDim}>  ·  </Text>
+            <Text color={theme.mist}>gateway-wide</Text>
+          </Box>
+
+          <Box flexDirection="column" marginBottom={1}>
+            {lines.map((line, i) => (
+              <Text key={`${i}-${line.slice(0, 24)}`} color={i === 0 ? theme.lavender : theme.mist}>
+                {line}
+              </Text>
+            ))}
+          </Box>
+
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color={theme.lavender}>Provider</Text>
+            {options.map((opt, i) => (
+              <Box key={opt} flexDirection="row" flexWrap="wrap">
+                <Text
+                  color={i === selectIndex ? theme.purple : theme.white}
+                  backgroundColor={i === selectIndex ? theme.purpleFaint : undefined}
+                >
+                  {i === selectIndex ? "› " : "  "}
+                  {providerDisplayTitle(opt)}
+                </Text>
+                <Text
+                  color={theme.mist}
+                  backgroundColor={i === selectIndex ? theme.purpleFaint : undefined}
+                >
+                  {" "}
+                  ({opt})
+                </Text>
+              </Box>
+            ))}
+          </Box>
+
+          <Text color={theme.mist} dimColor>
+            Enter — apply default model · ↑↓ select · Esc — cancel
           </Text>
         </Box>
       );

@@ -73,7 +73,9 @@ export default function App() {
   const [isPlanActive, setIsPlanActive] = useState(false);
 
   const reasoningEffortModeRef = useRef(false);
+  const providerModeRef = useRef(false);
   const [tuiReasoningEffort, setTuiReasoningEffort] = useState<string>("low");
+  const [tuiLlmProvider, setTuiLlmProvider] = useState<string | null>(null);
 
   const bootInfoRef = useRef<{ agentId: string; sessionId: string } | null>(null);
   bootInfoRef.current = bootInfo;
@@ -158,6 +160,23 @@ export default function App() {
   }, []);
 
   handleMsgRef.current = (msg: BridgeMessage) => {
+    // Only show events from the TUI's own prompts or from broadcast sources (cron/heartbeat/webhook).
+    // Events from other interactive channels (discord, react) are filtered out.
+    // source_id identifies the named source; source_type identifies its kind.
+    const msgSourceId = (msg as { source_id?: string }).source_id;
+    const msgSourceType = (msg as { source_type?: string }).source_type;
+    if (msgSourceId || msgSourceType) {
+      const BROADCAST_TYPES = new Set(["cron", "heartbeat", "webhook"]);
+      const isTui = msgSourceId === "tui";
+      const isBroadcast = BROADCAST_TYPES.has(msgSourceType ?? "") || BROADCAST_TYPES.has(msgSourceId ?? "");
+      if (!isTui && !isBroadcast) {
+        const DISPLAY_TYPES = new Set([
+          "text_stream", "tool_start", "tool_log", "tool_done",
+          "subagent_start", "subagent_done", "inbound_turn", "status_update",
+        ]);
+        if (DISPLAY_TYPES.has(msg.type)) return;
+      }
+    }
     switch (msg.type) {
       case "ready":
         setBridgeReady(true);
@@ -171,6 +190,7 @@ export default function App() {
         setUserSendPending(false);
         setIsCompacting(false);
         void refreshSessionStats();
+        void refreshLlmConfig();
         break;
       case "text_stream":
         streamingRef.current += msg.content;
@@ -289,7 +309,7 @@ export default function App() {
 
     const connect = async () => {
       try {
-        const res = await fetch(`${GATEWAY}/v1/sessions/${session}/stream`, {
+        const res = await fetch(`${GATEWAY}/v1/sessions/${session}/stream?subscriber=tui`, {
           signal: controller.signal,
           headers: { Accept: "text/event-stream" },
         });
@@ -538,80 +558,218 @@ export default function App() {
     }
   }, []);
 
+  const refreshLlmConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${GATEWAY}/v1/llm-config`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { provider?: string };
+      if (data.provider) setTuiLlmProvider(data.provider);
+    } catch {
+      // best effort
+    }
+  }, []);
+
+  const startProviderFlow = useCallback(async () => {
+    providerModeRef.current = true;
+    try {
+      const res = await fetch(`${GATEWAY}/v1/llm-config`);
+      if (!res.ok) {
+        providerModeRef.current = false;
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Could not load LLM config (${res.status}). Is the gateway running?`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+        return;
+      }
+      const data = (await res.json()) as { provider: string; model: string; providers: string[] };
+      setTuiLlmProvider(data.provider);
+      const title =
+        data.provider === "openai"
+          ? "OpenAI"
+          : data.provider === "anthropic"
+            ? "Anthropic"
+            : data.provider;
+      setHitlSpec({
+        type: "user_input_required" as const,
+        method: "select" as const,
+        prompt: `Gateway LLM\nCurrent: ${title} — ${data.model}\nApplies to every session until you switch again.`,
+        options: [...data.providers].sort(),
+        ui: "provider",
+        preferredOption: data.provider,
+      });
+    } catch (err: unknown) {
+      providerModeRef.current = false;
+      const m = err instanceof Error ? err.message : String(err);
+      setScrollback((s) => [
+        ...s,
+        { type: "agent_line", content: `LLM config error: ${m}`, isFirst: true, isSystem: true },
+      ]);
+    }
+  }, []);
+
+  const handleProviderSubmit = useCallback(
+    async (value: string | boolean | number) => {
+      providerModeRef.current = false;
+      setHitlSpec(null);
+      const chosen = String(value).trim().toLowerCase();
+      if (!chosen) return;
+      if (chosen === tuiLlmProvider) {
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Already using provider '${chosen}'.`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+        return;
+      }
+      try {
+        const res = await fetch(`${GATEWAY}/v1/llm-config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: chosen, model: "" }),
+        });
+        const raw = await res.text();
+        if (res.ok) {
+          try {
+            const data = JSON.parse(raw) as { provider: string; model: string };
+            setTuiLlmProvider(data.provider);
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: `LLM → ${data.provider} · ${data.model}`,
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+          } catch {
+            setTuiLlmProvider(chosen);
+            setScrollback((s) => [
+              ...s,
+              {
+                type: "agent_line",
+                content: `LLM provider updated to ${chosen}.`,
+                isFirst: true,
+                isSystem: true,
+              },
+            ]);
+          }
+          return;
+        }
+        let errDetail = raw || res.statusText;
+        try {
+          const j = JSON.parse(raw) as { detail?: string };
+          if (j.detail) errDetail = String(j.detail);
+        } catch {
+          /* keep text */
+        }
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Provider switch failed: ${errDetail}`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+      } catch (err: unknown) {
+        const m = err instanceof Error ? err.message : String(err);
+        setScrollback((s) => [
+          ...s,
+          {
+            type: "agent_line",
+            content: `Provider switch failed: ${m}`,
+            isFirst: true,
+            isSystem: true,
+          },
+        ]);
+      }
+    },
+    [tuiLlmProvider]
+  );
+
   const commitStreaming = useCallback(() => {
     commitStreamToScrollback();
   }, [commitStreamToScrollback]);
 
-  // --- MCP management state ---
-  const mcpModeRef = useRef(false);
+  // --- Integration management state ---
+  const integrationModeRef = useRef(false);
   const deleteModeRef = useRef(false);
   const workDirModeRef = useRef(false);
   const compactModeRef = useRef(false);
 
-  const startMcpManagement = useCallback(async () => {
-    mcpModeRef.current = true;
-    const showMcpList = async () => {
+  const startIntegrationManagement = useCallback(async () => {
+    integrationModeRef.current = true;
+    const showIntegrationList = async () => {
       try {
-        const res = await fetch(`${GATEWAY}/v1/mcps`);
+        const res = await fetch(`${GATEWAY}/v1/integrations`);
         if (!res.ok) {
           setScrollback((s) => [
           ...s,
-          { type: "agent_line", content: `MCP fetch failed: ${res.status}`, isFirst: true, isSystem: true },
+          { type: "agent_line", content: `Integration fetch failed: ${res.status}`, isFirst: true, isSystem: true },
         ]);
-          mcpModeRef.current = false;
+          integrationModeRef.current = false;
           return;
         }
-        const data = (await res.json()) as { mcps?: { name: string; enabled: boolean }[] };
-        const mcps = data.mcps ?? [];
+        const data = (await res.json()) as { integrations?: { name: string; enabled: boolean }[] };
+        const integrations = data.integrations ?? [];
         const doneLabel = "[Done]";
-        const options = mcps.map(
+        const options = integrations.map(
           (m) => `${m.name} [${m.enabled ? "Enabled" : "Disabled"}] → ${m.enabled ? "Disable" : "Enable"}`
         );
         options.push(doneLabel);
         setHitlSpec({
           type: "user_input_required" as const,
           method: "select" as const,
-          prompt: "MCP Settings: choose an MCP to toggle, or select [Done]",
+          prompt: "Integration Settings: choose an integration to toggle, or select [Done]",
           options,
         });
       } catch (err: any) {
         setScrollback((s) => [
           ...s,
-          { type: "agent_line", content: `MCP error: ${err.message}`, isFirst: true, isSystem: true },
+          { type: "agent_line", content: `Integration error: ${err.message}`, isFirst: true, isSystem: true },
         ]);
-        mcpModeRef.current = false;
+        integrationModeRef.current = false;
       }
     };
-    await showMcpList();
+    await showIntegrationList();
   }, []);
 
-  const handleMcpSelection = useCallback(async (value: string | boolean | number) => {
+  const handleIntegrationSelection = useCallback(async (value: string | boolean | number) => {
     const choice = String(value);
     if (choice === "[Done]" || choice === "false") {
-      mcpModeRef.current = false;
+      integrationModeRef.current = false;
       setHitlSpec(null);
       setScrollback((s) => [
         ...s,
-        { type: "agent_line", content: "MCP settings updated.", isFirst: true, isSystem: true },
+        { type: "agent_line", content: "Integration settings updated.", isFirst: true, isSystem: true },
       ]);
       return;
     }
-    // Extract MCP name from option string: "name [Enabled] → Disable"
-    const mcpName = choice.split(" ")[0];
-    if (!mcpName) {
-      mcpModeRef.current = false;
+    // Extract integration name from option string: "name [Enabled] → Disable"
+    const integrationName = choice.split(" ")[0];
+    if (!integrationName) {
+      integrationModeRef.current = false;
       setHitlSpec(null);
       return;
     }
     try {
-      const res = await fetch(`${GATEWAY}/v1/mcps/${encodeURIComponent(mcpName)}/toggle`, { method: "POST" });
+      const res = await fetch(`${GATEWAY}/v1/integrations/${encodeURIComponent(integrationName)}/toggle`, { method: "POST" });
       if (res.ok) {
         const result = (await res.json()) as { enabled?: boolean };
         setScrollback((s) => [
           ...s,
           {
             type: "agent_line",
-            content: `MCP '${mcpName}' ${result.enabled ? "enabled" : "disabled"}.`,
+            content: `Integration '${integrationName}' ${result.enabled ? "enabled" : "disabled"}.`,
             isFirst: true,
             isSystem: true,
           },
@@ -623,13 +781,13 @@ export default function App() {
         { type: "agent_line", content: `Toggle failed: ${err.message}`, isFirst: true, isSystem: true },
       ]);
     }
-    // Re-show the list only if the user is still in MCP settings. If they hit [Done] or Esc
-    // while the toggle request was in flight, mcpModeRef is false — do not reopen the picker
+    // Re-show the list only if the user is still in integration settings. If they hit [Done] or Esc
+    // while the toggle request was in flight, integrationModeRef is false — do not reopen the picker
     // (would steal focus from chat and strand in-flight replies).
-    if (mcpModeRef.current) {
-      await startMcpManagement();
+    if (integrationModeRef.current) {
+      await startIntegrationManagement();
     }
-  }, [startMcpManagement]);
+  }, [startIntegrationManagement]);
 
   const startWorkDirFlow = useCallback(async () => {
     workDirModeRef.current = true;
@@ -1075,8 +1233,12 @@ export default function App() {
     }
   }, [connectSse, scrollback]);
 
-  const onSubmit = useCallback((task: string, _provider: "openai" | "anthropic", _maxTurns: number) => {
+  const onSubmit = useCallback((task: string, _provider: string, _maxTurns: number) => {
     if (!task.trim()) return;
+    if (task.trim() === "/provider") {
+      void startProviderFlow();
+      return;
+    }
     setInputHistory((prev) => {
       const next = [task, ...prev.filter((t) => t !== task)].slice(0, 50);
       return next;
@@ -1095,7 +1257,7 @@ export default function App() {
     });
     setUserSendPending(true);
     sendToGateway({ message: task });
-  }, [commitStreamToScrollback, sendToGateway]);
+  }, [commitStreamToScrollback, sendToGateway, startProviderFlow]);
 
   const onHitlSubmit = useCallback(
     (value: string | boolean | number) => {
@@ -1115,8 +1277,8 @@ export default function App() {
         void handleAgentSelection(value);
         return;
       }
-      if (mcpModeRef.current) {
-        handleMcpSelection(value);
+      if (integrationModeRef.current) {
+        handleIntegrationSelection(value);
         return;
       }
       if (workDirModeRef.current) {
@@ -1131,6 +1293,10 @@ export default function App() {
         handlePlanGoalSubmit(value);
         return;
       }
+      if (providerModeRef.current) {
+        void handleProviderSubmit(value);
+        return;
+      }
       if (reasoningEffortModeRef.current) {
         handleReasoningEffortSubmit(value);
         return;
@@ -1139,7 +1305,18 @@ export default function App() {
       sendToGateway({ message: "", form_answer: { value } });
       setHitlSpec(null);
     },
-    [sendToGateway, handleMcpSelection, handleAgentSelection, handleCreateAgentFlowSubmit, performDeleteAgent, handleWorkDirSubmit, handleCompactSubmit, handlePlanGoalSubmit, handleReasoningEffortSubmit]
+    [
+      sendToGateway,
+      handleIntegrationSelection,
+      handleAgentSelection,
+      handleCreateAgentFlowSubmit,
+      performDeleteAgent,
+      handleWorkDirSubmit,
+      handleCompactSubmit,
+      handlePlanGoalSubmit,
+      handleProviderSubmit,
+      handleReasoningEffortSubmit,
+    ]
   );
 
   const onHitlCancel = useCallback(() => {
@@ -1169,8 +1346,8 @@ export default function App() {
       setHitlSpec(null);
       return;
     }
-    if (mcpModeRef.current) {
-      mcpModeRef.current = false;
+    if (integrationModeRef.current) {
+      integrationModeRef.current = false;
       setHitlSpec(null);
       return;
     }
@@ -1192,6 +1369,11 @@ export default function App() {
     }
     if (reasoningEffortModeRef.current) {
       reasoningEffortModeRef.current = false;
+      setHitlSpec(null);
+      return;
+    }
+    if (providerModeRef.current) {
+      providerModeRef.current = false;
       setHitlSpec(null);
       return;
     }
@@ -1293,8 +1475,8 @@ export default function App() {
             prompt: `Delete agent '${bootInfo.agentId}' and all sessions? This cannot be undone.`,
           });
           break;
-        case "mcps":
-          startMcpManagement();
+        case "integrations":
+          startIntegrationManagement();
           break;
         case "work-dir":
           void startWorkDirFlow();
@@ -1322,7 +1504,7 @@ export default function App() {
           setHitlSpec(null);
           setUsageOverlay(null);
           agentModeRef.current = false;
-          mcpModeRef.current = false;
+          integrationModeRef.current = false;
           deleteModeRef.current = false;
           setStatusLabel(null);
           setStatusKind(null);
@@ -1373,6 +1555,9 @@ export default function App() {
             ui: "reasoning-effort",
           });
           break;
+        case "provider":
+          void startProviderFlow();
+          break;
         case "todos":
           setPlanTodosOverlay("todos");
           break;
@@ -1413,11 +1598,12 @@ export default function App() {
             { type: "agent_line", content: "/branch   - Clone current agent with full session history", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/btw      - Temporary side session (Esc from empty input to return)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/delete   - Delete current agent (gateway.yml + ~/.proxi/agents)", isFirst: false, isSystem: true },
-            { type: "agent_line", content: "/mcps     - Enable/disable MCPs", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/integrations - Enable/disable integrations (gmail, spotify, etc.)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/work-dir - View or change working directory", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/compact  - Summarize context to save tokens (optionally add a focus hint)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/clear    - Clear UI + session history.jsonl", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/plan     - Start an interactive planning session", isFirst: false, isSystem: true },
+            { type: "agent_line", content: "/provider - Switch LLM provider (OpenAI · Anthropic)", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/todos    - View open todos", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/usage    - Show context and turn usage", isFirst: false, isSystem: true },
             { type: "agent_line", content: "/help     - Show all commands", isFirst: false, isSystem: true },
@@ -1429,7 +1615,7 @@ export default function App() {
           break;
       }
     },
-    [onSwitchAgent, startMcpManagement, startWorkDirFlow, bootInfo, handleBranch, handleBtw]
+    [onSwitchAgent, startIntegrationManagement, startWorkDirFlow, bootInfo, handleBranch, handleBtw, startProviderFlow]
   );
 
   const minHeight = Math.max(8, (stdout?.rows ?? 24) - 4);
@@ -1514,6 +1700,7 @@ export default function App() {
             onOpenCommandPalette={() => setCommandPaletteOpen(true)}
             inputHistory={inputHistory}
             onEscapeEmpty={btwMode ? handleBtwReturn : undefined}
+            activeProvider={tuiLlmProvider ?? "openai"}
           />
         )}
       </Box>

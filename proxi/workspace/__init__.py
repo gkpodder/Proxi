@@ -87,9 +87,11 @@ class WorkspaceManager:
     # --- Global workspace -------------------------------------------------
 
     def ensure_base_dirs(self) -> None:
-        """Ensure the global/agents directories exist."""
+        """Ensure the global/agents/memory directories exist."""
         self.global_dir.mkdir(parents=True, exist_ok=True)
         self.agents_dir.mkdir(parents=True, exist_ok=True)
+        (self.root / "memory").mkdir(parents=True, exist_ok=True)
+        (self.root / "memory" / "skills").mkdir(parents=True, exist_ok=True)
 
     def ensure_global_system_prompt(self) -> Path:
         """Ensure global/system_prompt.md exists with workspace instructions."""

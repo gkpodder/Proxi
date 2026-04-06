@@ -13,7 +13,7 @@ from typing import Any
 import uvicorn
 import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -72,6 +72,7 @@ router: EventRouter
 lane_manager: LaneManager | None = None
 heartbeat_mgr: HeartbeatManager
 scheduler = AsyncIOScheduler()
+memory_manager: Any | None = None  # MemoryManager, initialised in lifespan
 
 SUPPORTED_LLM_MODELS: dict[str, list[str]] = get_supported_models_by_provider()
 LLM_MODEL_LIMITS: dict[str, list[dict[str, int | str]]
@@ -80,15 +81,15 @@ DEFAULT_LLM_MODELS: dict[str, str] = dict(DEFAULT_MODELS)
 llm_provider: str = "openai"
 llm_model: str = DEFAULT_LLM_MODELS["openai"]
 
-# MCP adapters loaded once at startup; their tools are injected into each lane.
+# MCP-type integration adapters loaded once at startup; injected into each lane.
 _mcp_adapters: list[Any] = []
-_mcp_tools: list[Any] = []           # live (always-loaded) MCP tools
-# deferred MCP tools (loaded via search_tools)
-_mcp_deferred_tools: list[Any] = []
-_last_mcp_signature: str | None = None
-_mcp_refresh_lock = asyncio.Lock()
+_integration_tools: list[Any] = []           # live (always-loaded) integration tools
+# deferred integration tools (loaded via search_tools)
+_integration_deferred_tools: list[Any] = []
+_last_integration_signature: str | None = None
+_integration_refresh_lock = asyncio.Lock()
 
-# CLI tools loaded once at startup; share the same lane injection as MCP tools.
+# CLI tools loaded once at startup; share the same lane injection as integration tools.
 _cli_tools: list[Any] = []           # live CLI tools
 _cli_deferred_tools: list[Any] = []  # deferred CLI tools (found via call_tool)
 
@@ -196,92 +197,97 @@ def _resolve_model(provider: str, model: str | None) -> str:
         return DEFAULT_LLM_MODELS[provider]
 
     allowed = SUPPORTED_LLM_MODELS.get(provider, [])
-    if requested not in allowed:
+    # Empty allowed list means models are user-defined (e.g. vllm) — skip validation.
+    if allowed and requested not in allowed:
         raise ValueError(f"Unsupported model for {provider}: {requested}")
     return requested
 
 
-async def _refresh_mcp_tools() -> None:
-    """Reload MCP tools when the enabled-MCP set has changed."""
-    global _mcp_adapters, _mcp_tools, _mcp_deferred_tools, _last_mcp_signature
+async def _refresh_integration_tools() -> None:
+    """Reload MCP and CLI integration tools when config or enable flags change."""
+    global _mcp_adapters, _integration_tools, _integration_deferred_tools, _last_integration_signature
 
-    no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
-    if no_mcp:
-        return
-
-    async with _mcp_refresh_lock:
-        from proxi.cli.main import load_mcp_config
-        from proxi.security.key_store import get_enabled_mcps
+    async with _integration_refresh_lock:
+        from proxi.cli.main import load_integrations_config
+        from proxi.security.key_store import get_enabled_integrations
 
         sig_payload = {
-            "enabled": sorted(get_enabled_mcps()),
-            "config": load_mcp_config(),
+            "enabled": sorted(get_enabled_integrations()),
+            "config": load_integrations_config(),
         }
         sig = hashlib.sha256(
             json.dumps(sig_payload, sort_keys=True,
                        separators=(",", ":")).encode()
         ).hexdigest()
-        if sig == _last_mcp_signature:
+        if sig == _last_integration_signature:
             return
-        _last_mcp_signature = sig
+        _last_integration_signature = sig
 
-        for adapter in _mcp_adapters:
+        no_mcp = os.environ.get("PROXI_NO_MCP", "").lower() in ("1", "true", "yes")
+        if not no_mcp:
+            for adapter in _mcp_adapters:
+                try:
+                    await asyncio.wait_for(adapter.close(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("mcp_close_timeout")
+                except Exception as exc:
+                    logger.warning("mcp_close_error", error=str(exc))
+            _mcp_adapters.clear()
+            _integration_tools.clear()
+            _integration_deferred_tools.clear()
+
             try:
-                await asyncio.wait_for(adapter.close(), timeout=5.0)
-            except asyncio.TimeoutError:
-                logger.warning("mcp_close_timeout")
+                from proxi.tools.registry import ToolRegistry as _TR
+
+                tmp_registry = _TR()
+                _mcp_adapters[:] = await asyncio.wait_for(
+                    auto_load_mcp_servers(tmp_registry), timeout=30.0
+                )
+                _integration_tools[:] = list(tmp_registry._tools.values())
+                _integration_deferred_tools[:] = list(
+                    tmp_registry._deferred_tools.values())
+                logger.info(
+                    "integrations_refreshed",
+                    adapters=len(_mcp_adapters),
+                    tools=len(_integration_tools),
+                    deferred=len(_integration_deferred_tools),
+                )
             except Exception as exc:
-                logger.warning("mcp_close_error", error=str(exc))
-        _mcp_adapters.clear()
-        _mcp_tools.clear()
-        _mcp_deferred_tools.clear()
+                logger.warning("integration_refresh_error", error=str(exc))
+        else:
+            for adapter in _mcp_adapters:
+                try:
+                    await asyncio.wait_for(adapter.close(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("mcp_close_timeout")
+                except Exception as exc:
+                    logger.warning("mcp_close_error", error=str(exc))
+            _mcp_adapters.clear()
+            _integration_tools.clear()
+            _integration_deferred_tools.clear()
 
-        try:
-            from proxi.tools.registry import ToolRegistry as _TR
-
-            tmp_registry = _TR()
-            _mcp_adapters[:] = await asyncio.wait_for(
-                auto_load_mcp_servers(tmp_registry), timeout=30.0
-            )
-            _mcp_tools[:] = list(tmp_registry._tools.values())
-            _mcp_deferred_tools[:] = list(
-                tmp_registry._deferred_tools.values())
-            logger.info(
-                "mcp_refreshed",
-                adapters=len(_mcp_adapters),
-                tools=len(_mcp_tools),
-                deferred=len(_mcp_deferred_tools),
-            )
-        except Exception as exc:
-            logger.warning("mcp_refresh_error", error=str(exc))
+        _refresh_cli_tools()
 
         # Existing lanes keep the same AgentLoop + ToolRegistry; refresh replaces
-        # global tool objects and closes old MCP stdio clients — push the new tools
-        # into every active loop so toggles take effect without restarting the gateway.
+        # global tool objects — push the new tools into every active loop so
+        # toggles take effect without restarting the gateway.
         if lane_manager is not None:
             lane_manager.sync_mcp_tools_to_loops(
-                _mcp_tools, _mcp_deferred_tools)
+                _integration_tools, _integration_deferred_tools)
+            lane_manager.sync_cli_tools_to_loops(
+                _cli_tools, _cli_deferred_tools)
 
 
 def _refresh_cli_tools() -> None:
-    """Load CLI tools from config/mcp.json cliTools section into global lists."""
+    """Load CLI tools from config + key store into global lists."""
     global _cli_tools, _cli_deferred_tools
-    from proxi.cli.main import load_mcp_config
-    from proxi.tools.cli_tool import CLI_TOOLS
+    from proxi.cli.main import build_cli_tool_lists
 
-    config = load_mcp_config()
-    cli_config = config.get("cliTools", {})
-    defer_by_default = cli_config.get("defer_loading", True)
-    always_load = set(cli_config.get("always_load", []))
-
+    live, deferred = build_cli_tool_lists()
     _cli_tools.clear()
     _cli_deferred_tools.clear()
-    for tool_class in CLI_TOOLS:
-        tool = tool_class()
-        if not defer_by_default or tool.name in always_load:
-            _cli_tools.append(tool)
-        else:
-            _cli_deferred_tools.append(tool)
+    _cli_tools.extend(live)
+    _cli_deferred_tools.extend(deferred)
     logger.info(
         "cli_tools_loaded",
         live=len(_cli_tools),
@@ -317,9 +323,9 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 
     workspace_config.curr_working_dir = str(working_dir)
 
-    for mcp_tool in _mcp_tools:
+    for mcp_tool in _integration_tools:
         tool_registry.register(mcp_tool)
-    for mcp_tool in _mcp_deferred_tools:
+    for mcp_tool in _integration_deferred_tools:
         tool_registry.register_deferred(mcp_tool)
     for cli_tool in _cli_tools:
         tool_registry.register(cli_tool)
@@ -328,6 +334,15 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
     if tool_registry.has_deferred_tools():
         from proxi.tools.call_tool_tool import CallToolTool
         tool_registry.register(CallToolTool(tool_registry))
+
+    # Register memory tools if memory is enabled for this agent
+    if memory_manager is not None:
+        _agent_mem_enabled = config.agents.get(workspace_config.agent_id)
+        if _agent_mem_enabled is None or _agent_mem_enabled.memory_enabled:
+            from proxi.tools.memory_tools import SearchMemoryTool, SaveSkillTool, UpdateUserModelTool
+            tool_registry.register(SearchMemoryTool(memory_manager))
+            tool_registry.register(SaveSkillTool(memory_manager))
+            tool_registry.register(UpdateUserModelTool(memory_manager))
 
     no_sub_agents = os.environ.get("PROXI_NO_SUB_AGENTS", "").lower() in (
         "1", "true", "yes",
@@ -356,11 +371,20 @@ def _create_agent_loop(workspace_config: WorkspaceConfig) -> AgentLoop:
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     global config, router, lane_manager, heartbeat_mgr
-    global _mcp_adapters, _mcp_tools
+    global _mcp_adapters, _integration_tools
     global llm_provider, llm_model
+    global memory_manager
 
     workspace_root = _workspace_root()
     WorkspaceManager(root=workspace_root).ensure_global_system_prompt()
+
+    # Initialize memory system
+    from proxi.memory.manager import MemoryManager as _MemoryManager
+    memory_manager = _MemoryManager(
+        memory_dir=workspace_root / "memory",
+        gateway_config_path=workspace_root / "gateway.yml",
+    )
+    memory_manager.init()
 
     config = GatewayConfig.load(workspace_root)
     router = EventRouter(config)
@@ -384,12 +408,11 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     except ValueError as exc:
         raise RuntimeError(str(exc)) from exc
 
-    # Load MCP adapters once so their tools are available to all lanes.
-    await _refresh_mcp_tools()
-    # Load CLI tools once so they are available to all lanes alongside MCP tools.
-    _refresh_cli_tools()
+    # Load MCP + CLI integration tools once (shared across all lanes).
+    await _refresh_integration_tools()
 
     lane_manager = LaneManager(config, create_loop=_create_agent_loop)
+    lane_manager.discord_broadcast_factory = _discord_channels_for_agent
 
     cron_registry = CronRegistry(config, lane_manager, router)
     cron_registry.load_all(scheduler)
@@ -417,7 +440,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         "gateway_started",
         agents=list(config.agents.keys()),
         sources=list(config.sources.keys()),
-        mcp_tools=len(_mcp_tools),
+        integration_tools=len(_integration_tools),
     )
 
     # Clean up any plans left over from a previous crash.
@@ -434,7 +457,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         except Exception as exc:
             logger.warning("mcp_close_error", error=str(exc))
     _mcp_adapters.clear()
-    _mcp_tools.clear()
+    _integration_tools.clear()
     # Plans are ephemeral — delete them on every shutdown.
     _purge_all_plans(workspace_root)
     logger.info("gateway_stopped")
@@ -491,6 +514,26 @@ def _discord_agent_for_channel(source: Any, channel_id: str) -> str:
     return source.target_agent
 
 
+# Tracks channel_id → agent_id for every Discord channel that has sent a message.
+# Populated at runtime so cron/heartbeat/webhook can broadcast back to active channels.
+_discord_active_channels: dict[str, str] = {}
+
+
+def _record_discord_channel(channel_id: str, agent_id: str) -> None:
+    if channel_id:
+        _discord_active_channels[channel_id] = agent_id
+
+
+def _discord_channels_for_agent(agent_id: str) -> list[Any]:
+    """Return DiscordReplyChannel instances for all channels currently mapped to *agent_id*."""
+    from proxi.gateway.channels.discord import DiscordReplyChannel
+    return [
+        DiscordReplyChannel(destination=ch)
+        for ch, ag in _discord_active_channels.items()
+        if ag == agent_id
+    ]
+
+
 def _resolve_discord_session(source: Any, raw: dict[str, Any]) -> str:
     channel_id = _discord_channel_id(raw)
     user_id = _discord_user_id(raw)
@@ -501,7 +544,7 @@ def _resolve_discord_session(source: Any, raw: dict[str, Any]) -> str:
             status_code=400, detail=f"Unknown Discord target agent: {agent_id}")
 
     mode = str(source.extras.get(
-        "discord_session_mode", "channel")).strip().lower()
+        "discord_session_mode", "fixed")).strip().lower()
     base_session = str(source.target_session or "").strip()
     agent_default = config.agents[agent_id].default_session
 
@@ -654,6 +697,7 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
                 status_code=400, detail="Discord channel_id is required for switch")
 
         _set_discord_channel_agent(channel_id, next_agent_id)
+        _record_discord_channel(channel_id, next_agent_id)
         source = _discord_source()
         switched_session_id = _resolve_discord_session(source, raw_payload)
         lane_manager._get_or_create(switched_session_id)
@@ -678,8 +722,22 @@ async def discord_webhook(request: Request) -> dict[str, Any]:
         return {"ok": True, "ignored": True, "reason": "empty_task"}
 
     event.session_id = session_id
+    channel_id = _discord_channel_id(raw_payload)
+    agent_id = session_id.split("/", 1)[0]
+    _record_discord_channel(channel_id, agent_id)
     await lane_manager.route(event)
     return {"ok": True, "action": "start", "queued": True, "session_id": session_id}
+
+
+@app.post("/channels/discord/deregister")
+async def discord_deregister(request: Request) -> dict[str, bool]:
+    """Called by the Discord relay on shutdown to stop cron/webhook broadcasts to Discord."""
+    source = config.sources.get("discord")
+    if source is not None:
+        await verify_discord_signature(request)
+    _discord_active_channels.clear()
+    logger.info("discord_active_channels_cleared")
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
@@ -742,7 +800,7 @@ class SendRequest(BaseModel):
 
 
 @app.post("/v1/sessions/{session_id:path}/send")
-async def send_to_session(session_id: str, body: SendRequest) -> dict[str, str]:
+async def send_to_session(session_id: str, body: SendRequest, request: Request) -> dict[str, str]:
     """Non-blocking: enqueue a message or form answer, return event_id immediately."""
     if body.form_answer is not None:
         await lane_manager.resume(session_id, form_answer=body.form_answer)
@@ -756,20 +814,24 @@ async def send_to_session(session_id: str, body: SendRequest) -> dict[str, str]:
     if lane is not None and lane.try_resolve_pending_form_with_text(msg):
         return {"event_id": "", "status": "form_answer_injected"}
 
-    # Re-evaluate MCP toggles before each task (mirrors bridge behaviour).
-    await _refresh_mcp_tools()
+    # Re-evaluate integration toggles before each task (mirrors bridge behaviour).
+    await _refresh_integration_tools()
 
-    # Build a lightweight event using the tui source (if configured) or http fallback
-    source_id = "tui"
-    source = config.sources.get(source_id)
-    if source is None:
-        source_id = "http"
+    # Identify the caller: React frontend sends X-Proxi-Source: react.
+    # Otherwise fall back to tui (if configured) or http.
+    proxi_source_header = request.headers.get("X-Proxi-Source", "").strip().lower()
+    if proxi_source_header == "react":
+        source_id = "react"
+    else:
+        source_id = "tui"
+        if config.sources.get(source_id) is None:
+            source_id = "http"
 
     event = GatewayEvent(
         source_id=source_id,
         source_type="http",
         payload={"text": msg},
-        reply_channel=HttpNoopReplyChannel(destination=f"tui:{session_id}"),
+        reply_channel=HttpNoopReplyChannel(destination=f"{source_id}:{session_id}"),
         session_id=session_id,
         priority=0,
     )
@@ -781,8 +843,12 @@ _SSE_KEEPALIVE_INTERVAL = 15  # seconds
 
 
 @app.get("/v1/sessions/{session_id:path}/stream")
-async def stream_session(session_id: str) -> StreamingResponse:
-    """SSE stream of agent output for a session."""
+async def stream_session(session_id: str, subscriber: str = Query(default="sse")) -> StreamingResponse:
+    """SSE stream of agent output for a session.
+
+    ``subscriber`` identifies the client type (e.g. 'tui', 'react') so multiple
+    clients can connect to the same session simultaneously without stomping each other.
+    """
     lane = lane_manager.get_lane(session_id)
     if lane is None:
         try:
@@ -794,9 +860,9 @@ async def stream_session(session_id: str) -> StreamingResponse:
             except Exception:
                 raise HTTPException(status_code=404, detail="Unknown session")
 
-    sse = HttpSseReplyChannel(destination=f"sse:{session_id}")
+    sse = HttpSseReplyChannel(destination=f"sse:{session_id}:{subscriber}")
     form_bridge = HttpFormBridge(sse)
-    lane.attach_sse(sse, form_bridge)
+    lane.attach_sse(sse, subscriber, form_bridge)
 
     await sse.send_event({"type": "ready"})
 
@@ -806,7 +872,7 @@ async def stream_session(session_id: str) -> StreamingResponse:
     await sse.send_event({
         "type": "boot_complete",
         "agentId": agent_id,
-        "sessionId": session_name,
+        "sessionId": session_id,
     })
 
     async def event_generator():
@@ -816,7 +882,7 @@ async def stream_session(session_id: str) -> StreamingResponse:
         except Exception:
             pass
         finally:
-            lane.detach_sse(sse)
+            lane.detach_sse(sse, subscriber)
 
     async def keepalive_generator():
         """Merge data events with periodic SSE comments to keep the connection alive."""
@@ -874,35 +940,38 @@ async def get_lane(session_id: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# MCP management
+# Integration management
 # ---------------------------------------------------------------------------
-@app.get("/v1/mcps")
-async def list_mcps_endpoint() -> dict[str, Any]:
-    """List all MCPs with their enabled/disabled status."""
-    from proxi.security.key_store import list_mcps as _list_mcps
+@app.get("/v1/integrations")
+async def list_integrations_endpoint() -> dict[str, Any]:
+    """List all integrations with their enabled/disabled status."""
+    from proxi.security.key_store import list_integrations as _list_integrations
 
-    records = _list_mcps()
+    records = _list_integrations()
     return {
-        "mcps": [
-            {"name": r.mcp_name, "enabled": r.enabled}
-            for r in sorted(records, key=lambda r: r.mcp_name)
+        "integrations": [
+            {"name": r.integration_name, "enabled": r.enabled}
+            for r in sorted(records, key=lambda r: r.integration_name)
         ]
     }
 
 
-@app.post("/v1/mcps/{mcp_name}/toggle")
-async def toggle_mcp_endpoint(mcp_name: str) -> dict[str, Any]:
-    """Toggle an MCP between enabled and disabled."""
-    from proxi.security.key_store import enable_mcp as _enable_mcp, is_mcp_enabled
+@app.post("/v1/integrations/{integration_name}/toggle")
+async def toggle_integration_endpoint(integration_name: str) -> dict[str, Any]:
+    """Toggle an integration between enabled and disabled."""
+    from proxi.security.key_store import (
+        enable_integration as _enable_integration,
+        is_integration_enabled,
+    )
 
-    currently_enabled = is_mcp_enabled(mcp_name)
+    currently_enabled = is_integration_enabled(integration_name)
     new_state = not currently_enabled
-    _enable_mcp(mcp_name, enabled=new_state)
+    _enable_integration(integration_name, enabled=new_state)
 
-    # Immediately refresh loaded MCP tools so the change takes effect.
-    await _refresh_mcp_tools()
+    # Immediately refresh MCP-type integration tools so the change takes effect.
+    await _refresh_integration_tools()
 
-    return {"name": mcp_name, "enabled": new_state}
+    return {"name": integration_name, "enabled": new_state}
 
 
 # ---------------------------------------------------------------------------
@@ -1568,16 +1637,13 @@ async def accept_plan(session_id: str) -> dict[str, str]:
     # Inject plan content as the next user turn so the agent auto-executes
     execute_message = f"Execute the following plan:\n\n{plan_content}"
 
-    if lane._sse_channel is not None:
-        try:
-            await lane._sse_channel.send_event({
-                "type": "status_update",
-                "label": "Executing plan",
-                "status": "running",
-                "tui_abortable": True,
-            })
-        except Exception:
-            pass
+    if lane._sse_channels:
+        await lane._broadcast_sse({
+            "type": "status_update",
+            "label": "Executing plan",
+            "status": "running",
+            "tui_abortable": True,
+        })
 
     # Route the execution message through the lane (async background task)
     event = GatewayEvent(
@@ -1612,20 +1678,17 @@ async def reject_plan(session_id: str) -> dict[str, str]:
     lane._state.workspace.active_plan_path = None
     lane.workspace_config.active_plan_path = None
 
-    if lane._sse_channel is not None:
-        try:
-            await lane._sse_channel.send_event({
-                "type": "text_stream",
-                "content": "Plan rejected.",
-            })
-            await lane._sse_channel.send_event({
-                "type": "status_update",
-                "label": "Plan rejected",
-                "status": "done",
-                "tui_abortable": False,
-            })
-        except Exception:
-            pass
+    if lane._sse_channels:
+        await lane._broadcast_sse({
+            "type": "text_stream",
+            "content": "Plan rejected.",
+        })
+        await lane._broadcast_sse({
+            "type": "status_update",
+            "label": "Plan rejected",
+            "status": "done",
+            "tui_abortable": False,
+        })
 
     return {"status": "rejected"}
 

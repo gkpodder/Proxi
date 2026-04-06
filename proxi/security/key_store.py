@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import argparse
 import base64
+import difflib
 import json
 import os
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, available_timezones
 
-from proxi.mcp.catalog import known_mcp_categories
+from proxi.integrations.catalog import known_integrations
 
 # All database files are stored in the config/ directory for centralized configuration
 DEFAULT_DB_PATH = Path(os.getenv("PROXI_KEYS_DB_PATH", "config/api_keys.db"))
@@ -27,7 +30,7 @@ class ApiKeyRecord:
 
 def resolve_db_path(db_path: str | Path | None = None) -> Path:
     """Resolve the SQLite DB path and ensure parent directory (config/) exists.
-    
+
     All database files are stored in the config/ directory. If a custom db_path
     is provided, it will be used; otherwise the default config/api_keys.db is used.
     """
@@ -38,7 +41,7 @@ def resolve_db_path(db_path: str | Path | None = None) -> Path:
 
 def get_connection(db_path: str | Path | None = None) -> sqlite3.Connection:
     """Open a sqlite3 connection with row factory.
-    
+
     Args:
         db_path: Optional path to database file. Defaults to config/api_keys.db.
     """
@@ -48,12 +51,14 @@ def get_connection(db_path: str | Path | None = None) -> sqlite3.Connection:
 
 
 def init_db(db_path: str | Path | None = None) -> Path:
-    """Create the API keys and enabled_mcps tables if they do not exist.
-    
+    """Create the API keys and enabled_integrations tables if they do not exist.
+
+    Migrates existing enabled_mcps table to enabled_integrations automatically.
+
     Args:
         db_path: Optional path to database file. Defaults to config/api_keys.db.
                All databases should be stored in the config/ directory.
-    
+
     Returns:
         Path object pointing to the initialized database file in config/.
     """
@@ -68,10 +73,47 @@ def init_db(db_path: str | Path | None = None) -> Path:
             )
             """
         )
+
+        # Migrate enabled_mcps → enabled_integrations if needed.
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "enabled_mcps" in tables and "enabled_integrations" not in tables:
+            conn.execute("ALTER TABLE enabled_mcps RENAME TO enabled_integrations")
+            # Rename column mcp_name → integration_name (requires SQLite 3.25+)
+            try:
+                conn.execute(
+                    "ALTER TABLE enabled_integrations RENAME COLUMN mcp_name TO integration_name"
+                )
+            except Exception:
+                # Older SQLite: recreate table with correct column name
+                conn.execute(
+                    """
+                    CREATE TABLE _integrations_new (
+                        integration_name TEXT PRIMARY KEY,
+                        enabled BOOLEAN NOT NULL DEFAULT 1,
+                        created_at TEXT NOT NULL
+                    )
+                    """
+                )
+                conn.execute(
+                    """
+                    INSERT INTO _integrations_new (integration_name, enabled, created_at)
+                    SELECT mcp_name, enabled, created_at FROM enabled_integrations
+                    """
+                )
+                conn.execute("DROP TABLE enabled_integrations")
+                conn.execute(
+                    "ALTER TABLE _integrations_new RENAME TO enabled_integrations"
+                )
+
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS enabled_mcps (
-                mcp_name TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS enabled_integrations (
+                integration_name TEXT PRIMARY KEY,
                 enabled BOOLEAN NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL
             )
@@ -112,34 +154,140 @@ def get_user_profile(db_path: str | Path | None = None) -> UserProfileRecord | N
     return UserProfileRecord(profile=parsed, updated_at=row["updated_at"])
 
 
+def _normalize_timezone(raw_timezone: str) -> str | None:
+    """Resolve user-friendly timezone input to a valid IANA timezone name."""
+    if not raw_timezone or not raw_timezone.strip():
+        return None
+
+    aliases = {
+        "est": "America/New_York",
+        "edt": "America/New_York",
+        "eastern": "America/New_York",
+        "eastern time": "America/New_York",
+        "cst": "America/Chicago",
+        "cdt": "America/Chicago",
+        "central": "America/Chicago",
+        "central time": "America/Chicago",
+        "mst": "America/Denver",
+        "mdt": "America/Denver",
+        "mountain": "America/Denver",
+        "mountain time": "America/Denver",
+        "pst": "America/Los_Angeles",
+        "pdt": "America/Los_Angeles",
+        "pacific": "America/Los_Angeles",
+        "pacific time": "America/Los_Angeles",
+        "utc": "UTC",
+        "gmt": "UTC",
+    }
+
+    raw = raw_timezone.strip()
+    lowered = raw.lower()
+    if lowered in aliases:
+        return aliases[lowered]
+
+    # Try direct validation with ZoneInfo first (works on most systems)
+    try:
+        ZoneInfo(raw)
+        return raw
+    except Exception:
+        pass
+
+    # Fallback: check against static list of common IANA timezones (Windows compatibility)
+    common_timezones = {
+        "UTC",
+        "America/New_York",
+        "America/Chicago",
+        "America/Denver",
+        "America/Los_Angeles",
+        "America/Anchorage",
+        "Pacific/Honolulu",
+        "America/Toronto",
+        "America/Mexico_City",
+        "America/Bogota",
+        "America/Lima",
+        "America/Caracas",
+        "America/Argentina/Buenos_Aires",
+        "America/Sao_Paulo",
+        "America/Godthab",
+        "Atlantic/Azores",
+        "Atlantic/Cape_Verde",
+        "Europe/London",
+        "Europe/Dublin",
+        "Europe/Paris",
+        "Europe/Berlin",
+        "Europe/Amsterdam",
+        "Europe/Brussels",
+        "Europe/Vienna",
+        "Europe/Prague",
+        "Europe/Warsaw",
+        "Europe/Athens",
+        "Europe/Helsinki",
+        "Europe/Istanbul",
+        "Europe/Moscow",
+        "Asia/Dubai",
+        "Asia/Kolkata",
+        "Asia/Bangkok",
+        "Asia/Hong_Kong",
+        "Asia/Tokyo",
+        "Asia/Seoul",
+        "Asia/Shanghai",
+        "Australia/Sydney",
+        "Australia/Melbourne",
+        "Pacific/Auckland",
+    }
+
+    if raw in common_timezones:
+        return raw
+
+    # Normalize separators and case: "america/new york" -> "America/New_York".
+    normalized = raw.replace("\\", "/").replace("-", "_").strip()
+    normalized = re.sub(r"\s+", "_", normalized)
+    normalized = "/".join(part.capitalize() for part in normalized.split("/"))
+    if normalized in common_timezones:
+        return normalized
+
+    # Try fuzzy matching only if available_timezones() returns results
+    try:
+        all_tzs = available_timezones()
+        if all_tzs:
+            tz_by_lower = {tz.lower(): tz for tz in all_tzs}
+            fuzzy_target = normalized.lower()
+            match = difflib.get_close_matches(
+                fuzzy_target,
+                list(tz_by_lower.keys()),
+                n=1,
+                cutoff=0.78,
+            )
+            if match:
+                return tz_by_lower[match[0]]
+    except Exception:
+        pass
+
+    return None
+
+
 def validate_timezone(timezone_str: str | None) -> str | None:
     """Validate and normalize timezone to IANA format compatible with Google Calendar.
-    
+
     Args:
         timezone_str: User input or profile timezone string.
-        
+
     Returns:
         Normalized IANA timezone name (e.g., 'America/Toronto') if valid, None otherwise.
     """
     if not timezone_str or not isinstance(timezone_str, str):
         return None
-    
-    try:
-        from proxi.mcp.servers.calendar_tools import CalendarTools
-        normalized = CalendarTools._normalize_timezone(timezone_str)
-        return normalized
-    except Exception:
-        return None
+    return _normalize_timezone(timezone_str)
 
 
 def upsert_user_profile(profile: dict[str, Any], db_path: str | Path | None = None) -> None:
     """Insert or update the single user profile record.
-    
+
     Validates and normalizes timezone field to IANA format if present.
     """
     if not isinstance(profile, dict):
         raise ValueError("Profile must be a JSON object")
-    
+
     # Validate and normalize timezone to Google Calendar format
     if "timezone" in profile and profile["timezone"]:
         normalized_tz = validate_timezone(profile["timezone"])
@@ -245,11 +393,11 @@ def _mask_key(value: str) -> str:
     return f"{value[:4]}...{value[-4:]}"
 
 
-# MCP Management Functions
+# Integration Management Functions
 
 @dataclass(slots=True)
-class MCPRecord:
-    mcp_name: str
+class IntegrationRecord:
+    integration_name: str
     enabled: bool
     created_at: str
 
@@ -260,20 +408,22 @@ class UserProfileRecord:
     updated_at: str
 
 
-def enable_mcp(mcp_name: str, enabled: bool = True, db_path: str | Path | None = None) -> None:
-    """Enable or disable an MCP."""
-    normalized_name = mcp_name.strip().lower()
+def enable_integration(
+    integration_name: str, enabled: bool = True, db_path: str | Path | None = None
+) -> None:
+    """Enable or disable an integration."""
+    normalized_name = integration_name.strip().lower()
     if not normalized_name:
-        raise ValueError("MCP name cannot be empty")
+        raise ValueError("Integration name cannot be empty")
 
     now = datetime.now(UTC).isoformat()
     init_db(db_path)
     with get_connection(db_path) as conn:
         conn.execute(
             """
-            INSERT INTO enabled_mcps (mcp_name, enabled, created_at)
+            INSERT INTO enabled_integrations (integration_name, enabled, created_at)
             VALUES (?, ?, ?)
-            ON CONFLICT(mcp_name) DO UPDATE SET
+            ON CONFLICT(integration_name) DO UPDATE SET
                 enabled = excluded.enabled
             """,
             (normalized_name, enabled, now),
@@ -281,13 +431,15 @@ def enable_mcp(mcp_name: str, enabled: bool = True, db_path: str | Path | None =
         conn.commit()
 
 
-def is_mcp_enabled(mcp_name: str, db_path: str | Path | None = None) -> bool:
-    """Check if an MCP is enabled."""
-    normalized_name = mcp_name.strip().lower()
+def is_integration_enabled(
+    integration_name: str, db_path: str | Path | None = None
+) -> bool:
+    """Check if an integration is enabled."""
+    normalized_name = integration_name.strip().lower()
     init_db(db_path)
     with get_connection(db_path) as conn:
         row = conn.execute(
-            "SELECT enabled FROM enabled_mcps WHERE mcp_name = ?",
+            "SELECT enabled FROM enabled_integrations WHERE integration_name = ?",
             (normalized_name,),
         ).fetchone()
     if not row:
@@ -295,34 +447,39 @@ def is_mcp_enabled(mcp_name: str, db_path: str | Path | None = None) -> bool:
     return bool(row["enabled"])
 
 
-def list_mcps(db_path: str | Path | None = None) -> list[MCPRecord]:
-    """List MCP records sorted by name, including known MCPs not yet persisted."""
+def list_integrations(db_path: str | Path | None = None) -> list[IntegrationRecord]:
+    """List integration records sorted by name, including known integrations not yet persisted."""
     init_db(db_path)
     with get_connection(db_path) as conn:
         rows = conn.execute(
-            "SELECT mcp_name, enabled, created_at FROM enabled_mcps ORDER BY mcp_name"
+            "SELECT integration_name, enabled, created_at FROM enabled_integrations ORDER BY integration_name"
         ).fetchall()
 
-    records: dict[str, MCPRecord] = {
-        row["mcp_name"]: MCPRecord(row["mcp_name"], bool(row["enabled"]), row["created_at"])
+    records: dict[str, IntegrationRecord] = {
+        row["integration_name"]: IntegrationRecord(
+            row["integration_name"], bool(row["enabled"]), row["created_at"]
+        )
         for row in rows
     }
 
-    for mcp_name in known_mcp_categories():
-        if mcp_name not in records:
-            records[mcp_name] = MCPRecord(mcp_name=mcp_name, enabled=False, created_at="")
+    for integration_name in known_integrations():
+        if integration_name not in records:
+            records[integration_name] = IntegrationRecord(
+                integration_name=integration_name, enabled=False, created_at=""
+            )
 
     return [records[name] for name in sorted(records.keys())]
 
 
-def get_enabled_mcps(db_path: str | Path | None = None) -> list[str]:
-    """Get list of enabled MCP names."""
-    return [mcp.mcp_name for mcp in list_mcps(db_path) if mcp.enabled]
-
+def get_enabled_integrations(db_path: str | Path | None = None) -> list[str]:
+    """Get list of enabled integration names."""
+    return [i.integration_name for i in list_integrations(db_path) if i.enabled]
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Manage Proxi API keys and MCPs in SQLite")
+    parser = argparse.ArgumentParser(
+        description="Manage Proxi API keys and integrations in SQLite"
+    )
     parser.add_argument("--db", help="Override SQLite database path")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -345,19 +502,31 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("export-env", help="Export all keys as JSON object")
 
-    # MCP subcommands
-    list_mcps_parser = subparsers.add_parser("list-mcps", help="List all MCPs and their status")
+    # Integration subcommands
+    subparsers.add_parser("list-integrations", help="List all integrations and their status")
 
-    enable_mcp_parser = subparsers.add_parser("enable-mcp", help="Enable an MCP")
-    enable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, calendar, notion, weather)")
+    enable_integration_parser = subparsers.add_parser(
+        "enable-integration", help="Enable an integration"
+    )
+    enable_integration_parser.add_argument(
+        "integration_name",
+        help="Integration name (e.g., gmail, google_calendar, spotify, weather)",
+    )
 
-    disable_mcp_parser = subparsers.add_parser("disable-mcp", help="Disable an MCP")
-    disable_mcp_parser.add_argument("mcp_name", help="MCP name (e.g., gmail, calendar, notion, weather)")
+    disable_integration_parser = subparsers.add_parser(
+        "disable-integration", help="Disable an integration"
+    )
+    disable_integration_parser.add_argument(
+        "integration_name",
+        help="Integration name (e.g., gmail, google_calendar, spotify, weather)",
+    )
 
     # User profile subcommands
     subparsers.add_parser("get-profile", help="Get the saved user profile")
 
-    upsert_profile_parser = subparsers.add_parser("upsert-profile", help="Insert or update the user profile")
+    upsert_profile_parser = subparsers.add_parser(
+        "upsert-profile", help="Insert or update the user profile"
+    )
     upsert_profile_parser.add_argument("--json", help="Profile payload as JSON object")
     upsert_profile_parser.add_argument(
         "--json-base64",
@@ -424,23 +593,43 @@ def main() -> int:
             print(json.dumps({"ok": True, "env": export_env_keys(db_path)}))
             return 0
 
-        if args.command == "list-mcps":
-            records = list_mcps(db_path)
+        if args.command == "list-integrations":
+            records = list_integrations(db_path)
             output = [
-                {"mcp_name": r.mcp_name, "enabled": r.enabled, "created_at": r.created_at}
+                {
+                    "integration_name": r.integration_name,
+                    "enabled": r.enabled,
+                    "created_at": r.created_at,
+                }
                 for r in records
             ]
-            print(json.dumps({"ok": True, "mcps": output}))
+            print(json.dumps({"ok": True, "integrations": output}))
             return 0
 
-        if args.command == "enable-mcp":
-            enable_mcp(args.mcp_name, enabled=True, db_path=db_path)
-            print(json.dumps({"ok": True, "mcp_name": args.mcp_name.strip().lower(), "enabled": True}))
+        if args.command == "enable-integration":
+            enable_integration(args.integration_name, enabled=True, db_path=db_path)
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "integration_name": args.integration_name.strip().lower(),
+                        "enabled": True,
+                    }
+                )
+            )
             return 0
 
-        if args.command == "disable-mcp":
-            enable_mcp(args.mcp_name, enabled=False, db_path=db_path)
-            print(json.dumps({"ok": True, "mcp_name": args.mcp_name.strip().lower(), "enabled": False}))
+        if args.command == "disable-integration":
+            enable_integration(args.integration_name, enabled=False, db_path=db_path)
+            print(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "integration_name": args.integration_name.strip().lower(),
+                        "enabled": False,
+                    }
+                )
+            )
             return 0
 
         if args.command == "get-profile":
@@ -448,7 +637,11 @@ def main() -> int:
             if not record:
                 print(json.dumps({"ok": True, "profile": None}))
                 return 0
-            print(json.dumps({"ok": True, "profile": record.profile, "updated_at": record.updated_at}))
+            print(
+                json.dumps(
+                    {"ok": True, "profile": record.profile, "updated_at": record.updated_at}
+                )
+            )
             return 0
 
         if args.command == "upsert-profile":
@@ -458,7 +651,9 @@ def main() -> int:
             profile_payload = args.json
             if args.json_base64:
                 try:
-                    profile_payload = base64.b64decode(args.json_base64.encode("ascii")).decode("utf-8")
+                    profile_payload = base64.b64decode(
+                        args.json_base64.encode("ascii")
+                    ).decode("utf-8")
                 except Exception as exc:
                     raise ValueError("Invalid base64 profile payload") from exc
 

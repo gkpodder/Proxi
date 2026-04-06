@@ -27,6 +27,9 @@ class LaneManager:
         self._config = config
         self._lanes: dict[str, AgentLane] = {}
         self._create_loop = create_loop
+        # Optional factory: given an agent_id, returns Discord reply channels to broadcast to.
+        # Set by server.py after startup for cron/heartbeat/webhook broadcast support.
+        self.discord_broadcast_factory: Callable[[str], list[Any]] | None = None
 
     def update_config(self, new_config: GatewayConfig) -> None:
         """Replace gateway config (e.g. after gateway.yml is updated on disk)."""
@@ -34,6 +37,15 @@ class LaneManager:
 
     async def route(self, event: GatewayEvent) -> None:
         assert event.session_id, "session_id must be stamped by EventRouter before routing"
+        # For automated sources (cron/heartbeat/webhook), attach Discord broadcast channels
+        # so the response is sent to all Discord channels mapped to the target agent.
+        if (
+            event.source_type in ("cron", "heartbeat", "webhook")
+            and self.discord_broadcast_factory is not None
+            and not event.broadcast_reply_channels
+        ):
+            agent_id = event.session_id.split("/", 1)[0]
+            event.broadcast_reply_channels = self.discord_broadcast_factory(agent_id)
         lane = self._get_or_create(event.session_id)
         await lane.enqueue(event)
 
@@ -106,6 +118,15 @@ class LaneManager:
         """After gateway MCP refresh, update tool registries on running loops."""
         for lane in self._lanes.values():
             lane.sync_mcp_tools(list(mcp_tools), list(deferred_tools))
+
+    def sync_cli_tools_to_loops(
+        self,
+        live_tools: Sequence[Any],
+        deferred_tools: Sequence[Any] = (),
+    ) -> None:
+        """After gateway CLI integration refresh, update tool registries on running loops."""
+        for lane in self._lanes.values():
+            lane.sync_cli_tools(list(live_tools), list(deferred_tools))
 
     def sync_coding_tools_to_loops(self, working_dir: Path) -> None:
         """After a working-dir change, re-root coding tools on all active loops."""
