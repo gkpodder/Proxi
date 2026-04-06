@@ -1551,13 +1551,16 @@ better? (LO\_ProbSolutions)}
 
 Right now, the design assumes relatively simple commands and a
 limited amount of context. The NLU is closer to pattern matching
-than full natural language understanding. The system also depends on
+than full natural language understanding. Our pipeline is also fairly
+sequential, so errors in speech capture or intent parsing can propagate
+forward into planning and execution. The system also depends on
 reliable speech models and may not perform as well in noisy
 environments or for all accents. With more time and resources, we
-would explore more robust language models, better noise handling, and
-wider accessibility testing with real users. We would also add more
-automation around logging and replaying user sessions for regression
-testing, drawing from ideas in my QA work and SFWRENG 3S03 and
+would strengthen context handling between modules, improve recovery
+when one stage of the pipeline fails, and explore more robust language
+models, better noise handling, and wider accessibility testing with real users.
+We would also add more automation around logging and replaying user sessions for
+regression testing, drawing from ideas in my QA work and SFWRENG 3S03 and
 STATS 3Y03 for analyzing failure patterns.
 
 \item \textbf{Give a brief overview of other design solutions you
@@ -1619,10 +1622,12 @@ given unlimited resources, what could you do to make the project
 better? (LO\_ProbSolutions)}
 
 The limitations of our solution is that it is designed for a single desktop
-enviroment and heavlily is reliant on STT and LLM. Hence, offline use cases
+enviroment and heavlily is reliant on STT and LLM. The current design also uses
+a relatively simple interaction loop, so more complex multi-step tasks or longer
+conversations may require repeated clarification from the user. Hence, offline use cases
 and strong privacy guarantees are not well supported. Given unlimited resources,
-we would explore more defined language models, and richer accessibility features
-to target a broader user base.
+we would strengthen local processing, improve context handling across the system,
+and add richer accessibility features to target a broader user base.
 
 \item \textbf{Give a brief overview of other design solutions you
 considered. What are the benefits and tradeoffs of those other
@@ -1683,8 +1688,11 @@ given unlimited resources, what could you do to make the project
 better? (LO\_ProbSolutions)}
 
 The current limitation of our solutions is using off-the-shelf existing AI models
-for our project. Given unlimited time, we would aim to create our own model as
-our use-case is relatively specific and niche. Making API calls for every single
+for our project. Our design also still depends on a chain of separate modules for
+input, interpretation, planning, and safety, so failures in one stage can reduce
+the reliability of the full interaction. Given unlimited time, we would aim to
+improve the coordination between these stages and create stronger fallback behaviour
+before attempting our own model for this specific use-case. Making API calls for every single
 action will quickly get very expensive and will make scaling the application
 challenging over time.
 Our error-handling strategy is also very rudimentary at the moment; it simply
@@ -1768,10 +1776,14 @@ better? (LO\_ProbSolutions)}
 
 In an ideal scenario we would create our own model as there are a specific class
 of llms called large action models (LAMs) which are specifically designed for
-action planning tasks. These models are optimized to understand and execute
+action planning tasks. At the design level, another limitation is that our current
+architecture still keeps context memory, action planning, and safety confirmation
+fairly lightweight, which can make longer or more ambiguous user requests harder
+to handle consistently. These models are optimized to understand and execute
 complex sequences of actions based on user commands. These models are typically
 smaller and more efficient than general-purpose LLMs, making them suitable for
-low latency and better user experience.
+low latency and better user experience. With more resources, we would also build
+stronger local context management and more robust recovery paths for failed plans.
 
 \item \textbf{Give a brief overview of other design solutions you
 considered. What are the benefits and tradeoffs of those other
