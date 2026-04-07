@@ -200,7 +200,7 @@ There are three memory types:
 
 At the end of each session a background task summarizes the conversation using a cheap model (provider-appropriate: Haiku for Anthropic, `gpt-4o-mini` for OpenAI, or the active model as a fallback) and stores the result as an episode. The agent can query all three memory types via the `search_memory` tool, write new skills via `save_skill`, and update the user profile via `update_user_model`.
 
-For a full breakdown of the architecture, skill lifecycle, summarization pipeline, and configuration options see **[instruction_manual/memory.md](instruction_manual/memory.md)**.
+For a full breakdown of the architecture, skill lifecycle, summarization pipeline, and configuration options see **[refs/memory.md](refs/memory.md)**.
 
 
 

@@ -167,15 +167,58 @@ set of predefined tasks instead of broader autonomous computer control.
 
 \section{Expected Technology}
 
+The technologies below were selected because they support the core needs
+of Proxi: natural-language interaction, desktop and browser automation,
+accessibility-focused interface design, and a development process that
+is realistic within a capstone timeline. The team considered both the
+benefits and the limitations of these tools rather than choosing them
+only based on familiarity.
+
 \begin{itemize}
-  \item Programming Language: Python for the AI agent, tool plugins, and overall backend structure. TypeScript and React for desktop UI
-  \item Agent Core Libraries: pydantic, asyncio, httpx
-  \item System Automation: For Windows we will use pywin32, UIAutomationCore; for macOS we will use pyobjc, some AppleScript/JXA bridge; For Browser we will use Playwright
-  \item Storage/Database: SQL
-  \item Pre-trained Models: OpenAI GPT-4o-mini API for natural language understanding and generation
-  \item Local LLM For Future (if needed)
-  \item Linter Tools: pylint, Prettier, ESLint
-  \item CI/CD: Git, GitHub
+  \item \textbf{Programming Languages:} Python was chosen for the AI agent,
+  tool plugins, and backend orchestration because it has a strong
+  ecosystem for API integration, automation, and rapid prototyping.
+  TypeScript and React were chosen for the UI because they support a more
+  maintainable, component-based frontend with clearer type checking. The
+  tradeoff is a multi-language codebase that is more complex to manage
+  than a single-stack solution.
+  \item \textbf{Agent Core Libraries:} \texttt{pydantic}, \texttt{asyncio},
+  and \texttt{httpx} were selected because they provide structured data
+  validation, asynchronous coordination, and reliable communication with
+  external services. Their main limitation is increased implementation and
+  debugging complexity, especially when handling concurrent tasks and
+  network failures.
+  \item \textbf{System Automation:} For Windows we plan to use
+  \texttt{pywin32} and related UI automation support, for macOS
+  \texttt{pyobjc} and AppleScript/JXA bridges, and for browser
+  interactions Playwright. These tools were chosen because Proxi must
+  perform real computer actions rather than only generate text, but the
+  tradeoff is that automation can be platform-specific and brittle when
+  operating system or application interfaces change.
+  \item \textbf{Storage/Database:} SQL was chosen for structured
+  persistence of preferences, history, and logs because it scales better
+  than ad hoc files as the project grows. The downside is the added
+  overhead of schema design and data maintenance for a relatively small
+  system.
+  \item \textbf{Pre-trained Models:} The OpenAI GPT-4o-mini API was chosen
+  because it offers strong natural-language understanding and fast
+  integration, which is important for validating the core Proxi workflow
+  during capstone. Its limitations include internet dependence, usage
+  cost, privacy considerations, and reduced offline capability.
+  \item \textbf{Local LLM for Future Use:} A local model remains a possible
+  extension because it could improve privacy and offline support.
+  However, it was not selected as the primary approach because of the
+  higher hardware requirements, tuning effort, and integration overhead.
+  \item \textbf{Quality Tools:} \texttt{pylint}, Prettier, and ESLint were
+  chosen to enforce consistent coding standards and catch common issues
+  early across both the Python and TypeScript codebases. The tradeoff is
+  some setup friction and occasional false positives, but the quality and
+  maintainability benefits justify their use.
+  \item \textbf{Version Control and Collaboration:} Git and GitHub were
+  selected because they support branching, pull-request review, issue
+  tracking, and project traceability. Their limitation is added workflow
+  overhead, but that overhead is valuable for maintaining coordination
+  and code quality in a team project.
 \end{itemize}
 \section{Coding Standard}
 

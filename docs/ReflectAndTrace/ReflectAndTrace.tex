@@ -2,6 +2,8 @@
 
 \usepackage{tabularx}
 \usepackage{booktabs}
+\usepackage{xstring}
+\usepackage[round]{natbib}
 
 \title{Reflection and Traceability Report on \progname}
 
@@ -12,132 +14,1563 @@
 \input{../Comments}
 \input{../Common}
 
+\makeatletter
+\let\OriginalUrl\url
+\renewcommand{\url}[1]{%
+\IfSubStr{#1}{/issues/}{%
+\StrBehind{#1}{/issues/}[\IssueNumber]%
+\href{#1}{\#\IssueNumber}%
+}{%
+\IfSubStr{#1}{/pull/}{%
+\StrBehind{#1}{/pull/}[\PullNumber]%
+\href{#1}{\#\PullNumber}%
+}{%
+\OriginalUrl{#1}%
+}%
+}%
+}
+\makeatother
+
+% Improve line breaking and reduce minor spacing/overflow issues.
+\setlength{\emergencystretch}{3em}
+
 \begin{document}
 
 \maketitle
 
-\plt{Reflection is an important component of getting the full benefits from a
-learning experience.  Besides the intrinsic benefits of reflection, this
-document will be used to help the TAs grade how well your team responded to
-feedback.  Therefore, traceability between Revision 0 and Revision 1 is and
-important part of the reflection exercise.  In addition, several CEAB (Canadian
-Engineering Accreditation Board) Learning Outcomes (LOs) will be assessed based
-on your reflections.}
-
 \section{Changes in Response to Feedback}
 
-\plt{Summarize the changes made over the course of the project in response to
-feedback from TAs, the instructor, teammates, other teams, the project
-supervisor (if present), and from user testers.}
+This section summarizes the changes made across project deliverables in
+response to feedback from TAs, peer reviewers, and internal team review.
+Each item identifies the feedback received, its source, and the specific
+Revision 1 changes made in response. GitHub issue and pull request links
+are included to support traceability to the corresponding tracked changes.
 
-\plt{For those teams with an external supervisor, please highlight how the feedback 
-from the supervisor shaped your project.  In particular, you should highlight the 
-supervisor's response to your Rev 0 demonstration to them.}
-
-\plt{Version control can make the summary relatively easy, if you used issues
-and meaningful commits.  If you feedback is in an issue, and you responded in
-the issue tracker, you can point to the issue as part of explaining your
-changes.  If addressing the issue required changes to code or documentation, you
-can point to the specific commit that made the changes.  Although the links are
-helpful for the details, you should include a label for each item of feedback so
-that the reader has an idea of what each item is about without the need to click
-on everything to find out.}
-
-\plt{If you were not organized with your commits, traceability between feedback
-and commits will not be feasible to capture after the fact.  You will instead
-need to spend time writing down a summary of the changes made in response to
-each item of feedback.}
-
-\plt{You should address EVERY item of feedback.  A table or itemized list is
-recommended.  You should record every item of feedback, along with the source of
-that feedback and the change you made in response to that feedback.  The
-response can be a change to your documentation, code, or development process.
-The response can also be the reason why no changes were made in response to the
-feedback.  To make this information manageable, you will record the feedback and
-response separately for each deliverable in the sections that follow.}
-
-\plt{If the feedback is general or incomplete, the TA (or instructor) will not
-be able to grade your response to feedback.  In that case your grade on this
-document, and likely the Revision 1 versions of the other documents will be
-low.} 
+Peer review feedback was also considered during revision. When peer
+feedback aligned with TA feedback or identified clear issues in clarity,
+structure, traceability, or testability, the suggested changes were
+incorporated. When peer feedback was ambiguous, conflicted with the
+document's purpose, or introduced unnecessary implementation detail,
+the team reviewed it but did not apply it. These decisions were made to
+preserve consistency with project scope, black-box requirements
+principles, and previously validated design choices.
 
 \subsection{SRS and Hazard Analysis}
 
-\subsection{Design and Design Documentation}
+\subsubsection{SRS}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.1.1 Start: SRS Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the SRS and the specific
+Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: Use symbolic constants instead of repeated numeric
+values.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A dedicated symbolic constants subsection was added in Section 2.1.
+Repeated thresholds for timing, accuracy, capacity, and related fit
+criteria were moved there and replaced with named constants throughout
+the document. This reduced duplication and made the same values usable
+consistently across goals, requirements, and V\&V activities. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Sections should not start directly with subsections.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Introductory text was added to major sections so each section now
+explains its purpose before listing subsections. This was applied across
+the SRS so the document has clearer flow and better context for the
+reader before detailed content begins. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Goals feel too low-level and resemble FRs or NFRs.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Section 1.2 was rewritten so the goals are high-level and stable rather
+than implementation-like. Detailed measurable criteria were removed
+from the goals and expressed later through functional and
+non-functional requirements, with quantitative targets centralized in
+the symbolic constants section. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Many spelling and wording issues.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The full SRS was reviewed for spelling, grammar, and wording problems.
+This included correction of typos, general wording cleanup, and small
+improvements to sentence flow so the document reads more consistently
+and professionally. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Definitions and acronyms should be ordered
+alphabetically.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The glossary and terminology material were reorganized alphabetically
+to improve lookup and consistency. This makes terminology easier to
+scan and aligns the document with expected reference-section style. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Tables need to be referenced in the document.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Tables were explicitly referenced in the surrounding text so their role
+is explained rather than left implicit. This was done to improve
+document coherence and to make the trace from discussion to tabular
+evidence clearer for the reader. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Section 8.3 needed more spacing and readability.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Section 8.3 was reformatted for better spacing and readability so
+individual product use cases are easier to follow. This change improved
+visual separation between entries and reduced the sense of compressed
+content in that section. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Most FRs were actually NFRs.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Requirements were revised to better distinguish functional behaviour
+from non-functional quality attributes. Functional requirements were
+kept focused on what the system does, while performance, usability,
+safety, and related quality measures were expressed through the
+appropriate non-functional sections and fit criteria. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Need a table or matrix for traceability.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Dedicated traceability from requirements to use cases was added so the
+reader can follow how requirements relate to system behaviour. This
+strengthened the bridge between the SRS and later V\&V artifacts by
+making requirement coverage more explicit. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Many NFRs need fit criteria.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Measurable thresholds were clarified and made more consistent by using
+the symbolic constants section and by tightening the wording of
+non-functional criteria. This improved testability and reduced the
+chance of inconsistent repeated numeric values across sections. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Constraints need rationale and clearer origin.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Rationale was added to key constraints so the document better explains
+why they exist and whether they come from the problem context, user
+needs, or team decisions. This improved transparency and reduced the
+risk of presenting internal design choices as mandated constraints. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Personas are good, but their effect on requirements is
+unclear.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The SRS now explicitly explains how personas affect requirement
+priorities. This links user groups such as accessibility-focused users,
+older adults, and power users to the emphasis placed on accessibility,
+high-level interaction, safety, and ease of use requirements. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Assumptions should be labeled, including LLM-related
+assumptions.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Assumptions were labeled explicitly as A1, A2, and so on in the
+assumptions section. This includes assumptions about external services,
+such as the use of off-the-shelf AI services, so those expectations are
+visible and can later be examined through validation rather than being
+left implicit. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: External knowledge and references were not included.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+External references were incorporated into the SRS so design and user
+context claims are supported rather than left unreferenced. This helps
+anchor the problem context and strengthens the professionalism of the
+document. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: No attempt to formalize any part of the document.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A formalized safety interaction protocol and a dedicated system state
+diagram subsection were added. These additions introduce more precise
+behavioural structure without turning the SRS into a design document. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Planning detail was thin.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Schedule and task-planning detail were expanded so the SRS more
+clearly reflects phased development expectations and downstream
+planning links. This helps connect requirements to the broader project
+workflow. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\end{itemize}
+
+\subsubsection{Hazard Analysis}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.1.2 Start: Hazard Analysis Feedback and
+Responses}
+
+\noindent
+The following items summarize TA feedback on the Hazard Analysis and
+the specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: Tables were not referenced in the document body.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Text was added to explicitly refer to the revision history table, the
+main FMEA, and the roadmap tables. The introduction now points the
+reader to Table 1, Section 5 introduces Table 2 directly, and Section 7
+explains the role of Tables 3 and 4 in prioritizing mitigations. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\item
+\textbf{Feedback: Table formatting and readability issues.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The revision history was reformatted to one item per row, the ruled
+tables were replaced with Booktabs styling, and the FMEA table was
+rotated to improve readability and avoid compressed text. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\item
+\textbf{Feedback: Need privacy hazards for external LLM usage.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Privacy and external-service risk coverage was expanded. New attention
+was given to what data may leave the system when external AI services
+are used, and explicit assumptions A6 and A7 were added to state that
+only minimum task-relevant data is sent and that users are informed
+when external processing is required. Derived requirements such as
+consent for external sharing and bounded logging were also included. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\item
+\textbf{Feedback: Hazard requirements and terminology should align with
+the SRS and V\&V artifacts.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Terminology and identifiers were aligned so hazard-derived requirements
+use names and references that connect more cleanly to the SRS and
+validation documents. The FMEA also includes SRS references beside
+hazards to strengthen cross-document traceability. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\item
+\textbf{Feedback: Need clearer system boundaries and assumptions.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+System boundaries were clarified in Section 3 by separating internal
+components from external systems such as the operating system,
+third-party applications, and cloud services. Assumptions were stated
+explicitly in Section 4, with extra emphasis on the new privacy-related
+assumptions tied to external processing. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\end{itemize}
 
 \subsection{VnV Plan and Report}
 
+\subsubsection{V\&V Plan}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.3.1 Start: V\&V Plan Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the V\&V Plan and the
+specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: Use symbolic constants instead of repeated numeric
+values.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Repeated numeric thresholds were replaced with symbolic constants and
+the plan now includes a symbolic parameters appendix. This makes the
+validation targets more consistent with the SRS and easier to update in
+one place. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Many spelling mistakes, grammar issues, and weak flow.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The document was reviewed for spelling, grammar, and sentence flow.
+Terminology and phrasing were cleaned up so the plan reads more
+smoothly and professionally. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Missing text introducing Section 1.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+An opening description was added before Section 1 so the document now
+states what the plan covers, how evidence will be collected, and how it
+traces back to the SRS. This gives the section a clearer entry point. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Proper stylization is macOS.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Platform terminology was standardized, including the proper stylization
+of macOS, so the document uses consistent technical naming. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Table titles and table references were incorrect or
+missing.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Table captions were positioned above tables and the text now refers to
+tables directly, such as Table 1 for team roles. This improves
+navigation and makes tabular evidence part of the argument rather than
+isolated content. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: No plan for how roles may change if needed.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A dedicated role reassignment and contingency plan was added in
+Section 2.2. It specifies how blocked work is identified, how backup
+reviewers are maintained, how reassignment is tracked in GitHub, and
+how traceability records are updated afterward. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Checklists were not atomic enough.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Broad checklist statements were broken into smaller, independently
+checkable items. For example, review checklists now separate ideas
+such as identifier uniqueness, direct language, measurable outcome,
+and requirement consistency, rather than hiding several checks inside
+one vague bullet. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: ``Run some WCAG checks'' was too vague.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The accessibility verification plan was made concrete. The plan now
+refers to specific checks such as keyboard navigation, screen reader
+compatibility, and WCAG 2.2-related accessibility validation instead
+of relying on a generic statement. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: It was not clear whether traceability was complete.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The plan now states requirement-to-test traceability more explicitly
+and includes a dedicated traceability section for functional and
+non-functional system tests. This clarifies intended completeness of
+coverage. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Walkthroughs, inspections, and reviews lacked
+specific plans.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Review activities were expanded into clearer planned stages, including
+internal review, peer team review, walkthrough meetings, and
+traceability checks. The plan now explains what each activity is for
+and how issues will be recorded. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Chosen extras were not justified well enough.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The challenge/extras section now explains why the user manual and
+usability report matter for this project specifically. Their value is
+tied to onboarding, accessibility support, and iterative improvement
+based on observed usability findings. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Stakeholder review session and survey goals were not
+clear enough.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The plan was expanded to explain how stakeholder feedback and survey
+results will be used, and the appendix now includes a usability survey
+with acceptance criteria. This makes the intended outputs of those
+activities more explicit and measurable. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\end{itemize}
+
+\subsubsection{V\&V Report}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.3.2 Start: V\&V Report Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the V\&V Report and the
+specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: Some FR tests were really more like NFR tests.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The report now separates behavioural verification from timing and
+latency evidence. Functional sections focus on whether required actions
+occur, while timing, latency, throughput, and related measurements are
+reported in the non-functional performance section. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: The project name should be updated.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The document title and content were updated to refer consistently to
+Project Proxi instead of a generic software engineering label. This
+brings the report in line with the other project artifacts. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: Performance results should include data, not only
+means.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Rawer performance evidence was added through dedicated tables for quiet
+and moderate-noise trials, common action completion times, and CPU
+samples during extended runs. This makes the performance discussion more
+transparent and easier to inspect. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: Usability has good data so far, but more complete
+results are expected elsewhere.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The report keeps the current usability-related evidence that supports
+requirement coverage, while making it clear that fuller usability
+analysis belongs in the dedicated usability report. This keeps the
+V\&V Report focused while preserving consistency with the chosen extra. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: Participant-count discussion should reflect capstone
+constraints.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Usability-study wording was adjusted so it reflects realistic
+small-scale evaluation within capstone limits, while still presenting
+meaningful participant-based evidence and observed issues. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: Traceability in the final report should be clearer.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The report includes requirement traceability matrices for functional
+and non-functional requirements, as well as module-level unit-test
+traceability matrices. This makes the relation between planned and
+completed verification more explicit. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\end{itemize}
+
+\subsection{Design Documentation}
+
+\subsubsection{Module Guide (MG)}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.3.1 Start: Module Guide (MG) Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the MG and the specific
+Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: I don't know if the Types module is really SW
+decision, since it is related to your requirements and not just generic
+software engineering things like searching/sorting algorithms.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The MG was revised so \texttt{SD-Types} is no longer framed as a generic
+software-decision module. Instead, it is presented as a shared type
+module that supports the actual domain model used by Proxi. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Core data types is not an abstract data type.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The description of the core structures was updated so they are treated
+as shared type and record definitions rather than being described as an
+abstract data type. This makes the MG classification more accurate. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: One table reference didn't work.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The broken table reference was corrected so the architecture discussion
+now points readers to the intended content without a failed reference. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Some tables extend and overlap with page numbers
+(LaTeX's \texttt{longtable} package should help with this).} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The large traceability tables were converted to \texttt{longtable} so
+that they can span pages cleanly without colliding with footer content
+or page numbers. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Need to change the variable for your team name, so it
+doesn't just say ``Software Engineering''.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The shared project and team macros were checked and used consistently so
+these design documents refer to Project Proxi and the actual team rather
+than generic placeholder text. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: I find it a bit weird that the hyperlinks point to
+the list of modules and not to the sections with more details about
+them.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The MG navigation and cross-reference wording were cleaned up so it is
+clearer how readers should move from the high-level hierarchy to the
+later detailed module descriptions. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Should quickly describe the tables in the body of the
+text.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Short explanatory text was added around the traceability tables so the
+reader is told what each table shows and how it supports the design
+argument. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Uses hierarchy diagram looks great! I love the
+different shapes for different types of modules - I would add a legend
+for the different shapes.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The uses-hierarchy explanation was expanded so the meaning of the
+various node shapes is described directly in the surrounding text,
+providing the equivalent of a legend for the diagram. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Figure 2 is not referenced in the body of the text.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The MG now explicitly references the main UI figure in the surrounding
+body text so it is introduced as part of the discussion rather than left
+unexplained. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Modules in MG and MIS do not match (e.g. M10 is
+ different).} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Module names and numbering were synchronized across the MG and MIS so
+that the same module identifiers refer to the same components in both
+design documents. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\end{itemize}
+
+\subsubsection{Module Interface Specification (MIS)}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.3.2 Start: MIS Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the MIS and the specific
+Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: You don't need the ``if audio devices exist'' style
+of guard in the semantics, since the exception already captures that
+case.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Redundant success guards were removed from the access-program semantics
+so the state transitions are simpler and rely on the defined exception
+behaviour instead of duplicating that logic in prose. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Use \texttt{exc :=} for the exceptions.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Exception descriptions were rewritten using the expected
+\texttt{exc :=} notation so the MIS matches the course formatting
+conventions more closely. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Use \texttt{out :=} for outputs instead of
+sentences.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Output descriptions were updated to use \texttt{out :=} consistently,
+which makes the behaviour specifications shorter, clearer, and more
+uniform across modules. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Don't define types in the state variables. Add an
+``Exported Types'' section in the syntax instead.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Type definitions were moved out of the state-variable descriptions and
+into dedicated \texttt{Exported Types} subsections, which makes the
+module interfaces easier to read and build from. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Some things aren't clear enough to fully build this.
+For instance, \texttt{IntentType} is referenced throughout but does not
+seem to be defined anywhere.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The missing shared definitions, including \texttt{IntentType}, were added
+and tied together with the related records and parameter structures so
+that the interfaces are much closer to ``enough to build.'' \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Some parts of the document are somewhat formal, but no
+one piece is fully formalized.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The \texttt{BH-Input} module was strengthened into a more fully
+formalized state-based specification, with clearer invariants,
+transitions, and local functions. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\end{itemize}
+
+\subsection{Problem Statement and Development Plan}
+
+\subsubsection{Problem Statement and Goals}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.4.1 Start: Problem Statement and Goals Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the Problem Statement and
+Goals document and the specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: I'd put the most important goals for the project at
+the top, e.g. goal 3 is really what the project is all about and should
+probably go first.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The goals section was revised to better emphasize the project's central
+outcomes and make the main priorities more apparent to the reader. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Goal 5: average user rating.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The wording of the user-satisfaction goal was clarified so the expected
+average rating and its accessibility-focused context are stated more
+clearly. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Sections should always have text in them and not just
+a subsection header right below.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Introductory text was added so major sections now provide context before
+moving into their subsections, improving the document's flow and
+readability. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\end{itemize}
+
+\subsubsection{Development Plan}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.4.2 Start: Development Plan Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the Development Plan and
+the specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: What if the other roles have to change? Do you have a
+plan for that?} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A clear role-reassignment contingency plan was added to the Team Member
+Roles section so the document explains how role changes are handled if
+team availability or project needs shift. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Be specific about branches, branch naming standards,
+etc.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The workflow plan was made more concrete around issue-driven work,
+branch use, pull-request review, and GitHub-based progress tracking. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: These risks are not the kind of feasibility risks we
+are looking for in this part.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The proof-of-concept discussion was refocused away from broader concerns
+and toward a true feasibility question tied to the capstone scope. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: You should pick one specific thing and prove it is
+possible to do.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The plan now focuses on demonstrating one concrete capability:
+interpreting a natural-language request and successfully carrying out a
+meaningful computer action. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Be very clear what you will demonstrate in November.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The November proof-of-concept demonstration was rewritten more clearly
+as an end-to-end workflow showing Proxi receive a request, choose tools,
+and complete a visible task. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Be sure to format/stylize words, especially company
+names like GitHub, properly.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Naming and styling were cleaned up so terms such as GitHub are presented
+consistently and professionally throughout the document. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: In LaTeX, use `` and '' for proper quotations.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Quotation formatting was corrected so the document follows standard
+LaTeX typographic conventions more closely. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Should be written in first-person from each member.
+This feels summarized.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The reflection writing was revised to read more naturally in first
+person and to better reflect individual team perspective. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Should include a link to the repo, not just the
+license and project board.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A direct link to the main repository was added so readers can reach the
+project codebase from the Development Plan without relying only on the
+license or project-board links. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Need to justify the use of the various technologies
+and explore their pros and cons.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The ``Expected Technology'' section was expanded so the selected tools are
+now justified in terms of their fit for Proxi, along with their main
+benefits, limitations, and tradeoffs. This makes the engineering-tool
+choices more thoughtful and defensible rather than leaving them as a
+simple list. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\end{itemize}
+
 \section{Extras}
 
-\plt{Summarize the extras that were tackled by this project.  Extras
-can include usability testing, code walkthroughs, user documentation, formal
-proof, GenderMag personas, Design Thinking, etc.  Extras should have already
-been approved by the course instructor as included in your problem statement.}
+Two approved extras were completed for this project: a user manual and
+a usability testing study. Both were selected to improve onboarding,
+accessibility support, and evaluation of real user interaction quality.
 
-\section{Design Iteration (LO11 (PrototypeIterate))}
+\subsection*{User Manual}
 
-\plt{Explain how you arrived at your final design and implementation.  How did
-the design evolve from the first version to the final version?} 
+A detailed user manual was developed to support onboarding and effective
+use of the system. The manual is available
+\href{../Extras/UserManual/UserManual.pdf}{here}.
 
-\plt{Don't just say what you changed, say why you changed it.  The needs of the
-client should be part of the explanation.  For example, if you made changes in
-response to usability testing, explain what the testing found and what changes
-it led to.}
+It includes:
+
+\begin{itemize}
+\item Setup and installation instructions for running the system.
+\item Description of system features and supported interactions.
+\item Step-by-step examples of common user tasks and workflows.
+\item Guidance for accessibility-focused usage scenarios.
+\end{itemize}
+
+The manual ensures that new users, including those with limited
+technical experience, can effectively understand and interact with the
+system. It also reinforces consistency between intended system
+behaviour and actual user interaction.
+
+\subsection*{Usability Testing}
+
+A usability testing study was conducted to evaluate system usability and
+interaction effectiveness. The full report is available
+\href{../Extras/UsabilityTesting/UsabilityTesting.pdf}{here}.
+
+The study includes:
+
+\begin{itemize}
+\item Scenario-based tasks representing realistic user workflows.
+\item Observation of user interactions and identification of issues.
+\item Collection of user feedback through structured surveys.
+\item Measurement of usability metrics such as task completion and
+user satisfaction.
+\end{itemize}
+
+The results were used to identify usability issues and guide system
+improvements. These findings also support validation of usability-
+related non-functional requirements.
+
+\section{Design Iteration (LO11: Prototype Iteration)}
+
+Our first working prototype (MVP) used a simple pipeline: capture a screenshot,
+run OCR, append extracted text to the user request, and send the combined prompt
+to an LLM for a one-shot response. This validated feasibility, but testing
+revealed recurring issues: OCR noise reduced reliability, one-shot responses were
+hard to recover when a step failed, and behavior varied across interfaces.
+
+From a design perspective, the main lesson from this stage was that the system
+could demonstrate capability, but not yet dependable usability. The usability
+study confirmed this broader lesson later: participants saw the value of the idea
+quickly, but they still needed clearer entry points, better examples, and a more
+consistent interaction model before the system felt easy to adopt.
+
+\medskip
+\noindent\textbf{Iteration 1: one-shot flow to agent loop.} We introduced an agent loop
+(reason $\rightarrow$ decide $\rightarrow$ act $\rightarrow$ observe
+$\rightarrow$ reflect) so the system could make progress in smaller steps,
+inspect tool outputs, and recover from partial failures. We made this change to
+reduce user burden, especially for users facing accessibility barriers who should
+not need to repeatedly restate intent after one failed action.
+
+This change also aligned with the usability findings that users often knew the
+outcome they wanted, but were uncertain about the exact phrasing or the best
+follow-up command. The agent loop gave the assistant more room to clarify,
+recover, and continue the task instead of forcing the user to restart the
+conversation.
+
+\medskip
+\noindent\textbf{Iteration 2: tightly coupled integrations to MCP integrations.} As the
+number of capabilities grew, integration code became difficult to scale and
+maintain. We moved to MCP-backed integrations to support modular growth and
+clearer boundaries between orchestration and external tools.
+
+In the later version of this design, we also added prompt caching and MCP tool
+search so the system could reuse useful context instead of repeatedly sending
+large prompts. That reduced token usage, lowered operational cost, and made the
+assistant more efficient when handling repeated or similar requests.
+
+This decision was reinforced by the usability testing results because the system
+needed to support realistic workflows like email, calendar, notes, and weather
+without making each feature feel like a separate product. Modular integrations
+allowed us to add and refine capabilities while preserving the same user-facing
+interaction style.
+
+\medskip
+\noindent\textbf{Iteration 3: separate interface logic to shared gateway.} Early versions
+already used a shared backend or bridge, but the control paths were still not
+general enough for all sources of work. We introduced a gateway architecture to
+formalize many-to-one-many routing so that cron jobs, webhooks, GUI, TUI,
+Discord relay, and future chat integrations could all enter the same runtime and
+receive consistent results on the way out. This added a clean control layer on
+top of the existing shared backend.
+
+The usability study made this especially important because participants valued
+the assistant most when it could support real tasks in a consistent way. If one
+entry path behaved differently from another, the system would feel less
+predictable and harder to learn. The gateway was therefore not only an
+architecture improvement, but also a usability decision.
+
+\medskip
+\noindent\textbf{Iteration 4: selected MCP flows to direct CLI tools.} For common,
+high-frequency tasks, we converted some MCP interactions to local CLI-backed
+tools. This reduced overhead and improved operational reliability for frequently
+used workflows.
+
+We also used tool search for MCPs in the final version to avoid loading or
+describing unnecessary tools in every turn. This kept the active tool surface
+smaller, which lowered token usage and reduced cost while still preserving access
+to the right integrations when they were needed.
+
+This change was influenced by the need to keep common actions responsive and
+reliable. In testing, the most useful experiences were the ones where the user
+could complete a task quickly without being interrupted by setup friction or
+unclear transitions. Moving some high-value actions to CLI-backed tools helped
+reduce that friction.
+
+\medskip
+Overall, the design evolved from a proof-of-concept into a layered architecture
+with explicit orchestration, modular integrations, and a shared runtime across
+interfaces. Each iteration was a response to observed limitations and to the
+same client objective: dependable, low-friction interaction for users who may
+face barriers with traditional computer interfaces. The usability study evidence
+(for example, command discoverability, follow-up ambiguity, and feature
+discoverability findings) also directly influenced our iteration priorities and
+documentation improvements, while the later prompt-caching and tool-search work
+reduced token usage and made the system cheaper to operate.
+
+\medskip
+In particular, the exploratory free-use sessions were useful because they showed
+what users attempted when they were not constrained by scripted tasks. That
+revealed where discoverability broke down and where supported features needed to
+be surfaced earlier. Those observations pushed us to improve documentation, the
+user manual, and the visibility of interface options in the final version.
 
 \section{Design Decisions (LO12)}
 
-\plt{Reflect and justify your design decisions.  How did limitations,
- assumptions, and constraints influence your decisions?  Discuss each of these
- separately.}
+\subsection{Limitations and Their Influence}
+
+\begin{itemize}
+	\item \textbf{OCR quality limitations:} Screenshot text extraction is not
+	always accurate or complete. Because the usability study showed that users were
+	already sensitive to unclear or unreliable responses, we prioritized iterative
+	reasoning and verification instead of one-shot execution.
+	\item \textbf{External dependency limitations:} Model providers and external
+	integrations can fail, throttle, or change. This pushed us to modularize
+	integrations and design for graceful degradation, which was important because
+	participants valued completing real workflows without having to restart from
+	scratch when something went wrong.
+	\item \textbf{Multi-client limitations:} GUI, TUI, and Discord differ in
+	interaction style and transport. This drove the decision to centralize runtime
+	behavior in a gateway, since the usability work showed that users expected the
+	same task to behave consistently regardless of the entry path they used, and
+	we also needed one place to absorb cron jobs, webhooks, and future chat inputs.
+\end{itemize}
+
+\subsection{Assumptions and Their Influence}
+
+\begin{itemize}
+	\item \textbf{A1:} Natural-language interaction lowers the barrier for our
+	target users compared to command memorization. This supported investing in
+	agent-based orchestration, especially because usability testing showed that
+	participants understood the value of the system quickly but struggled with how
+	to phrase requests and follow-up commands.
+	\item \textbf{A2:} Users may switch interaction surfaces while expecting
+	equivalent behavior. This justified a shared backend rather than per-interface
+	business logic, because the study indicated that users cared more about task
+	completion than about which front end they were using.
+	\item \textbf{A3:} The integration surface will continue to expand over time.
+	This justified MCP modularity, with selective CLI conversion for high-value
+	paths, so we could keep common workflows dependable while adding features.
+\end{itemize}
+
+\subsection{Constraints and Their Influence}
+
+\begin{itemize}
+	\item \textbf{Capstone time constraint:} We prioritized reliability,
+	consistency, and core accessibility value over lower-priority feature breadth,
+	because the usability study identified clarity and discoverability as the main
+	friction points rather than missing advanced capabilities.
+	\item \textbf{Team-size constraint:} Duplicated orchestration across clients was
+	not sustainable, so we centralized execution paths.
+	\item \textbf{Resource/cost constraint:} External API usage and operational
+	overhead influenced our choice to keep some frequent operations local via CLI.
+\end{itemize}
+
+\subsection{Traceability from PoC to Rev 0 to Final Presentation}
+
+The design evolution is explicitly traced across three development stages below.
+
+\begin{enumerate}
+	\item \textbf{PoC stage (initial prototype):}
+	\begin{itemize}
+		\item The initial prototype focused on direct computer control through MCP
+		tools.
+		\item Context management was limited: the system did not yet perform robust
+		selection or structuring of relevant context, and large amounts of context
+		were frequently compressed into a single prompt.
+		\item Orchestration support for iterative recovery was minimal.
+	\end{itemize}
+
+	\item \textbf{Rev 0 stage:}
+	\begin{itemize}
+		\item A React GUI was introduced to improve usability and accessibility for
+		non-technical users.
+		\item Initial orchestration capabilities were added to reduce dependence on
+		purely one-shot behavior and improve action sequencing.
+		\item MCP integrations were retained and reorganized around concrete user
+		workflows exposed through the GUI.
+	\end{itemize}
+
+	\item \textbf{Final presentation stage:}
+	\begin{itemize}
+		\item A shared gateway architecture was introduced as the central runtime for
+		orchestration, routing, and session management.
+		\item Interaction surfaces were expanded to \textbf{TUI, GUI, and Discord relay},
+		all connected to the same backend behavior.
+		\item This change reduced interface drift and improved behavioral
+		consistency, maintainability, and reliability under multi-client operation.
+	\end{itemize}
+\end{enumerate}
+
+\subsection{Challenge Level and Extras}
+
+\textbf{Challenge level:} High. The project required coordinating asynchronous
+agent behavior, multiple interfaces, and integration reliability while preserving
+an accessibility-first product goal. The usability study reinforced that this was
+not just a feature problem: users needed clearer entry points, clearer prompts,
+and consistent task behavior across interfaces.
+
+\textbf{Extras:} Usability testing and the user manual were completed extras
+that directly influenced design priorities, especially consistency, recoverability,
+and clarity for end users.
 
 \section{Economic Considerations (LO23)}
 
-\plt{Is there a market for your product? What would be involved in marketing your 
-product? What is your estimate of the cost to produce a version that you could 
-sell?  What would you charge for your product?  How many units would you have to 
-sell to make money? If your product isn't something that would be sold, like an 
-open source project, how would you go about attracting users?  How many potential 
-users currently exist?}
+There is a growing market for AI-assisted productivity and accessibility
+tools. Adoption of AI-powered systems has increased significantly in
+recent years as users seek more efficient and intuitive ways to interact
+with software systems~\citep{ai_adoption}. In particular, tools that
+reduce reliance on traditional interfaces and support natural language
+interaction are becoming increasingly relevant.
+
+Proxi is currently developed as an open-source system with no immediate
+plans for commercialization. However, a potential commercial version
+could target professionals, accessibility-focused users, and enterprise
+environments that benefit from automation and simplified workflows.
+
+If commercialized, estimated development and maintenance costs would
+primarily include infrastructure for AI services, system integration,
+and ongoing updates. A reasonable estimate for transitioning to a
+production-ready system would be approximately \$20,000--\$40,000 CAD,
+depending on hosting requirements, API usage, and long-term support.
+
+A possible pricing model could involve a subscription-based approach,
+with pricing in the range of \$10--\$25 per user per month. This aligns
+with existing subscription-based productivity tools, which commonly fall
+within a similar pricing range~\citep{pricing}.
+
+Assuming an average price of \$15 per month, the system would require
+approximately 150--300 active users over one year to recover initial
+costs. Beyond this point, additional users would contribute to profit,
+making the model scalable.
+
+Since Proxi is currently open-source, the primary focus is on attracting
+users rather than generating revenue. User adoption can be increased by:
+
+\begin{itemize}
+\item Providing clear documentation and onboarding through the user manual.
+\item Demonstrating system capabilities through example workflows.
+\item Leveraging usability testing results to improve user experience.
+\item Sharing the project through GitHub and academic networks.
+\end{itemize}
+
+The potential user base is large. Globally, a significant portion of the
+population benefits from assistive or accessibility-focused technologies,
+and demand for accessible computing solutions continues to grow
+~\citep{accessibility}. In addition, students and professionals seeking
+more efficient workflows represent a broad secondary user group.
+
+Overall, while Proxi is not currently positioned as a commercial product,
+the system demonstrates strong potential for future adoption and
+scalability. These estimates are preliminary and intended to demonstrate
+feasibility rather than provide exact financial projections.
 
 \section{Reflection on Project Management (LO24)}
 
-\plt{This question focuses on processes and tools used for project management.}
+This section reflects on how we managed schedule, scope, team
+coordination, and verification throughout the capstone project. As
+shown in the Development Plan and V\&V documents, our process relied on
+both project-management tools and engineering tools: Git and GitHub for
+version control, issue tracking, pull-request review, and traceability;
+Discord for day-to-day coordination; and technical tools such as
+Python, TypeScript/React, Playwright, OpenAI-based APIs, and linting
+and testing workflows to support actual implementation and quality
+control.
 
 \subsection{How Does Your Project Management Compare to Your Development Plan}
 
-\plt{Did you follow your Development plan, with respect to the team meeting plan, 
-team communication plan, team member roles and workflow plan.  Did you use the 
-technology you planned on using?}
+Overall, our project management stayed reasonably close to what we
+committed to in the Development Plan. We used the planned weekly team
+meetings, rotating chair and note-taker roles, Discord for day-to-day
+communication, and GitHub Issues, pull requests, and the project board
+as the main tools for assigning work, reviewing changes, and keeping
+progress visible. On the engineering side, the project also stayed well
+aligned with the documented technology plan: Python for orchestration,
+TypeScript/React for interface work, OpenAI-based language-model
+support, Playwright and platform automation tools for task execution,
+and Git-based review practices for quality control.
+
+At the same time, the real project required more flexibility than the
+initial plan suggested. The role table gave us a useful starting point,
+but once implementation, testing, and documentation began to interact
+more closely, people had to contribute across boundaries instead of
+remaining in a single narrow role. Scope also had to be managed more
+carefully over time. Rather than trying to pursue an overly broad vision
+of a fully autonomous assistant, we focused the project around reliable
+voice and text interaction, safe task execution, and a proof of concept
+that was feasible within capstone constraints.
 
 \subsection{What Went Well?}
 
-\plt{What went well for your project management in terms of processes and 
-technology?}
+One of the biggest strengths of our project management was that we used
+simple tools consistently and for clear purposes. GitHub Issues, pull
+requests, and the GitHub project board gave us a shared source of truth
+for tasks, review status, and progress, while Discord helped us resolve
+blockers quickly between meetings. On the engineering side, having a
+clear tool stack also helped: Python and its supporting libraries made
+rapid backend iteration possible, TypeScript/React supported a more
+structured frontend, and tools such as Playwright and platform-specific
+automation libraries let us test real computer interactions rather than
+only describe them abstractly.
+
+Another process that worked well was connecting project management to
+verification rather than treating testing as a final-step activity. As
+reflected in the V\&V Plan and V\&V Report, we used checklist-based
+inspections, traceability matrices, and unit, integration, and system
+tests as concrete management tools for deciding whether work was ready.
+The coding-standard tools from the Development Plan, such as pylint,
+Prettier, and ESLint, also supported consistency across the Python and
+TypeScript codebases. Together, these tools improved accountability,
+kept quality visible, and made the final stages of the project more
+manageable because evidence and traceability were collected throughout
+the term instead of being invented at the end.
 
 \subsection{What Went Wrong?}
 
-\plt{What went wrong in terms of processes and technology?}
+The main difficulty was that some parts of the project needed more
+coordination effort than the original plan implied. Integrating AI
+services, desktop and browser automation, frontend work, verification,
+and documentation created more dependency between tasks than a simple
+role table can capture. In practice, that meant the engineering tools
+that made Proxi possible also added coordination overhead: external LLM
+services can be variable, browser and OS automation can be brittle, and
+a multi-language codebase requires more care when different components
+must evolve together. As a result, some work could not progress as
+cleanly in parallel as we first expected, and late-stage consistency
+checking across documents took a significant amount of time and focus.
 
-\subsection{What Would you Do Differently Next Time?}
+We also learned that scope control had to be more active than we had
+initially assumed. Early ideas around Proxi could easily expand into a
+much broader autonomous-assistant vision, but the team had to narrow the
+focus toward the most important and demonstrably feasible workflows. In
+addition, some workflow details, such as stronger branch conventions,
+clearer traceability ownership, fuller tool justification, and earlier
+use of process checklists, were only strengthened after external
+feedback rather than being fully mature from the beginning.
 
-\plt{What will you do differently for your next project?}
+\subsection{What Would You Do Differently Next Time?}
+
+For a similar project, we would formalize several management practices
+much earlier. We would define branch naming and review expectations from
+the start, schedule more frequent internal milestone reviews before each
+official deliverable, and assign an explicit owner for cross-document
+traceability so the final reporting effort is distributed more evenly
+across the term. We would also make even better use of management tools
+such as GitHub issue templates, review checklists, and clearer status
+tracking so process discipline does not depend only on memory or last-
+minute cleanup.
+
+We would also revisit feasibility risk and fallback scope at regular
+checkpoints instead of only when deadlines become close. For a project
+that depends on AI behaviour, external services, and automation tools,
+it is especially important to decide early which workflows are
+release-critical and which are optional extensions. Doing that sooner,
+along with earlier automation of linting and testing expectations, would
+improve time management, reduce last-minute scope pressure, and make
+resource decisions more deliberate and effective.
 
 \section{Ethics and Equity (LO18)}
 
-\plt{Describe how your team applied the principle of equity and universal design
-to ensure equitable treatment of all stakeholders.}
+Our team considered ethics and equity throughout the design and
+development of Proxi, with a focus on accessibility, inclusivity, and
+responsible use of AI-assisted technologies.
+
+A key principle guiding the project was universal design. Proxi enables
+users to interact with computer systems using natural language rather
+than requiring technical knowledge of commands or interfaces. This
+reduces barriers for users who may have limited technical experience,
+including older adults and users with accessibility needs.
+
+The system was designed to support equitable access by prioritizing
+simplicity and clarity in interactions. For example, users are not
+required to remember specific commands, and feedback is presented in a
+way that is easy to understand. These design choices help ensure that
+the system is usable by a broader range of users, rather than only those
+with advanced technical skills.
+
+Empathy played an important role in understanding stakeholder needs.
+Personas representing accessibility-focused users and non-technical
+users were used to guide requirements and design decisions. This helped
+the team consider how different users might experience frustration,
+confusion, or barriers when interacting with traditional systems, and
+influenced the focus on intuitive interaction and error tolerance.
+
+The team also considered ethical implications of using external AI
+services. There is a potential risk that user data may be transmitted to
+external systems. To address this, the system is designed to minimize
+data sharing and ensure that only task-relevant information is used.
+Users are also expected to be informed when external processing may
+occur, supporting transparency and informed consent.
+
+Despite these efforts, there are still limitations. The system relies on
+off-the-shelf AI models, which may not perform equally well across all
+users or contexts. This could lead to inconsistent experiences,
+particularly for users with different speech patterns or accents. While
+this limitation was recognized, it was not fully addressed within the
+scope of the project.
+
+Overall, the team made a conscious effort to design Proxi in a way that
+promotes equitable access and usability, while also acknowledging areas
+where further improvements are needed to better support all users.
 
 \section{Reflection on Capstone}
 
-\plt{This question focuses on what you learned during the course of the capstone project.}
+This capstone was especially valuable because it required end-to-end
+software engineering rather than isolated course assignments. We had to
+move from requirements and hazard analysis, to architectural design,
+implementation across multiple components, verification and validation,
+and finally documentation and traceability. That made the project a much
+more realistic exercise in systems integration, engineering tradeoffs,
+and maintaining consistency between requirements, design decisions, code,
+and evidence.
+
+Several courses gave us a strong foundation for this work, but the
+capstone forced us to apply that knowledge in a more connected and
+practical way.
+Instead of treating requirements, testing, interface design, and
+security as separate topics, Proxi required us to combine them into one
+coherent engineering process.
 
 \subsection{Which Courses Were Relevant}
 
-\plt{Which of the courses you have taken were relevant for the capstone project?}
+Several courses were especially relevant because they mapped directly
+onto the engineering artifacts we produced for Proxi. SFWRENG 3RA3
+(Software Requirements \& Security Considerations) was useful when
+writing the SRS and hazard analysis, since it emphasized precise
+requirements, stakeholder-driven thinking, privacy and safety concerns,
+and traceability rather than jumping straight into implementation.
+SFWRENG 3S03 (Software Testing) was equally important because our
+capstone required a real V\&V process with test planning, unit and
+integration testing, system-level checks, and evidence-based reporting
+instead of informal feature demos.
+
+The software design sequence, especially SFWRENG 3BB4 and SFWRENG 3A04,
+was important for the architectural side of the project. The separation
+between the gateway, integrations, memory, and multiple user interfaces
+was not just a coding choice; it was an engineering decision about
+modularity, maintainability, and extensibility. SFWRENG 4HC3 (Human-
+Computer Interfaces) was also relevant in a technical sense because
+accessibility and usability were treated as engineering qualities that
+affected requirements, interface decisions, validation tasks, and the
+choice to complete a usability study and user manual. Finally,
+SFWRENG 4C03 (Computer Networks \& Security) reinforced concerns around
+secure external integrations, service boundaries, and the risks of
+relying on networked or third-party components.
 
 \subsection{Knowledge/Skills Outside of Courses}
 
-\plt{What skills/knowledge did you need to acquire for your capstone project
-that was outside of the courses you took?}
+At the same time, some of the most important knowledge for this project
+came from outside formal coursework. We had to learn practical LLM
+engineering, including prompt construction, tool-calling patterns, and
+how to manage tradeoffs between latency, token cost, privacy, and
+reliability when external AI services are part of the system. We also
+had to work with browser and desktop automation tools in a much more
+hands-on way than most courses require, dealing with asynchronous flows,
+brittle UI behaviour, and environment-specific debugging. Coordinating a
+two-language engineering toolchain across Python and TypeScript also
+required stronger use of linting, formatting, and testing tools than a
+single-course assignment usually demands.
+
+Another major area of growth was learning how to convert engineering
+evidence into design iteration. Running a usability study,
+interpreting the results, and then turning those results into
+architectural, interface, and documentation changes required more
+judgment than solving a tightly scoped academic problem. It required us
+to balance feasibility, maintainability, user value, and verification in
+a way that felt much closer to real software engineering practice.
+
+\bibliographystyle{plainnat}
+\bibliography{../../refs/References}
 
 \end{document}
