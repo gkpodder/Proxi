@@ -31,6 +31,9 @@
 }
 \makeatother
 
+% Improve line breaking and reduce minor spacing/overflow issues.
+\setlength{\emergencystretch}{3em}
+
 \begin{document}
 
 \maketitle
@@ -737,7 +740,7 @@ argument. \\
 
 \item
 \textbf{Feedback: Uses hierarchy diagram looks great! I love the
-different shapes for different types of modules --- I would add a legend
+different shapes for different types of modules - I would add a legend
 for the different shapes.} \\
 \textbf{Source: TA Feedback} \\
 \textbf{Changes Made:}
@@ -1050,7 +1053,7 @@ license or project-board links. \\
 and explore their pros and cons.} \\
 \textbf{Source: TA Feedback} \\
 \textbf{Changes Made:}
-The `Expected Technology` section was expanded so the selected tools are
+The ``Expected Technology'' section was expanded so the selected tools are
 now justified in terms of their fit for Proxi, along with their main
 benefits, limitations, and tradeoffs. This makes the engineering-tool
 choices more thoughtful and defensible rather than leaving them as a
@@ -1107,7 +1110,8 @@ user satisfaction.
 The results were used to identify usability issues and guide system
 improvements. These findings also support validation of usability-
 related non-functional requirements.
-\section{Design Iteration (LO11 (PrototypeIterate))}
+
+\section{Design Iteration (LO11: Prototype Iteration)}
 
 Our first working prototype (MVP) used a simple pipeline: capture a screenshot,
 run OCR, append extracted text to the user request, and send the combined prompt
@@ -1121,7 +1125,8 @@ study confirmed this broader lesson later: participants saw the value of the ide
 quickly, but they still needed clearer entry points, better examples, and a more
 consistent interaction model before the system felt easy to adopt.
 
-\textbf{Iteration 1: one-shot flow to agent loop.} We introduced an agent loop
+\medskip
+\noindent\textbf{Iteration 1: one-shot flow to agent loop.} We introduced an agent loop
 (reason $\rightarrow$ decide $\rightarrow$ act $\rightarrow$ observe
 $\rightarrow$ reflect) so the system could make progress in smaller steps,
 inspect tool outputs, and recover from partial failures. We made this change to
@@ -1134,7 +1139,8 @@ follow-up command. The agent loop gave the assistant more room to clarify,
 recover, and continue the task instead of forcing the user to restart the
 conversation.
 
-\textbf{Iteration 2: tightly coupled integrations to MCP integrations.} As the
+\medskip
+\noindent\textbf{Iteration 2: tightly coupled integrations to MCP integrations.} As the
 number of capabilities grew, integration code became difficult to scale and
 maintain. We moved to MCP-backed integrations to support modular growth and
 clearer boundaries between orchestration and external tools.
@@ -1150,7 +1156,8 @@ without making each feature feel like a separate product. Modular integrations
 allowed us to add and refine capabilities while preserving the same user-facing
 interaction style.
 
-\textbf{Iteration 3: separate interface logic to shared gateway.} Early versions
+\medskip
+\noindent\textbf{Iteration 3: separate interface logic to shared gateway.} Early versions
 already used a shared backend or bridge, but the control paths were still not
 general enough for all sources of work. We introduced a gateway architecture to
 formalize many-to-one-many routing so that cron jobs, webhooks, GUI, TUI,
@@ -1164,7 +1171,8 @@ entry path behaved differently from another, the system would feel less
 predictable and harder to learn. The gateway was therefore not only an
 architecture improvement, but also a usability decision.
 
-\textbf{Iteration 4: selected MCP flows to direct CLI tools.} For common,
+\medskip
+\noindent\textbf{Iteration 4: selected MCP flows to direct CLI tools.} For common,
 high-frequency tasks, we converted some MCP interactions to local CLI-backed
 tools. This reduced overhead and improved operational reliability for frequently
 used workflows.
@@ -1180,6 +1188,7 @@ could complete a task quickly without being interrupted by setup friction or
 unclear transitions. Moving some high-value actions to CLI-backed tools helped
 reduce that friction.
 
+\medskip
 Overall, the design evolved from a proof-of-concept into a layered architecture
 with explicit orchestration, modular integrations, and a shared runtime across
 interfaces. Each iteration was a response to observed limitations and to the
@@ -1190,6 +1199,7 @@ discoverability findings) also directly influenced our iteration priorities and
 documentation improvements, while the later prompt-caching and tool-search work
 reduced token usage and made the system cheaper to operate.
 
+\medskip
 In particular, the exploratory free-use sessions were useful because they showed
 what users attempted when they were not constrained by scripted tasks. That
 revealed where discoverability broke down and where supported features needed to
@@ -1429,7 +1439,7 @@ clearer traceability ownership, fuller tool justification, and earlier
 use of process checklists, were only strengthened after external
 feedback rather than being fully mature from the beginning.
 
-\subsection{What Would you Do Differently Next Time?}
+\subsection{What Would You Do Differently Next Time?}
 
 For a similar project, we would formalize several management practices
 much earlier. We would define branch naming and review expectations from
@@ -1496,62 +1506,69 @@ where further improvements are needed to better support all users.
 
 \section{Reflection on Capstone}
 
-This capstone was a valuable experience because it brought together many
-parts of software engineering in a way that regular course work usually
-keeps separate. It required us to move from isolated assignments to a
-single evolving product shaped by real constraints, user needs,
-iteration, verification, and team coordination. In that sense, the
-project was not just about building Proxi, but also about learning how
-to make technical decisions, respond to feedback, and refine a system
-over time.
+This capstone was especially valuable because it required end-to-end
+software engineering rather than isolated course assignments. We had to
+move from requirements and hazard analysis, to architectural design,
+implementation across multiple components, verification and validation,
+and finally documentation and traceability. That made the project a much
+more realistic exercise in systems integration, engineering tradeoffs,
+and maintaining consistency between requirements, design decisions, code,
+and evidence.
 
-At the same time, several courses gave us an important foundation for
-this work. They helped us approach requirements, architecture, testing,
-accessibility, and security more systematically, even though the
-capstone still required us to extend that knowledge in more practical
-and open-ended ways.
+Several courses gave us a strong foundation for this work, but the
+capstone forced us to apply that knowledge in a more connected and
+practical way.
+Instead of treating requirements, testing, interface design, and
+security as separate topics, Proxi required us to combine them into one
+coherent engineering process.
 
 \subsection{Which Courses Were Relevant}
 
-Several courses were especially relevant to Proxi. SFWRENG 3RA3
-(Software Requirements \& Security Considerations) was directly useful
-for writing the SRS, thinking about stakeholder needs, and handling
-privacy and safety concerns in the hazard analysis and traceability
-work. SFWRENG 3S03 (Software Testing) was also highly relevant because
-our project required structured verification through unit, integration,
-system, and usability-related testing rather than relying on informal
-checks.
+Several courses were especially relevant because they mapped directly
+onto the engineering artifacts we produced for Proxi. SFWRENG 3RA3
+(Software Requirements \& Security Considerations) was useful when
+writing the SRS and hazard analysis, since it emphasized precise
+requirements, stakeholder-driven thinking, privacy and safety concerns,
+and traceability rather than jumping straight into implementation.
+SFWRENG 3S03 (Software Testing) was equally important because our
+capstone required a real V\&V process with test planning, unit and
+integration testing, system-level checks, and evidence-based reporting
+instead of informal feature demos.
 
-Our software design courses, especially SFWRENG 3BB4 and SFWRENG 3A04,
-were important for the architectural side of the project. Proxi depends
-on modular decomposition, clear interface boundaries, and separation of
-responsibilities across the gateway, integrations, memory, and user
-interfaces. SFWRENG 4HC3 (Human-Computer Interfaces) was also very
-relevant because accessibility and ease of use were central goals of
-this project, and that background helped us think more carefully about
-user workflows, feedback clarity, and the usability testing extra.
-Finally, SFWRENG 4C03 (Computer Networks \& Security) reinforced the
-importance of secure integrations, external services, and dependable
-communication between system components.
+The software design sequence, especially SFWRENG 3BB4 and SFWRENG 3A04,
+was important for the architectural side of the project. The separation
+between the gateway, integrations, memory, and multiple user interfaces
+was not just a coding choice; it was an engineering decision about
+modularity, maintainability, and extensibility. SFWRENG 4HC3 (Human-
+Computer Interfaces) was also relevant in a technical sense because
+accessibility and usability were treated as engineering qualities that
+affected requirements, interface decisions, validation tasks, and the
+choice to complete a usability study and user manual. Finally,
+SFWRENG 4C03 (Computer Networks \& Security) reinforced concerns around
+secure external integrations, service boundaries, and the risks of
+relying on networked or third-party components.
 
 \subsection{Knowledge/Skills Outside of Courses}
 
-At the same time, some of the most important skills for this project
-were learned outside formal coursework. We had to learn how to work
-with modern LLM APIs, prompt design, and tool-calling orchestration in a
-way that was reliable enough for a real assistant rather than a small
-classroom prototype. We also had to gain hands-on experience with
-browser and desktop automation tools and understand the practical
-tradeoffs that come with external services, such as latency, token cost,
-and service reliability.
+At the same time, some of the most important knowledge for this project
+came from outside formal coursework. We had to learn practical LLM
+engineering, including prompt construction, tool-calling patterns, and
+how to manage tradeoffs between latency, token cost, privacy, and
+reliability when external AI services are part of the system. We also
+had to work with browser and desktop automation tools in a much more
+hands-on way than most courses require, dealing with asynchronous flows,
+brittle UI behaviour, and environment-specific debugging. Coordinating a
+two-language engineering toolchain across Python and TypeScript also
+required stronger use of linting, formatting, and testing tools than a
+single-course assignment usually demands.
 
-Another major area of learning was practical accessibility and usability
-evaluation. Coursework helped us think about interface design, but
-running a real usability study, interpreting participant feedback, and
-turning that feedback into documentation and workflow improvements
-required more applied judgment than a typical course assignment. This
-combination of course foundations and self-directed learning was one of
-the most valuable parts of the capstone experience.
+Another major area of growth was learning how to convert engineering
+evidence into design iteration. Running a usability study,
+interpreting the results, and then turning those results into
+architectural, interface, and documentation changes required more
+judgment than solving a tightly scoped academic problem. It required us
+to balance feasibility, maintainability, user value, and verification in
+a way that felt much closer to real software engineering practice.
 
 \bibliographystyle{plainnat}
 \bibliography{../../refs/References}
