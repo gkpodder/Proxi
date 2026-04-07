@@ -132,7 +132,7 @@
       voice: false,
     });
     const [compactHint, setCompactHint] = useState("");
-    const [selectedReasoningEffort, setSelectedReasoningEffort] = useState("minimal");
+    const [selectedReasoningEffort, setSelectedReasoningEffort] = useState("low");
     const [scheduleMode, setScheduleMode] = useState("quick");
     const [everyValue, setEveryValue] = useState("30");
     const [everyUnit, setEveryUnit] = useState("minute");
@@ -155,9 +155,11 @@
     );
 
     useEffect(() => {
-      const normalized = String(generaReasoningEffort || "minimal").trim().toLowerCase();
-      const valid = ["minimal", "low", "medium", "high"];
-      setSelectedReasoningEffort(valid.includes(normalized) ? normalized : "minimal");
+      const normalized = String(generaReasoningEffort || "low").trim().toLowerCase();
+      const valid = ["low", "medium", "high"];
+      setSelectedReasoningEffort(
+        normalized === "minimal" ? "low" : (valid.includes(normalized) ? normalized : "low")
+      );
     }, [generaReasoningEffort]);
 
     useEffect(() => {
@@ -262,7 +264,6 @@
                       disabled={generaBusy}
                       onChange={(e) => setSelectedReasoningEffort(e.target.value)}
                     >
-                      <option value="minimal">minimal</option>
                       <option value="low">low</option>
                       <option value="medium">medium</option>
                       <option value="high">high</option>
