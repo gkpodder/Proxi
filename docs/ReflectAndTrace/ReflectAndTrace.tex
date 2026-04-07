@@ -3,6 +3,7 @@
 \usepackage{tabularx}
 \usepackage{booktabs}
 \usepackage{xstring}
+\usepackage[round]{natbib}
 
 \title{Reflection and Traceability Report on \progname}
 
@@ -961,12 +962,54 @@ it led to.}
 
 \section{Economic Considerations (LO23)}
 
-\plt{Is there a market for your product? What would be involved in marketing your 
-product? What is your estimate of the cost to produce a version that you could 
-sell?  What would you charge for your product?  How many units would you have to 
-sell to make money? If your product isn't something that would be sold, like an 
-open source project, how would you go about attracting users?  How many potential 
-users currently exist?}
+There is a growing market for AI-assisted productivity and accessibility
+tools. Adoption of AI-powered systems has increased significantly in
+recent years as users seek more efficient and intuitive ways to interact
+with software systems~\citep{ai_adoption}. In particular, tools that
+reduce reliance on traditional interfaces and support natural language
+interaction are becoming increasingly relevant.
+
+Proxi is currently developed as an open-source system with no immediate
+plans for commercialization. However, a potential commercial version
+could target professionals, accessibility-focused users, and enterprise
+environments that benefit from automation and simplified workflows.
+
+If commercialized, estimated development and maintenance costs would
+primarily include infrastructure for AI services, system integration,
+and ongoing updates. A reasonable estimate for transitioning to a
+production-ready system would be approximately \$20,000--\$40,000 CAD,
+depending on hosting requirements, API usage, and long-term support.
+
+A possible pricing model could involve a subscription-based approach,
+with pricing in the range of \$10--\$25 per user per month. This aligns
+with existing subscription-based productivity tools, which commonly fall
+within a similar pricing range~\citep{pricing}.
+
+Assuming an average price of \$15 per month, the system would require
+approximately 150--300 active users over one year to recover initial
+costs. Beyond this point, additional users would contribute to profit,
+making the model scalable.
+
+Since Proxi is currently open-source, the primary focus is on attracting
+users rather than generating revenue. User adoption can be increased by:
+
+\begin{itemize}
+\item Providing clear documentation and onboarding through the user manual.
+\item Demonstrating system capabilities through example workflows.
+\item Leveraging usability testing results to improve user experience.
+\item Sharing the project through GitHub and academic networks.
+\end{itemize}
+
+The potential user base is large. Globally, a significant portion of the
+population benefits from assistive or accessibility-focused technologies,
+and demand for accessible computing solutions continues to grow
+~\citep{accessibility}. In addition, students and professionals seeking
+more efficient workflows represent a broad secondary user group.
+
+Overall, while Proxi is not currently positioned as a commercial product,
+the system demonstrates strong potential for future adoption and
+scalability. These estimates are preliminary and intended to demonstrate
+feasibility rather than provide exact financial projections.
 
 \section{Reflection on Project Management (LO24)}
 
@@ -1008,5 +1051,8 @@ to ensure equitable treatment of all stakeholders.}
 
 \plt{What skills/knowledge did you need to acquire for your capstone project
 that was outside of the courses you took?}
+
+\bibliographystyle{plainnat}
+\bibliography{../../refs/References}
 
 \end{document}
