@@ -1109,19 +1109,191 @@ improvements. These findings also support validation of usability-
 related non-functional requirements.
 \section{Design Iteration (LO11 (PrototypeIterate))}
 
-\plt{Explain how you arrived at your final design and implementation.  How did
-the design evolve from the first version to the final version?} 
+Our first working prototype (MVP) used a simple pipeline: capture a screenshot,
+run OCR, append extracted text to the user request, and send the combined prompt
+to an LLM for a one-shot response. This validated feasibility, but testing
+revealed recurring issues: OCR noise reduced reliability, one-shot responses were
+hard to recover when a step failed, and behavior varied across interfaces.
 
-\plt{Don't just say what you changed, say why you changed it.  The needs of the
-client should be part of the explanation.  For example, if you made changes in
-response to usability testing, explain what the testing found and what changes
-it led to.}
+From a design perspective, the main lesson from this stage was that the system
+could demonstrate capability, but not yet dependable usability. The usability
+study confirmed this broader lesson later: participants saw the value of the idea
+quickly, but they still needed clearer entry points, better examples, and a more
+consistent interaction model before the system felt easy to adopt.
+
+\textbf{Iteration 1: one-shot flow to agent loop.} We introduced an agent loop
+(reason $\rightarrow$ decide $\rightarrow$ act $\rightarrow$ observe
+$\rightarrow$ reflect) so the system could make progress in smaller steps,
+inspect tool outputs, and recover from partial failures. We made this change to
+reduce user burden, especially for users facing accessibility barriers who should
+not need to repeatedly restate intent after one failed action.
+
+This change also aligned with the usability findings that users often knew the
+outcome they wanted, but were uncertain about the exact phrasing or the best
+follow-up command. The agent loop gave the assistant more room to clarify,
+recover, and continue the task instead of forcing the user to restart the
+conversation.
+
+\textbf{Iteration 2: tightly coupled integrations to MCP integrations.} As the
+number of capabilities grew, integration code became difficult to scale and
+maintain. We moved to MCP-backed integrations to support modular growth and
+clearer boundaries between orchestration and external tools.
+
+In the later version of this design, we also added prompt caching and MCP tool
+search so the system could reuse useful context instead of repeatedly sending
+large prompts. That reduced token usage, lowered operational cost, and made the
+assistant more efficient when handling repeated or similar requests.
+
+This decision was reinforced by the usability testing results because the system
+needed to support realistic workflows like email, calendar, notes, and weather
+without making each feature feel like a separate product. Modular integrations
+allowed us to add and refine capabilities while preserving the same user-facing
+interaction style.
+
+\textbf{Iteration 3: separate interface logic to shared gateway.} Early versions
+already used a shared backend or bridge, but the control paths were still not
+general enough for all sources of work. We introduced a gateway architecture to
+formalize many-to-one-many routing so that cron jobs, webhooks, GUI, TUI,
+Discord relay, and future chat integrations could all enter the same runtime and
+receive consistent results on the way out. This added a clean control layer on
+top of the existing shared backend.
+
+The usability study made this especially important because participants valued
+the assistant most when it could support real tasks in a consistent way. If one
+entry path behaved differently from another, the system would feel less
+predictable and harder to learn. The gateway was therefore not only an
+architecture improvement, but also a usability decision.
+
+\textbf{Iteration 4: selected MCP flows to direct CLI tools.} For common,
+high-frequency tasks, we converted some MCP interactions to local CLI-backed
+tools. This reduced overhead and improved operational reliability for frequently
+used workflows.
+
+We also used tool search for MCPs in the final version to avoid loading or
+describing unnecessary tools in every turn. This kept the active tool surface
+smaller, which lowered token usage and reduced cost while still preserving access
+to the right integrations when they were needed.
+
+This change was influenced by the need to keep common actions responsive and
+reliable. In testing, the most useful experiences were the ones where the user
+could complete a task quickly without being interrupted by setup friction or
+unclear transitions. Moving some high-value actions to CLI-backed tools helped
+reduce that friction.
+
+Overall, the design evolved from a proof-of-concept into a layered architecture
+with explicit orchestration, modular integrations, and a shared runtime across
+interfaces. Each iteration was a response to observed limitations and to the
+same client objective: dependable, low-friction interaction for users who may
+face barriers with traditional computer interfaces. The usability study evidence
+(for example, command discoverability, follow-up ambiguity, and feature
+discoverability findings) also directly influenced our iteration priorities and
+documentation improvements, while the later prompt-caching and tool-search work
+reduced token usage and made the system cheaper to operate.
+
+In particular, the exploratory free-use sessions were useful because they showed
+what users attempted when they were not constrained by scripted tasks. That
+revealed where discoverability broke down and where supported features needed to
+be surfaced earlier. Those observations pushed us to improve documentation, the
+user manual, and the visibility of interface options in the final version.
 
 \section{Design Decisions (LO12)}
 
-\plt{Reflect and justify your design decisions.  How did limitations,
- assumptions, and constraints influence your decisions?  Discuss each of these
- separately.}
+\subsection{Limitations and Their Influence}
+
+\begin{itemize}
+	\item \textbf{OCR quality limitations:} Screenshot text extraction is not
+	always accurate or complete. Because the usability study showed that users were
+	already sensitive to unclear or unreliable responses, we prioritized iterative
+	reasoning and verification instead of one-shot execution.
+	\item \textbf{External dependency limitations:} Model providers and external
+	integrations can fail, throttle, or change. This pushed us to modularize
+	integrations and design for graceful degradation, which was important because
+	participants valued completing real workflows without having to restart from
+	scratch when something went wrong.
+	\item \textbf{Multi-client limitations:} GUI, TUI, and Discord differ in
+	interaction style and transport. This drove the decision to centralize runtime
+	behavior in a gateway, since the usability work showed that users expected the
+	same task to behave consistently regardless of the entry path they used, and
+	we also needed one place to absorb cron jobs, webhooks, and future chat inputs.
+\end{itemize}
+
+\subsection{Assumptions and Their Influence}
+
+\begin{itemize}
+	\item \textbf{A1:} Natural-language interaction lowers the barrier for our
+	target users compared to command memorization. This supported investing in
+	agent-based orchestration, especially because usability testing showed that
+	participants understood the value of the system quickly but struggled with how
+	to phrase requests and follow-up commands.
+	\item \textbf{A2:} Users may switch interaction surfaces while expecting
+	equivalent behavior. This justified a shared backend rather than per-interface
+	business logic, because the study indicated that users cared more about task
+	completion than about which front end they were using.
+	\item \textbf{A3:} The integration surface will continue to expand over time.
+	This justified MCP modularity, with selective CLI conversion for high-value
+	paths, so we could keep common workflows dependable while adding features.
+\end{itemize}
+
+\subsection{Constraints and Their Influence}
+
+\begin{itemize}
+	\item \textbf{Capstone time constraint:} We prioritized reliability,
+	consistency, and core accessibility value over lower-priority feature breadth,
+	because the usability study identified clarity and discoverability as the main
+	friction points rather than missing advanced capabilities.
+	\item \textbf{Team-size constraint:} Duplicated orchestration across clients was
+	not sustainable, so we centralized execution paths.
+	\item \textbf{Resource/cost constraint:} External API usage and operational
+	overhead influenced our choice to keep some frequent operations local via CLI.
+\end{itemize}
+
+\subsection{Traceability from PoC to Rev 0 to Final Presentation}
+
+The design evolution is explicitly traced across three development stages below.
+
+\begin{enumerate}
+	\item \textbf{PoC stage (initial prototype):}
+	\begin{itemize}
+		\item The initial prototype focused on direct computer control through MCP
+		tools.
+		\item Context management was limited: the system did not yet perform robust
+		selection or structuring of relevant context, and large amounts of context
+		were frequently compressed into a single prompt.
+		\item Orchestration support for iterative recovery was minimal.
+	\end{itemize}
+
+	\item \textbf{Rev 0 stage:}
+	\begin{itemize}
+		\item A React GUI was introduced to improve usability and accessibility for
+		non-technical users.
+		\item Initial orchestration capabilities were added to reduce dependence on
+		purely one-shot behavior and improve action sequencing.
+		\item MCP integrations were retained and reorganized around concrete user
+		workflows exposed through the GUI.
+	\end{itemize}
+
+	\item \textbf{Final presentation stage:}
+	\begin{itemize}
+		\item A shared gateway architecture was introduced as the central runtime for
+		orchestration, routing, and session management.
+		\item Interaction surfaces were expanded to \textbf{TUI, GUI, and Discord relay},
+		all connected to the same backend behavior.
+		\item This change reduced interface drift and improved behavioral
+		consistency, maintainability, and reliability under multi-client operation.
+	\end{itemize}
+\end{enumerate}
+
+\subsection{Challenge Level and Extras}
+
+\textbf{Challenge level:} High. The project required coordinating asynchronous
+agent behavior, multiple interfaces, and integration reliability while preserving
+an accessibility-first product goal. The usability study reinforced that this was
+not just a feature problem: users needed clearer entry points, clearer prompts,
+and consistent task behavior across interfaces.
+
+\textbf{Extras:} Usability testing and the user manual were completed extras
+that directly influenced design priorities, especially consistency, recoverability,
+and clarity for end users.
 
 \section{Economic Considerations (LO23)}
 
