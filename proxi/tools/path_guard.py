@@ -4,6 +4,22 @@ from pathlib import Path
 
 from proxi.tools.base import ToolResult
 
+DEFAULT_IGNORED_NAMES: frozenset[str] = frozenset({
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    "coverage",
+    "htmlcov",
+    "logs",
+})
+
 
 class PathGuardError(ValueError):
     """Raised when a path violates the working directory constraint."""
@@ -18,6 +34,7 @@ class PathGuard:
 
     def __init__(self, base_dir: Path | None) -> None:
         self._base: Path | None = base_dir.resolve() if base_dir is not None else None
+        self._ignored_names: frozenset[str] = DEFAULT_IGNORED_NAMES
 
     @property
     def base_dir(self) -> Path | None:
@@ -58,3 +75,36 @@ class PathGuard:
             return self.validate(path), None
         except PathGuardError as e:
             return None, ToolResult(success=False, output="", error=str(e))
+
+    @property
+    def ignored_names(self) -> frozenset[str]:
+        return self._ignored_names
+
+    def is_ignored(self, path: str | Path) -> bool:
+        """Return True when path is under a default-ignored directory."""
+        resolved = self.validate(path)
+        parts = {part.lower() for part in resolved.parts}
+        return any(name.lower() in parts for name in self._ignored_names)
+
+    def guard_ignored_result(
+        self,
+        path: str | Path,
+        *,
+        include_ignored: bool = False,
+    ) -> "tuple[Path | None, ToolResult | None]":
+        """Validate path and enforce ignore policy unless explicitly overridden."""
+        resolved, err = self.guard_result(path)
+        if err is not None or resolved is None:
+            return None, err
+        if include_ignored:
+            return resolved, None
+        if self.is_ignored(resolved):
+            return None, ToolResult(
+                success=False,
+                output="",
+                error=(
+                    f"Path '{path}' is in an ignored directory. "
+                    "Set include_ignored=true to access it explicitly."
+                ),
+            )
+        return resolved, None

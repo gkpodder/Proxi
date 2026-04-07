@@ -36,6 +36,13 @@ class ReadFileTool(BaseTool):
                         "type": "integer",
                         "description": "Maximum number of lines to return (default: all)",
                     },
+                    "include_ignored": {
+                        "type": "boolean",
+                        "description": (
+                            "Allow reading paths in ignored directories "
+                            "(.venv, .pytest_cache, node_modules, etc.)"
+                        ),
+                    },
                 },
                 "required": ["path"],
             },
@@ -47,7 +54,10 @@ class ReadFileTool(BaseTool):
         if not path_str or not isinstance(path_str, str):
             return ToolResult(success=False, output="", error="Path argument is required")
 
-        resolved, err = self._guard.guard_result(path_str)
+        include_ignored = bool(arguments.get("include_ignored", False))
+        resolved, err = self._guard.guard_ignored_result(
+            path_str, include_ignored=include_ignored
+        )
         if err:
             return err
 

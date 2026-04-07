@@ -12,7 +12,6 @@ from proxi.tools.filesystem import EditFileTool, ReadFileTool
 from proxi.tools.diff import ApplyPatchTool
 from proxi.tools.shell import ExecuteCodeTool
 from proxi.tools.coding import build_coding_tools, register_coding_tools
-from proxi.tools.registry import ToolRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +68,14 @@ def test_path_guard_symlink_traversal(tmp_path: Path) -> None:
     guard = PathGuard(tmp_path)
     with pytest.raises(PathGuardError):
         guard.validate(inside)
+
+
+def test_path_guard_detects_ignored_path(tmp_path: Path) -> None:
+    guard = PathGuard(tmp_path)
+    ignored = tmp_path / ".venv" / "bin" / "python"
+    ignored.parent.mkdir(parents=True)
+    ignored.write_text("")
+    assert guard.is_ignored(ignored)
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +141,28 @@ async def test_grep_truncates_output(tmp_path: Path) -> None:
     assert "truncated" in result.output
 
 
+@pytest.mark.asyncio
+async def test_grep_ignores_default_noise_dirs(tmp_path: Path) -> None:
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "noise.txt").write_text("needle\n")
+    (tmp_path / "real.txt").write_text("needle\n")
+    tool = GrepTool(PathGuard(tmp_path))
+    result = await tool.execute({"pattern": "needle"})
+    assert result.success
+    assert "real.txt" in result.output
+    assert ".venv" not in result.output
+
+
+@pytest.mark.asyncio
+async def test_grep_include_ignored_allows_noise_dirs(tmp_path: Path) -> None:
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "noise.txt").write_text("needle\n")
+    tool = GrepTool(PathGuard(tmp_path))
+    result = await tool.execute({"pattern": "needle", "include_ignored": True})
+    assert result.success
+    assert ".venv/noise.txt" in result.output
+
+
 # ---------------------------------------------------------------------------
 # GlobTool
 # ---------------------------------------------------------------------------
@@ -167,6 +196,28 @@ async def test_glob_rejects_path_outside_cwd(tmp_path: Path) -> None:
     tool = GlobTool(PathGuard(tmp_path))
     result = await tool.execute({"pattern": "**/*.py", "path": str(outside)})
     assert not result.success
+
+
+@pytest.mark.asyncio
+async def test_glob_ignores_default_noise_dirs(tmp_path: Path) -> None:
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "skip.py").write_text("")
+    (tmp_path / "keep.py").write_text("")
+    tool = GlobTool(PathGuard(tmp_path))
+    result = await tool.execute({"pattern": "**/*.py"})
+    assert result.success
+    assert "keep.py" in result.output
+    assert ".venv/skip.py" not in result.output
+
+
+@pytest.mark.asyncio
+async def test_glob_include_ignored_allows_noise_dirs(tmp_path: Path) -> None:
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "skip.py").write_text("")
+    tool = GlobTool(PathGuard(tmp_path))
+    result = await tool.execute({"pattern": "**/*.py", "include_ignored": True})
+    assert result.success
+    assert ".venv/skip.py" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +343,28 @@ async def test_read_file_not_found(tmp_path: Path) -> None:
     tool = ReadFileTool()
     result = await tool.execute({"path": str(tmp_path / "missing.txt")})
     assert not result.success
+
+
+@pytest.mark.asyncio
+async def test_read_file_blocks_ignored_path_by_default(tmp_path: Path) -> None:
+    ignored_file = tmp_path / ".venv" / "note.txt"
+    ignored_file.parent.mkdir(parents=True)
+    ignored_file.write_text("secret")
+    tool = ReadFileTool(PathGuard(tmp_path))
+    result = await tool.execute({"path": str(ignored_file)})
+    assert not result.success
+    assert "ignored directory" in result.error.lower()
+
+
+@pytest.mark.asyncio
+async def test_read_file_include_ignored_allows_read(tmp_path: Path) -> None:
+    ignored_file = tmp_path / ".venv" / "note.txt"
+    ignored_file.parent.mkdir(parents=True)
+    ignored_file.write_text("secret")
+    tool = ReadFileTool(PathGuard(tmp_path))
+    result = await tool.execute({"path": str(ignored_file), "include_ignored": True})
+    assert result.success
+    assert "secret" in result.output
 
 
 # ---------------------------------------------------------------------------

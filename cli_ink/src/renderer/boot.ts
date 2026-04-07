@@ -7,7 +7,7 @@ import chalk from "chalk";
 import { printLine, colors } from "./scrollback.js";
 import { theme } from "../theme.js";
 
-const VERSION = "0.5.0";
+const VERSION = "1.0.0";
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);

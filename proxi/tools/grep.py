@@ -5,6 +5,7 @@ import re
 import shlex
 import shutil
 from pathlib import Path
+from typing import Callable
 
 from proxi.tools.base import BaseTool, ToolResult
 from proxi.tools.path_guard import PathGuard
@@ -21,6 +22,9 @@ def _python_grep(
     case_insensitive: bool,
     output_mode: str,
     max_results: int,
+    *,
+    include_ignored: bool,
+    is_ignored_path: Callable[[Path], bool],
 ) -> tuple[bool, str]:
     """Pure-Python grep fallback using pathlib + re."""
     flags = re.IGNORECASE if case_insensitive else 0
@@ -45,6 +49,8 @@ def _python_grep(
     truncated = False
 
     for fpath in files:
+        if not include_ignored and is_ignored_path(fpath):
+            continue
         try:
             text = fpath.read_text(encoding="utf-8", errors="replace")
         except (OSError, IsADirectoryError):
@@ -156,6 +162,13 @@ class GrepTool(BaseTool):
                         "type": "integer",
                         "description": "Maximum output lines to return (default: 200)",
                     },
+                    "include_ignored": {
+                        "type": "boolean",
+                        "description": (
+                            "Allow searching in ignored directories "
+                            "(.venv, .pytest_cache, node_modules, etc.)"
+                        ),
+                    },
                 },
                 "required": ["pattern"],
             },
@@ -173,12 +186,16 @@ class GrepTool(BaseTool):
         case_insensitive = bool(arguments.get("case_insensitive", False))
         output_mode = str(arguments.get("output_mode", "content"))
         max_results = int(arguments.get("max_results") or 200)
+        include_ignored = bool(arguments.get("include_ignored", False))
         context_int = int(context) if isinstance(context, int) and context > 0 else 0
 
         base = self._guard.base_dir or Path.cwd()
 
         if path_str:
-            resolved, err = self._guard.guard_result(path_str)
+            resolved, err = self._guard.guard_ignored_result(
+                path_str,
+                include_ignored=include_ignored,
+            )
             if err:
                 return err
             search_path = resolved
@@ -188,7 +205,7 @@ class GrepTool(BaseTool):
         if _RG_BIN:
             return await self._rg_grep(
                 pattern, search_path, base, glob_pattern, context_int,
-                case_insensitive, output_mode, max_results,
+                case_insensitive, output_mode, max_results, include_ignored,
             )
 
         # Python fallback
@@ -197,6 +214,8 @@ class GrepTool(BaseTool):
             pattern, search_path,
             str(glob_pattern) if glob_pattern else None,
             context_int, case_insensitive, output_mode, max_results,
+            include_ignored=include_ignored,
+            is_ignored_path=self._guard.is_ignored,
         )
         return ToolResult(success=success, output=output, metadata={})
 
@@ -210,6 +229,7 @@ class GrepTool(BaseTool):
         case_insensitive: bool,
         output_mode: str,
         max_results: int,
+        include_ignored: bool,
     ) -> ToolResult:
         assert _RG_BIN is not None
         cmd: list[str] = [_RG_BIN, "--no-heading"]
@@ -224,8 +244,15 @@ class GrepTool(BaseTool):
         if case_insensitive:
             cmd.append("--ignore-case")
 
+        if include_ignored:
+            # Explicit override mode: include hidden paths and bypass ignore files.
+            cmd.extend(["--hidden", "--no-ignore"])
+
         if glob_pattern and isinstance(glob_pattern, str):
             cmd.extend(["--glob", glob_pattern])
+        if not include_ignored:
+            for ignored in self._guard.ignored_names:
+                cmd.extend(["--glob", f"!**/{ignored}/**"])
 
         if context > 0:
             cmd.extend(["--context", str(context)])
