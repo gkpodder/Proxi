@@ -2,6 +2,7 @@
 
 \usepackage{tabularx}
 \usepackage{booktabs}
+\usepackage{xstring}
 
 \title{Reflection and Traceability Report on \progname}
 
@@ -12,60 +13,624 @@
 \input{../Comments}
 \input{../Common}
 
+\makeatletter
+\let\OriginalUrl\url
+\renewcommand{\url}[1]{%
+\IfSubStr{#1}{/issues/}{%
+\StrBehind{#1}{/issues/}[\IssueNumber]%
+\href{#1}{\#\IssueNumber}%
+}{%
+\IfSubStr{#1}{/pull/}{%
+\StrBehind{#1}{/pull/}[\PullNumber]%
+\href{#1}{\#\PullNumber}%
+}{%
+\OriginalUrl{#1}%
+}%
+}%
+}
+\makeatother
+
 \begin{document}
 
 \maketitle
 
-\plt{Reflection is an important component of getting the full benefits from a
-learning experience.  Besides the intrinsic benefits of reflection, this
-document will be used to help the TAs grade how well your team responded to
-feedback.  Therefore, traceability between Revision 0 and Revision 1 is and
-important part of the reflection exercise.  In addition, several CEAB (Canadian
-Engineering Accreditation Board) Learning Outcomes (LOs) will be assessed based
-on your reflections.}
-
 \section{Changes in Response to Feedback}
 
-\plt{Summarize the changes made over the course of the project in response to
-feedback from TAs, the instructor, teammates, other teams, the project
-supervisor (if present), and from user testers.}
+This section summarizes the changes made across project deliverables in
+response to feedback from TAs, peer reviewers, and internal team review.
+Each item identifies the feedback received, its source, and the specific
+Revision 1 changes made in response. GitHub issue and pull request links
+are included to support traceability to the corresponding tracked changes.
 
-\plt{For those teams with an external supervisor, please highlight how the feedback 
-from the supervisor shaped your project.  In particular, you should highlight the 
-supervisor's response to your Rev 0 demonstration to them.}
-
-\plt{Version control can make the summary relatively easy, if you used issues
-and meaningful commits.  If you feedback is in an issue, and you responded in
-the issue tracker, you can point to the issue as part of explaining your
-changes.  If addressing the issue required changes to code or documentation, you
-can point to the specific commit that made the changes.  Although the links are
-helpful for the details, you should include a label for each item of feedback so
-that the reader has an idea of what each item is about without the need to click
-on everything to find out.}
-
-\plt{If you were not organized with your commits, traceability between feedback
-and commits will not be feasible to capture after the fact.  You will instead
-need to spend time writing down a summary of the changes made in response to
-each item of feedback.}
-
-\plt{You should address EVERY item of feedback.  A table or itemized list is
-recommended.  You should record every item of feedback, along with the source of
-that feedback and the change you made in response to that feedback.  The
-response can be a change to your documentation, code, or development process.
-The response can also be the reason why no changes were made in response to the
-feedback.  To make this information manageable, you will record the feedback and
-response separately for each deliverable in the sections that follow.}
-
-\plt{If the feedback is general or incomplete, the TA (or instructor) will not
-be able to grade your response to feedback.  In that case your grade on this
-document, and likely the Revision 1 versions of the other documents will be
-low.} 
+Peer review feedback was also considered during revision. When peer
+feedback aligned with TA feedback or identified clear issues in clarity,
+structure, traceability, or testability, the suggested changes were
+incorporated. When peer feedback was ambiguous, conflicted with the
+document's purpose, or introduced unnecessary implementation detail,
+the team reviewed it but did not apply it. These decisions were made to
+preserve consistency with project scope, black-box requirements
+principles, and previously validated design choices.
 
 \subsection{SRS and Hazard Analysis}
 
-\subsection{Design and Design Documentation}
+\subsubsection{SRS}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.1.1 Start: SRS Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the SRS and the specific
+Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: Use symbolic constants instead of repeated numeric
+values.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A dedicated symbolic constants subsection was added in Section 2.1.
+Repeated thresholds for timing, accuracy, capacity, and related fit
+criteria were moved there and replaced with named constants throughout
+the document. This reduced duplication and made the same values usable
+consistently across goals, requirements, and V\&V activities. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Sections should not start directly with subsections.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Introductory text was added to major sections so each section now
+explains its purpose before listing subsections. This was applied across
+the SRS so the document has clearer flow and better context for the
+reader before detailed content begins. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Goals feel too low-level and resemble FRs or NFRs.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Section 1.2 was rewritten so the goals are high-level and stable rather
+than implementation-like. Detailed measurable criteria were removed
+from the goals and expressed later through functional and
+non-functional requirements, with quantitative targets centralized in
+the symbolic constants section. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Many spelling and wording issues.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The full SRS was reviewed for spelling, grammar, and wording problems.
+This included correction of typos, general wording cleanup, and small
+improvements to sentence flow so the document reads more consistently
+and professionally. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Definitions and acronyms should be ordered
+alphabetically.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The glossary and terminology material were reorganized alphabetically
+to improve lookup and consistency. This makes terminology easier to
+scan and aligns the document with expected reference-section style. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Tables need to be referenced in the document.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Tables were explicitly referenced in the surrounding text so their role
+is explained rather than left implicit. This was done to improve
+document coherence and to make the trace from discussion to tabular
+evidence clearer for the reader. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Section 8.3 needed more spacing and readability.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Section 8.3 was reformatted for better spacing and readability so
+individual product use cases are easier to follow. This change improved
+visual separation between entries and reduced the sense of compressed
+content in that section. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Most FRs were actually NFRs.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Requirements were revised to better distinguish functional behaviour
+from non-functional quality attributes. Functional requirements were
+kept focused on what the system does, while performance, usability,
+safety, and related quality measures were expressed through the
+appropriate non-functional sections and fit criteria. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Need a table or matrix for traceability.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Dedicated traceability from requirements to use cases was added so the
+reader can follow how requirements relate to system behaviour. This
+strengthened the bridge between the SRS and later V\&V artifacts by
+making requirement coverage more explicit. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Many NFRs need fit criteria.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Measurable thresholds were clarified and made more consistent by using
+the symbolic constants section and by tightening the wording of
+non-functional criteria. This improved testability and reduced the
+chance of inconsistent repeated numeric values across sections. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Constraints need rationale and clearer origin.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Rationale was added to key constraints so the document better explains
+why they exist and whether they come from the problem context, user
+needs, or team decisions. This improved transparency and reduced the
+risk of presenting internal design choices as mandated constraints. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Personas are good, but their effect on requirements is
+unclear.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The SRS now explicitly explains how personas affect requirement
+priorities. This links user groups such as accessibility-focused users,
+older adults, and power users to the emphasis placed on accessibility,
+high-level interaction, safety, and ease of use requirements. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Assumptions should be labeled, including LLM-related
+assumptions.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Assumptions were labeled explicitly as A1, A2, and so on in the
+assumptions section. This includes assumptions about external services,
+such as the use of off-the-shelf AI services, so those expectations are
+visible and can later be examined through validation rather than being
+left implicit. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: External knowledge and references were not included.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+External references were incorporated into the SRS so design and user
+context claims are supported rather than left unreferenced. This helps
+anchor the problem context and strengthens the professionalism of the
+document. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: No attempt to formalize any part of the document.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A formalized safety interaction protocol and a dedicated system state
+diagram subsection were added. These additions introduce more precise
+behavioural structure without turning the SRS into a design document. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\item
+\textbf{Feedback: Planning detail was thin.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Schedule and task-planning detail were expanded so the SRS more
+clearly reflects phased development expectations and downstream
+planning links. This helps connect requirements to the broader project
+workflow. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/129} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/121}
+
+\end{itemize}
+
+\subsubsection{Hazard Analysis}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.1.2 Start: Hazard Analysis Feedback and
+Responses}
+
+\noindent
+The following items summarize TA feedback on the Hazard Analysis and
+the specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: Tables were not referenced in the document body.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Text was added to explicitly refer to the revision history table, the
+main FMEA, and the roadmap tables. The introduction now points the
+reader to Table 1, Section 5 introduces Table 2 directly, and Section 7
+explains the role of Tables 3 and 4 in prioritizing mitigations. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\item
+\textbf{Feedback: Table formatting and readability issues.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The revision history was reformatted to one item per row, the ruled
+tables were replaced with Booktabs styling, and the FMEA table was
+rotated to improve readability and avoid compressed text. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\item
+\textbf{Feedback: Need privacy hazards for external LLM usage.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Privacy and external-service risk coverage was expanded. New attention
+was given to what data may leave the system when external AI services
+are used, and explicit assumptions A6 and A7 were added to state that
+only minimum task-relevant data is sent and that users are informed
+when external processing is required. Derived requirements such as
+consent for external sharing and bounded logging were also included. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\item
+\textbf{Feedback: Hazard requirements and terminology should align with
+the SRS and V\&V artifacts.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Terminology and identifiers were aligned so hazard-derived requirements
+use names and references that connect more cleanly to the SRS and
+validation documents. The FMEA also includes SRS references beside
+hazards to strengthen cross-document traceability. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\item
+\textbf{Feedback: Need clearer system boundaries and assumptions.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+System boundaries were clarified in Section 3 by separating internal
+components from external systems such as the operating system,
+third-party applications, and cloud services. Assumptions were stated
+explicitly in Section 4, with extra emphasis on the new privacy-related
+assumptions tied to external processing. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/138} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/125}
+
+\end{itemize}
 
 \subsection{VnV Plan and Report}
+
+\subsubsection{V\&V Plan}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.3.1 Start: V\&V Plan Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the V\&V Plan and the
+specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: Use symbolic constants instead of repeated numeric
+values.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Repeated numeric thresholds were replaced with symbolic constants and
+the plan now includes a symbolic parameters appendix. This makes the
+validation targets more consistent with the SRS and easier to update in
+one place. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Many spelling mistakes, grammar issues, and weak flow.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The document was reviewed for spelling, grammar, and sentence flow.
+Terminology and phrasing were cleaned up so the plan reads more
+smoothly and professionally. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Missing text introducing Section 1.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+An opening description was added before Section 1 so the document now
+states what the plan covers, how evidence will be collected, and how it
+traces back to the SRS. This gives the section a clearer entry point. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Proper stylization is macOS.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Platform terminology was standardized, including the proper stylization
+of macOS, so the document uses consistent technical naming. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Table titles and table references were incorrect or
+missing.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Table captions were positioned above tables and the text now refers to
+tables directly, such as Table 1 for team roles. This improves
+navigation and makes tabular evidence part of the argument rather than
+isolated content. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: No plan for how roles may change if needed.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A dedicated role reassignment and contingency plan was added in
+Section 2.2. It specifies how blocked work is identified, how backup
+reviewers are maintained, how reassignment is tracked in GitHub, and
+how traceability records are updated afterward. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Checklists were not atomic enough.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Broad checklist statements were broken into smaller, independently
+checkable items. For example, review checklists now separate ideas
+such as identifier uniqueness, direct language, measurable outcome,
+and requirement consistency, rather than hiding several checks inside
+one vague bullet. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: ``Run some WCAG checks'' was too vague.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The accessibility verification plan was made concrete. The plan now
+refers to specific checks such as keyboard navigation, screen reader
+compatibility, and WCAG 2.2-related accessibility validation instead
+of relying on a generic statement. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: It was not clear whether traceability was complete.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The plan now states requirement-to-test traceability more explicitly
+and includes a dedicated traceability section for functional and
+non-functional system tests. This clarifies intended completeness of
+coverage. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Walkthroughs, inspections, and reviews lacked
+specific plans.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Review activities were expanded into clearer planned stages, including
+internal review, peer team review, walkthrough meetings, and
+traceability checks. The plan now explains what each activity is for
+and how issues will be recorded. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Chosen extras were not justified well enough.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The challenge/extras section now explains why the user manual and
+usability report matter for this project specifically. Their value is
+tied to onboarding, accessibility support, and iterative improvement
+based on observed usability findings. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\item
+\textbf{Feedback: Stakeholder review session and survey goals were not
+clear enough.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The plan was expanded to explain how stakeholder feedback and survey
+results will be used, and the appendix now includes a usability survey
+with acceptance criteria. This makes the intended outputs of those
+activities more explicit and measurable. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/131} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/126}
+
+\end{itemize}
+
+\subsubsection{V\&V Report}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.3.2 Start: V\&V Report Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the V\&V Report and the
+specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: Some FR tests were really more like NFR tests.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The report now separates behavioural verification from timing and
+latency evidence. Functional sections focus on whether required actions
+occur, while timing, latency, throughput, and related measurements are
+reported in the non-functional performance section. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: The project name should be updated.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The document title and content were updated to refer consistently to
+Project Proxi instead of a generic software engineering label. This
+brings the report in line with the other project artifacts. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: Performance results should include data, not only
+means.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Rawer performance evidence was added through dedicated tables for quiet
+and moderate-noise trials, common action completion times, and CPU
+samples during extended runs. This makes the performance discussion more
+transparent and easier to inspect. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: Usability has good data so far, but more complete
+results are expected elsewhere.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The report keeps the current usability-related evidence that supports
+requirement coverage, while making it clear that fuller usability
+analysis belongs in the dedicated usability report. This keeps the
+V\&V Report focused while preserving consistency with the chosen extra. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: Participant-count discussion should reflect capstone
+constraints.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Usability-study wording was adjusted so it reflects realistic
+small-scale evaluation within capstone limits, while still presenting
+meaningful participant-based evidence and observed issues. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\item
+\textbf{Feedback: Traceability in the final report should be clearer.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The report includes requirement traceability matrices for functional
+and non-functional requirements, as well as module-level unit-test
+traceability matrices. This makes the relation between planned and
+completed verification more explicit. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/136} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/127}
+
+\end{itemize}
+
+\subsection{Design and Design Documentation}
 
 \section{Extras}
 
