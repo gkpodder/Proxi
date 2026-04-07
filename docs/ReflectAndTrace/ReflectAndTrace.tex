@@ -630,7 +630,273 @@ completed verification more explicit. \\
 
 \end{itemize}
 
-\subsection{Design and Design Documentation}
+\subsection{Design Documentation}
+
+\subsubsection{Module Guide (MG)}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.3.1 Start: Module Guide (MG) Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the MG and the specific
+Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: I don't know if the Types module is really SW
+decision, since it is related to your requirements and not just generic
+software engineering things like searching/sorting algorithms. Core
+data types is not an abstract data type.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The design documentation was revised so the shared types module is no
+longer presented as a generic software-decision abstract data type.
+Instead, \texttt{SD-Types} is described as a shared
+type-definition/library module that provides the core records and
+symbolic structures used
+throughout Proxi. This better reflects its role in the architecture and
+keeps the MG and MIS terminology aligned. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: One table reference didn't work. Some tables extend
+and overlap with page numbers (LaTeX's longtables package should help
+with this). Need to change the variable for your team name, so it
+doesn't just say ``Software Engineering''. I find it a bit weird that
+the hyperlinks point to the list of modules and not to the sections with
+more details about them. Should quickly describe the tables in the body
+of the text. Uses hierarchy diagram looks great, but it would benefit
+from a legend for the different shapes. Figure 2 is not referenced in
+the body of the text.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The MG was cleaned up for presentation and navigation. Broken table
+references were fixed, large traceability tables were converted to
+\texttt{longtable} so they no longer run into page footers, and the body
+text now introduces the tables and figures more clearly. The uses
+hierarchy discussion was expanded to explain the meaning of the node
+shapes, the main UI figure is now explicitly referenced, and the shared
+project/team macros were used consistently so the document refers
+properly to Project Proxi and the team rather than generic placeholder
+text. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Modules in MG and MIS do not match (e.g. M10 is
+different).} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Module names and numbering were synchronized across the MG and MIS so
+the same \texttt{M1}--\texttt{M14} identifiers now refer to the same
+modules in both documents. This included aligning labels such as
+\texttt{BH-Plan}, \texttt{BH-Safety}, \texttt{BH-Feedback}, and the
+shared/software-decision modules so
+readers can move between the two design artifacts without ambiguity. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\end{itemize}
+
+\subsubsection{Module Interface Specification (MIS)}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.3.2 Start: MIS Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the MIS and the specific
+Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: In the access routine semantics, you don't need
+redundant guards like ``if audio devices exist'' because the exception
+already captures that case. Use \texttt{exc :=} for the exceptions, use
+\texttt{out :=} for outputs instead of sentences, and don't define
+types in the
+state variables --- add an ``Exported Types'' section in the syntax
+instead.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The MIS semantics were normalized across the module specifications.
+Redundant success guards were removed, output and exception descriptions
+were rewritten using the expected \texttt{out :=} and \texttt{exc :=}
+notation, and type definitions were moved out of state variables into
+dedicated \texttt{Exported Types} sections. This made the
+access-program descriptions
+simpler, more consistent, and closer to the course MIS conventions. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Some things aren't clear enough to fully build this.
+For instance, \texttt{IntentType} is referenced throughout but does not
+seem to be defined anywhere.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Shared type definitions were expanded so the document is much closer to
+``enough to build.'' In particular, the missing definitions for
+\texttt{IntentType}, \texttt{ParamSet}, \texttt{ToolId}, \texttt{Intent},
+\texttt{Plan}, and \texttt{Action} were
+added and referenced consistently across the notation and module
+sections. This makes the intended interfaces and data flow much more
+explicit for implementation and testing. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Some parts of the document are somewhat formal, but no
+one piece is fully formalized.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The \texttt{BH-Input} module was strengthened into a more fully
+formalized state-based specification. Its exported types, invariants, transition
+rules, and local transition function were clarified so at least one part
+of the MIS demonstrates a complete formal treatment rather than only
+partial formal notation. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/132} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\end{itemize}
+
+\subsection{Problem Statement and Development Plan}
+
+\subsubsection{Problem Statement and Goals}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.4.1 Start: Problem Statement and Goals Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the Problem Statement and
+Goals document and the specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: I'd put the most important goals for the project at
+the top, and Goal 5 needs clearer wording around the average user
+rating.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The goals were revised to emphasize the most central project outcomes
+more clearly and to improve the wording of the measurable success
+criteria. In particular, the phrasing around user satisfaction and the
+average accessibility-focused rating was tightened so the goals read more
+clearly and professionally. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Sections should always have text in them and not just
+a subsection header right below.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+Introductory text and light wording improvements were added so major
+sections give context before moving into more detailed subsections. This
+improved the flow of the document and aligned it more closely with the
+writing checklist expectations. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\end{itemize}
+
+\subsubsection{Development Plan}
+
+\noindent\rule{\textwidth}{0.6pt}
+
+\noindent\textbf{Section 1.4.2 Start: Development Plan Feedback and Responses}
+
+\noindent
+The following items summarize TA feedback on the Development Plan and
+the specific Revision 1 changes made in response.
+
+\begin{itemize}
+
+\item
+\textbf{Feedback: What if the other roles have to change? Do you have a
+plan for that?} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+A clear role-reassignment contingency plan was added to the Team Member
+Roles section. The document now explains how role changes are discussed,
+recorded, and reflected in team workflow when availability or project
+needs shift during the term. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Be specific about branches, branch naming standards,
+etc.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The workflow plan was made more concrete around issue-driven development
+and pull-request review. Branching expectations, review requirements,
+and GitHub-based progress tracking were clarified so the development
+process is easier to follow and audit. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: These risks are not the kind of feasibility risks we
+are looking for here. You should pick one specific thing and prove it is
+possible to do, and be very clear what you will demonstrate in November.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The proof-of-concept section was refocused around one concrete
+feasibility question: whether Proxi can reliably interpret a natural-
+language request and carry out a meaningful computer action. The plan
+now states much more clearly what the November demonstration would show
+and why that demonstration addresses the project's central technical
+risk. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\item
+\textbf{Feedback: Be sure to format/stylize words properly, use proper
+LaTeX quotation marks, write the reflection in first-person from each
+member, and include a link to the repo, not just the license and project
+board.} \\
+\textbf{Source: TA Feedback} \\
+\textbf{Changes Made:}
+The Development Plan was polished for naming, style, and traceability.
+Terms such as GitHub were standardized, quotation formatting was
+cleaned up, the reflection content was revised to read more naturally in
+first person, and the document now points readers directly to the main
+repository in addition to the license and planning links. \\
+\textbf{Issue Link:}
+\url{https://github.com/gkpodder/Proxi/issues/137} \\
+\textbf{PR Link:}
+\url{https://github.com/gkpodder/Proxi/pull/128}
+
+\end{itemize}
 
 \section{Extras}
 
