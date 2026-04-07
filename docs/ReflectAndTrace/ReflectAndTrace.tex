@@ -1349,22 +1349,27 @@ feasibility rather than provide exact financial projections.
 \section{Reflection on Project Management (LO24)}
 
 This section reflects on how we managed schedule, scope, team
-coordination, and verification throughout the capstone project. Our
-approach relied on practical business-style processes that were
-appropriate for a small software team, including milestone planning,
-issue tracking, pull-request review, documented role ownership, and
-traceability between plans, tests, and final evidence.
+coordination, and verification throughout the capstone project. As
+shown in the Development Plan and V\&V documents, our process relied on
+both project-management tools and engineering tools: Git and GitHub for
+version control, issue tracking, pull-request review, and traceability;
+Discord for day-to-day coordination; and technical tools such as
+Python, TypeScript/React, Playwright, OpenAI-based APIs, and linting
+and testing workflows to support actual implementation and quality
+control.
 
 \subsection{How Does Your Project Management Compare to Your Development Plan}
 
 Overall, our project management stayed reasonably close to what we
 committed to in the Development Plan. We used the planned weekly team
 meetings, rotating chair and note-taker roles, Discord for day-to-day
-communication, and GitHub Issues and pull requests as the main workflow
-for tracking work and reviewing changes. We also stayed broadly aligned
-with the technology plan by building the system around Python, a
-TypeScript/React interface, automation tooling, and a GitHub-based
-review process.
+communication, and GitHub Issues, pull requests, and the project board
+as the main tools for assigning work, reviewing changes, and keeping
+progress visible. On the engineering side, the project also stayed well
+aligned with the documented technology plan: Python for orchestration,
+TypeScript/React for interface work, OpenAI-based language-model
+support, Playwright and platform automation tools for task execution,
+and Git-based review practices for quality control.
 
 At the same time, the real project required more flexibility than the
 initial plan suggested. The role table gave us a useful starting point,
@@ -1379,19 +1384,24 @@ that was feasible within capstone constraints.
 \subsection{What Went Well?}
 
 One of the biggest strengths of our project management was that we used
-simple tools consistently. GitHub Issues, pull requests, and the GitHub
-project board gave us a shared source of truth for tasks, review status,
-and progress, while Discord helped us resolve blockers quickly between
-meetings. The modular decomposition of the system also helped with time
-and resource management because different members could work on input
-handling, UI, automation, testing, and documentation in parallel with
-less overlap than a more tightly coupled design would have allowed.
+simple tools consistently and for clear purposes. GitHub Issues, pull
+requests, and the GitHub project board gave us a shared source of truth
+for tasks, review status, and progress, while Discord helped us resolve
+blockers quickly between meetings. On the engineering side, having a
+clear tool stack also helped: Python and its supporting libraries made
+rapid backend iteration possible, TypeScript/React supported a more
+structured frontend, and tools such as Playwright and platform-specific
+automation libraries let us test real computer interactions rather than
+only describe them abstractly.
 
 Another process that worked well was connecting project management to
-verification rather than treating testing as a final-step activity. The
-V\&V Plan, design reviews, checklist-based inspections, and later unit,
-integration, and system testing gave us structured checkpoints for
-judging whether work was actually ready. This improved accountability,
+verification rather than treating testing as a final-step activity. As
+reflected in the V\&V Plan and V\&V Report, we used checklist-based
+inspections, traceability matrices, and unit, integration, and system
+tests as concrete management tools for deciding whether work was ready.
+The coding-standard tools from the Development Plan, such as pylint,
+Prettier, and ESLint, also supported consistency across the Python and
+TypeScript codebases. Together, these tools improved accountability,
 kept quality visible, and made the final stages of the project more
 manageable because evidence and traceability were collected throughout
 the term instead of being invented at the end.
@@ -1402,7 +1412,11 @@ The main difficulty was that some parts of the project needed more
 coordination effort than the original plan implied. Integrating AI
 services, desktop and browser automation, frontend work, verification,
 and documentation created more dependency between tasks than a simple
-role table can capture. As a result, some work could not progress as
+role table can capture. In practice, that meant the engineering tools
+that made Proxi possible also added coordination overhead: external LLM
+services can be variable, browser and OS automation can be brittle, and
+a multi-language codebase requires more care when different components
+must evolve together. As a result, some work could not progress as
 cleanly in parallel as we first expected, and late-stage consistency
 checking across documents took a significant amount of time and focus.
 
@@ -1411,9 +1425,9 @@ initially assumed. Early ideas around Proxi could easily expand into a
 much broader autonomous-assistant vision, but the team had to narrow the
 focus toward the most important and demonstrably feasible workflows. In
 addition, some workflow details, such as stronger branch conventions,
-clearer traceability ownership, and fuller tool justification, were only
-strengthened after external feedback rather than being fully mature from
-the beginning.
+clearer traceability ownership, fuller tool justification, and earlier
+use of process checklists, were only strengthened after external
+feedback rather than being fully mature from the beginning.
 
 \subsection{What Would you Do Differently Next Time?}
 
@@ -1422,15 +1436,19 @@ much earlier. We would define branch naming and review expectations from
 the start, schedule more frequent internal milestone reviews before each
 official deliverable, and assign an explicit owner for cross-document
 traceability so the final reporting effort is distributed more evenly
-across the term.
+across the term. We would also make even better use of management tools
+such as GitHub issue templates, review checklists, and clearer status
+tracking so process discipline does not depend only on memory or last-
+minute cleanup.
 
 We would also revisit feasibility risk and fallback scope at regular
 checkpoints instead of only when deadlines become close. For a project
 that depends on AI behaviour, external services, and automation tools,
 it is especially important to decide early which workflows are
-release-critical and which are optional extensions. Doing that sooner
-would improve time management, reduce last-minute scope pressure, and
-make resource decisions more deliberate and effective.
+release-critical and which are optional extensions. Doing that sooner,
+along with earlier automation of linting and testing expectations, would
+improve time management, reduce last-minute scope pressure, and make
+resource decisions more deliberate and effective.
 
 \section{Ethics and Equity (LO18)}
 
@@ -1478,16 +1496,62 @@ where further improvements are needed to better support all users.
 
 \section{Reflection on Capstone}
 
-\plt{This question focuses on what you learned during the course of the capstone project.}
+This capstone was a valuable experience because it brought together many
+parts of software engineering in a way that regular course work usually
+keeps separate. It required us to move from isolated assignments to a
+single evolving product shaped by real constraints, user needs,
+iteration, verification, and team coordination. In that sense, the
+project was not just about building Proxi, but also about learning how
+to make technical decisions, respond to feedback, and refine a system
+over time.
+
+At the same time, several courses gave us an important foundation for
+this work. They helped us approach requirements, architecture, testing,
+accessibility, and security more systematically, even though the
+capstone still required us to extend that knowledge in more practical
+and open-ended ways.
 
 \subsection{Which Courses Were Relevant}
 
-\plt{Which of the courses you have taken were relevant for the capstone project?}
+Several courses were especially relevant to Proxi. SFWRENG 3RA3
+(Software Requirements \& Security Considerations) was directly useful
+for writing the SRS, thinking about stakeholder needs, and handling
+privacy and safety concerns in the hazard analysis and traceability
+work. SFWRENG 3S03 (Software Testing) was also highly relevant because
+our project required structured verification through unit, integration,
+system, and usability-related testing rather than relying on informal
+checks.
+
+Our software design courses, especially SFWRENG 3BB4 and SFWRENG 3A04,
+were important for the architectural side of the project. Proxi depends
+on modular decomposition, clear interface boundaries, and separation of
+responsibilities across the gateway, integrations, memory, and user
+interfaces. SFWRENG 4HC3 (Human-Computer Interfaces) was also very
+relevant because accessibility and ease of use were central goals of
+this project, and that background helped us think more carefully about
+user workflows, feedback clarity, and the usability testing extra.
+Finally, SFWRENG 4C03 (Computer Networks \& Security) reinforced the
+importance of secure integrations, external services, and dependable
+communication between system components.
 
 \subsection{Knowledge/Skills Outside of Courses}
 
-\plt{What skills/knowledge did you need to acquire for your capstone project
-that was outside of the courses you took?}
+At the same time, some of the most important skills for this project
+were learned outside formal coursework. We had to learn how to work
+with modern LLM APIs, prompt design, and tool-calling orchestration in a
+way that was reliable enough for a real assistant rather than a small
+classroom prototype. We also had to gain hands-on experience with
+browser and desktop automation tools and understand the practical
+tradeoffs that come with external services, such as latency, token cost,
+and service reliability.
+
+Another major area of learning was practical accessibility and usability
+evaluation. Coursework helped us think about interface design, but
+running a real usability study, interpreting participant feedback, and
+turning that feedback into documentation and workflow improvements
+required more applied judgment than a typical course assignment. This
+combination of course foundations and self-directed learning was one of
+the most valuable parts of the capstone experience.
 
 \bibliographystyle{plainnat}
 \bibliography{../../refs/References}
