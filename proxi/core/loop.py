@@ -104,6 +104,22 @@ class AgentLoop:
         self.workspace = workspace
         self.compactor = compactor
 
+    @staticmethod
+    def _is_memory_nudge_only_response(content: str) -> bool:
+        """Heuristic: detect replies that only acknowledge the memory nudge."""
+        normalized = content.strip().lower()
+        if not normalized:
+            return False
+        nudge_markers = (
+            "reusable skill",
+            "user preference",
+            "update_user_model",
+            "save_skill",
+            "continue with the implementation",
+            "continue without comment",
+        )
+        return len(normalized) <= 280 and any(marker in normalized for marker in nudge_markers)
+
     async def run(self, initial_message: str, reasoning_effort: str = "minimal") -> AgentState:
         """
         Run the agent loop with an initial message.
@@ -243,8 +259,9 @@ class AgentLoop:
                                     "status": "running",
                                 }
                             )
+                        # Keep memory nudge internal; avoid streaming transient text.
                         decision, usage = await self._decide(
-                            state, emit_stream=self.emitter is not None,
+                            state, emit_stream=(self.emitter is not None and not _mem_nudge_injected),
                             reasoning_effort=state.reasoning_effort,
                         )
                         if self.emitter:
@@ -260,6 +277,30 @@ class AgentLoop:
                         # Remove transient nudge so it is not in history going forward
                         if _mem_nudge_injected and state.history and state.history[-1].content == _MEMORY_NUDGE:
                             state.history.pop()
+
+                        # If the model replied only to the transient memory nudge,
+                        # suppress that response and immediately re-decide without the nudge.
+                        if (
+                            _mem_nudge_injected
+                            and decision.type == DecisionType.RESPOND
+                            and self._is_memory_nudge_only_response(
+                                decision.payload.get("content", "")
+                            )
+                        ):
+                            self.logger.info(
+                                "memory_nudge_response_suppressed",
+                                turn=state.current_turn,
+                            )
+                            retry_decision, retry_usage = await self._decide(
+                                state,
+                                emit_stream=False,
+                                reasoning_effort=state.reasoning_effort,
+                            )
+                            decision = retry_decision
+                            usage = {
+                                key: int(usage.get(key, 0)) + int(retry_usage.get(key, 0))
+                                for key in set(usage) | set(retry_usage)
+                            }
 
                         # Token accounting:
                         # - total_tokens tracks spend (input + output)

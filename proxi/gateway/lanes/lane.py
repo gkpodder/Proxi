@@ -206,6 +206,9 @@ class AgentLane:
     # Applied only to events from the TUI source; cron/discord/webhook events
     # always use "low" regardless of this setting.
     tui_reasoning_effort: str = field(default="low", repr=False)
+    # One-shot override used by /plan/accept so the immediate execution turn
+    # runs at medium effort, then automatically returns to normal routing.
+    _force_medium_next_dispatch: bool = field(default=False, repr=False)
 
     async def start(self) -> None:
         self._state = AgentState.load(self.history_path)
@@ -722,7 +725,10 @@ class AgentLane:
         #   3. All other sources (cron, discord, webhook, …) always use "minimal" for speed.
         _entering_plan_mode = text.startswith("PLAN MODE")
         _already_plan_mode = self._state is not None and self._state.plan_mode
-        if _entering_plan_mode or _already_plan_mode:
+        if self._force_medium_next_dispatch:
+            _effective_effort = "medium"
+            self._force_medium_next_dispatch = False
+        elif _entering_plan_mode or _already_plan_mode:
             _effective_effort = "medium"
         elif event.source_id == "tui":
             _effective_effort = self.tui_reasoning_effort
