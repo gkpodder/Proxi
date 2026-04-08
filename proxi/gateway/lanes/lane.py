@@ -202,10 +202,13 @@ class AgentLane:
         default=None, repr=False)
     _dispatch_tui_abortable: bool = field(default=False, repr=False)
 
-    # Reasoning effort override set via /reasoning-effort command from the TUI.
-    # Applied only to events from the TUI source; cron/discord/webhook events
-    # always use "low" regardless of this setting.
+    # Reasoning effort override set via /reasoning-effort for interactive clients.
+    # Applied to TUI and React events; cron/discord/webhook events keep their
+    # fast default unless explicitly routed otherwise.
     tui_reasoning_effort: str = field(default="low", repr=False)
+    # One-shot override used by /plan/accept so the immediate execution turn
+    # runs at medium effort, then automatically returns to normal routing.
+    _force_medium_next_dispatch: bool = field(default=False, repr=False)
 
     async def start(self) -> None:
         self._state = AgentState.load(self.history_path)
@@ -614,7 +617,7 @@ class AgentLane:
             return None
 
         # Handle /reasoning-effort <level> as a lane-level command — never sent to the loop.
-        # Only affects events that originate from the TUI; all other sources always use "minimal".
+        # Affects interactive clients (TUI/React) that share this lane.
         if text.lower().startswith("/reasoning-effort"):
             level = text[len("/reasoning-effort"):].strip().lower()
             if level == "reset":
@@ -718,13 +721,16 @@ class AgentLane:
 
         # Compute effective reasoning effort for this dispatch:
         #   1. Plan mode (active or entering) always uses "medium".
-        #   2. TUI-sourced events use the user-configured tui_reasoning_effort (default: "low").
-        #   3. All other sources (cron, discord, webhook, …) always use "minimal" for speed.
+        #   2. Interactive events (TUI/React) use the user-configured effort (default: "low").
+        #   3. All other sources (cron, discord, webhook, …) use "minimal" for speed.
         _entering_plan_mode = text.startswith("PLAN MODE")
         _already_plan_mode = self._state is not None and self._state.plan_mode
-        if _entering_plan_mode or _already_plan_mode:
+        if self._force_medium_next_dispatch:
             _effective_effort = "medium"
-        elif event.source_id == "tui":
+            self._force_medium_next_dispatch = False
+        elif _entering_plan_mode or _already_plan_mode:
+            _effective_effort = "medium"
+        elif event.source_id in {"tui", "react"}:
             _effective_effort = self.tui_reasoning_effort
         else:
             _effective_effort = "minimal"

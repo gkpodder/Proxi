@@ -19,10 +19,11 @@ Proxi can be accessed via a terminal TUI, our own GUI(react_frontend) or a suppo
 
 - [Tech Stack](#tech-stack)
 - [Installation](#installation)
+- [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Workspace Layout](#workspace-layout)
 - [Memory](#memory)
-- [Configuration](#configuration)
+- [Context Compaction](#context-compaction)
 - [Usage](#usage)
 - [TUI Slash Commands](#tui-slash-commands)
 - [Development](#development)
@@ -200,7 +201,20 @@ There are three memory types:
 
 At the end of each session a background task summarizes the conversation using a cheap model (provider-appropriate: Haiku for Anthropic, `gpt-4o-mini` for OpenAI, or the active model as a fallback) and stores the result as an episode. The agent can query all three memory types via the `search_memory` tool, write new skills via `save_skill`, and update the user profile via `update_user_model`.
 
-For a full breakdown of the architecture, skill lifecycle, summarization pipeline, and configuration options see **[refs/memory.md](refs/memory.md)**.
+For a full breakdown of the architecture, skill lifecycle, summarization pipeline, and configuration options see **[memory.md](refs/memory.md)**.
+
+
+## Context Compaction
+
+Proxi compacts long-running session history to stay within model context limits while preserving continuity. The current implementation uses a head/middle/tail strategy:
+
+- Keep a protected head of early anchoring messages.
+- Keep a protected tail of the most recent context.
+- Prune oversized tool results in the middle.
+- Summarize the remaining middle with an LLM call.
+- Reassemble as `head + summary + tail`, then repair tool-call/result integrity and role alternation.
+
+Compaction runs automatically when token usage crosses a configured threshold and can also be forced (for example via manual commands or reactive paths). For the complete architecture, pass flow, data-shape guarantees, and tuning knobs, see **[compaction.md](refs/compaction.md)**.
 
 
 

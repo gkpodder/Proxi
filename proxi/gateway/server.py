@@ -1630,10 +1630,11 @@ async def accept_plan(session_id: str) -> dict[str, str]:
         saved_path.write_text(plan_content, encoding="utf-8")
         plan_path.unlink(missing_ok=True)
 
-    # Exit plan mode and clear the active plan path; keep reasoning_effort at "medium"
-    # for the execution run (complex plan → deserves better reasoning throughout).
+    # Exit plan mode and clear the active plan path.
+    # The lane will force exactly the next dispatch to medium effort.
     lane._state.plan_mode = False
     lane._state.reasoning_effort = "medium"
+    lane._force_medium_next_dispatch = True
     lane._state.workspace.active_plan_path = None
     lane.workspace_config.active_plan_path = None
 
@@ -1678,6 +1679,7 @@ async def reject_plan(session_id: str) -> dict[str, str]:
 
     lane._state.plan_mode = False
     lane._state.reasoning_effort = "minimal"
+    lane._force_medium_next_dispatch = False
     lane._state.workspace.active_plan_path = None
     lane.workspace_config.active_plan_path = None
 

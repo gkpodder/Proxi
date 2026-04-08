@@ -31,6 +31,13 @@ class GlobTool(BaseTool):
                         "type": "string",
                         "description": "Base directory to search (defaults to working directory)",
                     },
+                    "include_ignored": {
+                        "type": "boolean",
+                        "description": (
+                            "Allow matching files in ignored directories "
+                            "(.venv, .pytest_cache, node_modules, etc.)"
+                        ),
+                    },
                 },
                 "required": ["pattern"],
             },
@@ -43,10 +50,14 @@ class GlobTool(BaseTool):
             return ToolResult(success=False, output="", error="pattern argument is required")
 
         path_str = arguments.get("path")
+        include_ignored = bool(arguments.get("include_ignored", False))
         base = self._guard.base_dir or Path.cwd()
 
         if path_str:
-            resolved, err = self._guard.guard_result(path_str)
+            resolved, err = self._guard.guard_ignored_result(
+                path_str,
+                include_ignored=include_ignored,
+            )
             if err:
                 return err
             search_root = resolved
@@ -64,6 +75,8 @@ class GlobTool(BaseTool):
 
         try:
             matches = list(search_root.glob(pattern))
+            if not include_ignored:
+                matches = [m for m in matches if not self._guard.is_ignored(m)]
             matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         except Exception as e:
             return ToolResult(success=False, output="", error=f"Glob error: {e}")

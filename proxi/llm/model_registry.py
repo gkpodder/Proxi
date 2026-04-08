@@ -24,13 +24,14 @@ _CONTEXT_WINDOWS: dict[str, int] = {
     "gpt-4o-2024-08-06": 128_000,
     "gpt-4o-mini-2024-07-18": 128_000,
     "gpt-4-turbo": 128_000,
-    "gpt-4": 8_192,
+    "gpt-4": 32_768,
     "gpt-3.5-turbo": 16_385,
     # OpenAI GPT-5 family
     "gpt-5": 128_000,
     "gpt-5-mini": 400_000,
     "gpt-5-mini-2025-08-07": 400_000,
-    "gpt-5.4-mini": 100_000_000,
+    "gpt-5.4-mini": 400_000,
+    "gpt-5.4": 100_000_000,
     # OpenAI o-series
     "o1": 200_000,
     "o1-mini": 128_000,
@@ -42,7 +43,7 @@ _CONTEXT_WINDOWS: dict[str, int] = {
 # Default models per provider (must match defaults in AnthropicClient / OpenAIClient / VLLMClient).
 DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-3-5-sonnet-20241022",
-    "openai": "gpt-5-mini-2025-08-07",
+    "openai": "gpt-5.4-mini",
     # vLLM: model name is whatever the server is serving; "local" is a placeholder.
     "vllm": "local",
 }

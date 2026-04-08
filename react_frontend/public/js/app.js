@@ -158,7 +158,7 @@ function App() {
   const [llmFeedback, setLlmFeedback] = useState("");
   const [generaFeedback, setGeneraFeedback] = useState("");
   const [generaBusy, setGeneraBusy] = useState(false);
-  const [generaReasoningEffort, setGeneraReasoningEffort] = useState("minimal");
+  const [generaReasoningEffort, setGeneraReasoningEffort] = useState("low");
   const [cronDraft, setCronDraft] = useState({
     sourceId: "",
     schedule: "",
@@ -1200,8 +1200,10 @@ function App() {
 
   function runReasoningEffortCommand(level) {
     const normalized = String(level || "").trim().toLowerCase();
-    const valid = ["minimal", "low", "medium", "high"];
-    const resolved = valid.includes(normalized) ? normalized : "minimal";
+    const valid = ["low", "medium", "high"];
+    const resolved = normalized === "minimal"
+      ? "low"
+      : (valid.includes(normalized) ? normalized : "low");
     const ok = runSlashCommand(`/reasoning-effort ${resolved}`, {
       echo: true,
       successMessage: `Reasoning effort set to ${resolved}.`,

@@ -929,13 +929,9 @@ class WebSearchTool(CLITool):
         super().__init__(
             name="web_search",
             description=(
-                "Search the web for information on any topic. Returns up to 5 relevant "
-                "results with titles, URLs, and descriptions. Use natural language queries "
-                "like 'weather today' or 'Python async patterns'. If results seem limited, "
-                "try a more specific query. For current-events and news requests, do not "
-                "ask the user for a time window, source preference, or format preference "
-                "unless they explicitly request customization; use a sensible default and "
-                "search immediately."
+                "Search the web for information on any topic. Returns relevant results "
+                "with title, URL, description, source domain, and rank. Supports optional "
+                "site/domain and recency filters for tighter retrieval."
             ),
             parameters_schema={
                 "type": "object",
@@ -947,6 +943,24 @@ class WebSearchTool(CLITool):
                     "max_results": {
                         "type": "integer",
                         "description": "Maximum number of results to return (default: 5, max: 20)",
+                    },
+                    "site": {
+                        "type": "string",
+                        "description": "Optional domain constraint (e.g., 'wikipedia.org')",
+                    },
+                    "region": {
+                        "type": "string",
+                        "description": "Optional region hint for the search backend (e.g., 'us-en')",
+                    },
+                    "safesearch": {
+                        "type": "string",
+                        "enum": ["off", "moderate", "strict"],
+                        "description": "SafeSearch level (default: moderate)",
+                    },
+                    "time_limit": {
+                        "type": "string",
+                        "enum": ["d", "w", "m", "y"],
+                        "description": "Optional recency window: day/week/month/year",
                     },
                 },
                 "required": ["query"],
@@ -967,11 +981,10 @@ class WebExtractTool(CLITool):
         super().__init__(
             name="web_extract",
             description=(
-                "Extract content from web page URLs and convert to markdown. Returns page "
-                "content in markdown format. Also works with PDF URLs — pass the PDF link "
-                "directly. Pages under 10,000 characters return full content; larger pages "
-                "are truncated with a note. Useful for reading articles, documentation, "
-                "and web content without leaving the conversation."
+                "Extract content from a web page URL and convert it to markdown. Returns "
+                "content plus metadata such as final_url, status_code, and content_type. "
+                "Supports chunked extraction with chunk_index/chunk_size for long pages. "
+                "Non-HTML content types (including PDF) are reported clearly as unsupported."
             ),
             parameters_schema={
                 "type": "object",
@@ -984,11 +997,85 @@ class WebExtractTool(CLITool):
                         "type": "integer",
                         "description": "Maximum characters to return before summarizing/truncating (default: 10000)",
                     },
+                    "chunk_index": {
+                        "type": "integer",
+                        "description": "Optional 0-based page chunk index when chunking is used",
+                    },
+                    "chunk_size": {
+                        "type": "integer",
+                        "description": "Optional chunk size in characters for paged extraction",
+                    },
                 },
                 "required": ["url"],
             },
             command=[sys.executable, "-m", "proxi.scripts.web_extract"],
             timeout=30,
+            parallel_safe=True,
+            read_only=True,
+            defer_loading=False,
+            max_retries=1,
+        )
+
+
+class WebResearchTool(CLITool):
+    """Run lightweight multi-step research across web sources."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            name="web_research",
+            description=(
+                "Run lightweight multi-step web research for a topic. Expands query "
+                "variants, searches multiple sources, deduplicates URLs, extracts key "
+                "evidence, and returns a concise brief with citations and follow-up "
+                "queries. Supports optional shopping_mode for best-effort deal discovery."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Research query or question",
+                    },
+                    "depth": {
+                        "type": "string",
+                        "enum": ["quick", "balanced", "deep"],
+                        "description": "Research depth (default: balanced)",
+                    },
+                    "max_sources": {
+                        "type": "integer",
+                        "description": "Maximum extracted sources to include (default: 6, max: 12)",
+                    },
+                    "region": {
+                        "type": "string",
+                        "description": "Optional region hint for search backend",
+                    },
+                    "include_domains": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional allow-list of domains",
+                    },
+                    "exclude_domains": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional block-list of domains",
+                    },
+                    "shopping_mode": {
+                        "type": "boolean",
+                        "description": "Enable best-effort deal/price extraction mode",
+                    },
+                    "product_query": {
+                        "type": "string",
+                        "description": "Optional product-focused query used in shopping_mode",
+                    },
+                    "max_price": {
+                        "type": "number",
+                        "description": "Optional upper bound for prices in shopping_mode",
+                    },
+                },
+                "required": ["query"],
+            },
+            command=[sys.executable, "-m", "proxi.scripts.web_research"],
+            timeout=45,
             parallel_safe=True,
             read_only=True,
             defer_loading=False,
@@ -1023,6 +1110,7 @@ CLI_TOOLS: list[type[CLITool]] = [
     ObsidianGetNoteMetadataTool,
     WebSearchTool,
     WebExtractTool,
+    WebResearchTool,
 ]
 
 

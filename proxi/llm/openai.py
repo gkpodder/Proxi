@@ -321,8 +321,8 @@ class OpenAIClient:
         """Map user-facing effort labels to values accepted by the Responses API per model."""
         e = (effort or "minimal").strip().lower()
         normalized = self.model.strip().lower()
-        # o1/o3/o4 expose low/medium/high; TUI defaults to "minimal" (GPT-5-style ladder).
-        if normalized.startswith(("o1", "o3", "o4")) and e == "minimal":
+        # GPT-5 and o-series models do not accept the legacy "minimal" label.
+        if normalized.startswith(("gpt-5", "o1", "o3", "o4")) and e == "minimal":
             return "low"
         return e
 
